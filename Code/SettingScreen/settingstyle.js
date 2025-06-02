@@ -198,7 +198,7 @@ export const getStyles = (isDarkMode) =>
       text:{
         fontFamily:'Lato-Regular',
         fontSize:10,
-        color: isDarkMode ? '#fff' : '#000',
+        color:'white'
 
       },
       selectedText:{
@@ -244,15 +244,15 @@ export const getStyles = (isDarkMode) =>
       option_menu:{
         padding:10
       },
-      text: {
-        fontSize: 12,
-        color: 'black', // Regular text color
-        paddingHorizontal:10
-      },
+      // text: {
+      //   fontSize: 12,
+      //   // color: 'black', // Regular text color
+      //   paddingHorizontal:10
+      // },
       emailText: {
         fontSize: 12,
-        color: 'blue', // Blue color to make it look like a link
-        textDecorationLine: 'underline', // Underline to signify it as a link
+        color: 'lightblue', // Blue color to make it look like a link
+        // textDecorationLine: 'underline', // Underline to signify it as a link
       },
     });
   

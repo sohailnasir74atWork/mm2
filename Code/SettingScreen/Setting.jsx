@@ -17,7 +17,7 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../GlobelStats';
 import { getStyles } from './settingstyle';
-import { handleGetSuggestions, handleOpenFacebook, handleOpenWebsite, handleRateApp, handleadoptme, handleShareApp, imageOptions, } from './settinghelper';
+import { handleGetSuggestions, handleOpenFacebook, handleOpenWebsite, handleRateApp, handleadoptme, handleShareApp, imageOptions, handleRefresh, handleBloxFruit, } from './settinghelper';
 import { logoutUser } from '../Firebase/UserLogics';
 import SignInDrawer from '../Firebase/SigninDrawer';
 import auth from '@react-native-firebase/auth';
@@ -41,7 +41,7 @@ export default function SettingsScreen({ selectedTheme }) {
   const [newDisplayName, setNewDisplayName] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [openSingnin, setOpenSignin] = useState(false);
-  const { user, theme, updateLocalStateAndDatabase, setUser, appdatabase, analytics } = useGlobalState()
+  const { user, theme, updateLocalStateAndDatabase, setUser, appdatabase, analytics, reload } = useGlobalState()
   const { updateLocalState, localState, mySubscriptions } = useLocalState()
   const [isPermissionGranted, setIsPermissionGranted] = useState(false);
   const [showOfferWall, setShowofferWall] = useState(false);
@@ -55,7 +55,7 @@ export default function SettingsScreen({ selectedTheme }) {
 
   const { triggerHapticFeedback } = useHaptic();
   const themes = [t('settings.theme_system'), t('settings.theme_light'), t('settings.theme_dark')];
-    // const themes = ['System', 'Light','Dark'];
+  // const themes = ['System', 'Light','Dark'];
 
   const handleToggle = (value) => {
     updateLocalState('isHaptic', value); // Update isHaptic state globally
@@ -108,9 +108,9 @@ export default function SettingsScreen({ selectedTheme }) {
           t("settings.permission_required"),
           t("settings.notification_permissions_disabled"),
           [
-            { text:  t("home.cancel"), style: 'cancel' },
+            { text: t("home.cancel"), style: 'cancel' },
             {
-              text:  t("settings.go_to_settings"),
+              text: t("settings.go_to_settings"),
               onPress: () => Linking.openSettings(), // Redirect to app settings
             },
           ]
@@ -197,7 +197,7 @@ export default function SettingsScreen({ selectedTheme }) {
       );
     }
   };
-  
+
   const handleDeleteUser = async () => {
     triggerHapticFeedback('impactLight');
     try {
@@ -208,9 +208,9 @@ export default function SettingsScreen({ selectedTheme }) {
         );
         return;
       }
-  
+
       const userId = user?.id;
-  
+
       // Step 1: Acknowledge the irreversible action
       const showAcknowledgment = () =>
         new Promise((resolve, reject) => {
@@ -219,11 +219,11 @@ export default function SettingsScreen({ selectedTheme }) {
             t("settings.delete_account_warning"),
             [
               { text: t("home.cancel"), style: 'cancel', onPress: reject },
-              { text:  t("settings.proceed"), style: 'destructive', onPress: resolve },
+              { text: t("settings.proceed"), style: 'destructive', onPress: resolve },
             ]
           );
         });
-  
+
       // Step 2: Confirm the action again
       const showFinalConfirmation = () =>
         new Promise((resolve, reject) => {
@@ -236,15 +236,15 @@ export default function SettingsScreen({ selectedTheme }) {
             ]
           );
         });
-  
+
       // Await acknowledgment and confirmation
       await showAcknowledgment();
       await showFinalConfirmation();
-  
+
       // Step 3: Remove user data from Firebase Realtime Database
       const userRef = ref(appdatabase, `users/${userId}`);
 
-  
+
       await Promise.all([
         remove(userRef), // ✅ Delete user profile
       ]);
@@ -261,10 +261,10 @@ export default function SettingsScreen({ selectedTheme }) {
         );
         return;
       }
-  
+
       // Step 5: Reset local state
       await resetUserState(setUser);
-  
+
       // Alert.alert(t("home.alert.success"), t("home.alert.success"));
       showSuccessMessage(
         t("home.alert.success"),
@@ -272,7 +272,7 @@ export default function SettingsScreen({ selectedTheme }) {
       );
     } catch (error) {
       // console.error('Error deleting user:', error.message);
-  
+
       if (error.code === 'auth/requires-recent-login') {
         // Alert.alert(
         //   t("settings.session_expired"),
@@ -292,13 +292,13 @@ export default function SettingsScreen({ selectedTheme }) {
       }
     }
   };
-  
+
   const manageSubscription = () => {
     const url = Platform.select({
       ios: 'https://apps.apple.com/account/subscriptions',
       android: 'https://play.google.com/store/account/subscriptions',
     });
-  
+
     if (url) {
       Linking.openURL(url).catch((err) => {
         console.error('Error opening subscription manager:', err);
@@ -322,24 +322,25 @@ export default function SettingsScreen({ selectedTheme }) {
   };
 
 
-const handleSelect = (lang) => {
-  if(!localState.isPro){
-    setShowofferWall(true)
-  } else
- { setAppLanguage(lang); 
-  changeLanguage(lang)}
-}
+  const handleSelect = (lang) => {
+    if (!localState.isPro) {
+      setShowofferWall(true)
+    } else {
+      setAppLanguage(lang);
+      changeLanguage(lang)
+    }
+  }
 
 
-const formatPlanName = (plan) => {
-  // console.log(plan, 'plan');
+  const formatPlanName = (plan) => {
+    // console.log(plan, 'plan');
 
-  if (plan === 'MONTHLY' || plan === 'Blox_values_199_1m') return '1 MONTH';
-  if (plan === 'QUARTERLY' || plan === 'Blox_values_499_3m') return '3 MONTHS';
-  if (plan === 'YEARLY' || plan === 'Blox_values_999_1y') return '1 YEAR';
+    if (plan === 'MONTHLY' || plan === 'Blox_values_199_1m') return '1 MONTH';
+    if (plan === 'QUARTERLY' || plan === 'Blox_values_499_3m') return '3 MONTHS';
+    if (plan === 'YEARLY' || plan === 'Blox_values_999_1y') return '1 YEAR';
 
-  return 'Anonymous Plan';
-};
+    return 'Anonymous Plan';
+  };
 
 
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
@@ -360,13 +361,13 @@ const formatPlanName = (plan) => {
             <TouchableOpacity onPress={user?.id ? () => { } : () => { setOpenSignin(true) }} disabled={user?.id !== null}>
               <Text style={!user?.id ? styles.userNameLogout : styles.userName}>
                 {!user?.id ? t("settings.login_register") : displayName}
-                {user?.isPro &&  
-        <Icon
-          name="checkmark-done-circle"
-          size={16}
-          color={config.colors.hasBlockGreen}
-          
-        />}
+                {user?.isPro &&
+                  <Icon
+                    name="checkmark-done-circle"
+                    size={16}
+                    color={config.colors.hasBlockGreen}
+
+                  />}
               </Text>
               {!user?.id && <Text style={styles.rewardLogout}>{t('settings.login_description')}</Text>}
               {user?.id && <Text style={styles.reward}>{t("settings.my_points")}: {user?.rewardPoints || 0}</Text>}
@@ -387,7 +388,7 @@ const formatPlanName = (plan) => {
           }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
               <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Icon name="radio-outline" size={18} color={'white'} style={{backgroundColor:'#B76E79', padding:5, borderRadius:5}} />
+                <Icon name="radio-outline" size={18} color={'white'} style={{ backgroundColor: '#B76E79', padding: 5, borderRadius: 5 }} />
                 <Text style={styles.optionText}>{t('settings.haptic_feedback')}</Text></TouchableOpacity>
               <Switch value={localState.isHaptic} onValueChange={handleToggle} />
             </View>
@@ -398,7 +399,7 @@ const formatPlanName = (plan) => {
           }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
               <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Icon name="notifications" size={18} color={'white'} style={{backgroundColor:config.colors.hasBlockGreen, padding:5, borderRadius:5}}/>
+                <Icon name="notifications" size={18} color={'white'} style={{ backgroundColor: config.colors.hasBlockGreen, padding: 5, borderRadius: 5 }} />
                 <Text style={styles.optionText}>{t('settings.chat_notifications')}</Text></TouchableOpacity>
               <Switch
                 value={isPermissionGranted}
@@ -413,30 +414,29 @@ const formatPlanName = (plan) => {
           }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
               <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Icon name="contrast-outline" size={18} color={'white'} style={{backgroundColor:'#4A90E2', padding:5, borderRadius:5}}/>
-                <Text style={styles.optionText}>{t('settings.theme')}</Text></TouchableOpacity>
+                <Icon name="contrast-outline" size={18} color={'white'} style={{ backgroundColor: '#4A90E2', padding: 5, borderRadius: 5 }} />
+                <Text style={styles.optionText}>Active Values</Text>
+              </TouchableOpacity>
               <View style={styles.containertheme}>
-                {themes.map((theme, index) => (
-                  <TouchableOpacity
-                    key={theme}
-                    style={[
-                      styles.box,
-                      localState.theme === ['system', 'light', 'dark'][index].toLowerCase() && styles.selectedBox, // Highlight selected box
-                    ]}
-                    onPress={() => updateLocalState('theme', ['system', 'light', 'dark'][index])}
-                  >
-                    
-                    <Text
-                    style={[
-                      styles.text,
-                      localState.theme === ['system', 'light', 'dark'][index] && styles.selectedText, // Highlight selected text
-                    ]}
-                  >
-                    {theme}
+                <TouchableOpacity
+                  style={[styles.box, localState.isMM2 && styles.selectedBox]}
+                  onPress={() => { updateLocalState('isMM2', true); handleRefresh(reload) }}
+                >
+                  <Text style={[styles.text, localState.isMM2 && styles.selectedText]}>
+                    MM2 Values
                   </Text>
-                  </TouchableOpacity>
-                ))}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.box, !localState.isMM2 && styles.selectedBox]}
+                  onPress={() => { updateLocalState('isMM2', false); handleRefresh(reload) }}
+                >
+                  <Text style={[styles.text, !localState.isMM2 && styles.selectedText]}>
+                    Supreme Values
+                  </Text>
+                </TouchableOpacity>
               </View>
+
             </View>
           </View>
         </View>
@@ -445,9 +445,9 @@ const formatPlanName = (plan) => {
         <View style={styles.cardContainer}>
           <View style={[styles.optionLast, { flexDirection: 'row', justifyContent: 'space-between' }]}>
             <View style={{ flexDirection: 'row', }}>
-          <Icon name="language-outline" size={18} color={'white'} style={{backgroundColor:'purple', padding:5, borderRadius:5}}/>
+              <Icon name="language-outline" size={18} color={'white'} style={{ backgroundColor: 'purple', padding: 5, borderRadius: 5 }} />
 
-            <Text style={styles.optionText}>{t('settings.select_language')}</Text></View>
+              <Text style={styles.optionText}>{t('settings.select_language')}</Text></View>
 
             <Menu>
               <MenuTrigger style={styles.menuTrigger}>
@@ -458,7 +458,7 @@ const formatPlanName = (plan) => {
 
               <MenuOptions style={styles.options}>
                 {languageOptions.map((lang) => (
-                  <MenuOption key={lang.code} onSelect={()=>handleSelect(lang.code)} style={styles.option_menu}>
+                  <MenuOption key={lang.code} onSelect={() => handleSelect(lang.code)} style={styles.option_menu}>
                     <Text>
                       {lang.flag} {lang.label}
                     </Text>
@@ -471,21 +471,22 @@ const formatPlanName = (plan) => {
 
 
         <Text style={styles.subtitle}>{t('settings.pro_subscription')}</Text>
-        <View style={[styles.cardContainer, {backgroundColor:'#FFD700'}]}>
+        <View style={[styles.cardContainer, { backgroundColor: '#FFD700' }]}>
 
-          <TouchableOpacity style={[styles.optionLast]} onPress={() => { setShowofferWall(true);     
- }}>
-            <Icon name="prism-outline" size={18} color={'white'} style={{backgroundColor:config.colors.hasBlockGreen, padding:5, borderRadius:5}}/>
-            <Text style={[styles.optionText, {color:'black'}]}>
-            {t('settings.active_plan')} : {localState.isPro ? t('settings.paid') : t('settings.free')}
+          <TouchableOpacity style={[styles.optionLast]} onPress={() => {
+            setShowofferWall(true);
+          }}>
+            <Icon name="prism-outline" size={18} color={'white'} style={{ backgroundColor: config.colors.hasBlockGreen, padding: 5, borderRadius: 5 }} />
+            <Text style={[styles.optionText, { color: 'black' }]}>
+              {t('settings.active_plan')} : {localState.isPro ? t('settings.paid') : t('settings.free')}
             </Text>
           </TouchableOpacity>
           {localState.isPro && (
             <View style={styles.subscriptionContainer}>
               <Text style={styles.subscriptionText}>
-              {t('settings.active_plan')} - 
-                  {mySubscriptions.length === 0
-                  ?   t('settings.paid')
+                {t('settings.active_plan')} -
+                {mySubscriptions.length === 0
+                  ? t('settings.paid')
                   : mySubscriptions.map(sub => formatPlanName(sub.plan)).join(', ')}
               </Text>
 
@@ -496,7 +497,7 @@ const formatPlanName = (plan) => {
             </View>
           )}
         </View>
-     
+
 
         <Text style={styles.subtitle}>{t('settings.other_settings')}</Text>
 
@@ -506,7 +507,7 @@ const formatPlanName = (plan) => {
           <TouchableOpacity style={styles.option} onPress={() => {
             handleShareApp(); triggerHapticFeedback('impactLight');
           }}>
-            <Icon name="share-social-outline" size={18} color={'white'} style={{backgroundColor:'#B76E79', padding:5, borderRadius:5}}/>
+            <Icon name="share-social-outline" size={18} color={'white'} style={{ backgroundColor: '#B76E79', padding: 5, borderRadius: 5 }} />
             <Text style={styles.optionText}>{t('settings.share_app')}</Text>
           </TouchableOpacity>
           {/* <TouchableOpacity style={styles.option} onPress={() => {
@@ -518,28 +519,28 @@ const formatPlanName = (plan) => {
           <TouchableOpacity style={styles.option} onPress={() => {
             handleGetSuggestions(user); triggerHapticFeedback('impactLight');
           }}>
-            <Icon name="mail-outline" size={18} color={'white'}  style={{backgroundColor:'#566D5D', padding:5, borderRadius:5}}/>
+            <Icon name="mail-outline" size={18} color={'white'} style={{ backgroundColor: '#566D5D', padding: 5, borderRadius: 5 }} />
             <Text style={styles.optionText}>{t('settings.give_suggestions')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.option} onPress={() => { handleRateApp(); triggerHapticFeedback('impactLight'); }
           }>
-            <Icon name="star-outline" size={18} color={'white'} style={{backgroundColor:'#A2B38B', padding:5, borderRadius:5}}/>
+            <Icon name="star-outline" size={18} color={'white'} style={{ backgroundColor: '#A2B38B', padding: 5, borderRadius: 5 }} />
             <Text style={styles.optionText}>{t('settings.rate_us')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.option} onPress={() => {
             handleOpenFacebook(); triggerHapticFeedback('impactLight');
           }}>
-            <Icon name="logo-facebook" size={18} color={'white'} style={{backgroundColor:'#566D5D', padding:5, borderRadius:5}}/>
+            <Icon name="logo-facebook" size={18} color={'white'} style={{ backgroundColor: '#566D5D', padding: 5, borderRadius: 5 }} />
             <Text style={styles.optionText}>{t('settings.visit_facebook_group')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={user?.id ? styles.option : styles.optionLast} onPress={() => {
             handleOpenWebsite(); triggerHapticFeedback('impactLight');
           }}>
-            <Icon name="link-outline" size={18} color={'white'}  style={{backgroundColor:'#4B4453', padding:5, borderRadius:5}}/>
+            <Icon name="link-outline" size={18} color={'white'} style={{ backgroundColor: '#4B4453', padding: 5, borderRadius: 5 }} />
             <Text style={styles.optionText}>{t('settings.visit_website')}</Text>
           </TouchableOpacity>
           {user?.id && <TouchableOpacity style={styles.option} onPress={handleLogout} >
-            <Icon name="person-outline" size={18} color={'white'} style={{backgroundColor:'#4B4453', padding:5, borderRadius:5}} />
+            <Icon name="person-outline" size={18} color={'white'} style={{ backgroundColor: '#4B4453', padding: 5, borderRadius: 5 }} />
             <Text style={styles.optionTextLogout}>{t('settings.logout')}</Text>
           </TouchableOpacity>}
           {user?.id && <TouchableOpacity style={styles.optionDelete} onPress={handleDeleteUser} >
@@ -547,37 +548,47 @@ const formatPlanName = (plan) => {
             <Text style={styles.optionTextDelete}>{t('settings.delete_my_account')}</Text>
           </TouchableOpacity>}
 
-         
+
 
         </View>
         <Text style={styles.subtitle}>Our Other APPS</Text>
-       
+
         <View style={styles.cardContainer}>
 
 
-<TouchableOpacity style={styles.optionLast} onPress={() => {
-  handleadoptme(); triggerHapticFeedback('impactLight');
-}}>
- <Image 
-  source={require('../../assets/adoptme.png')} 
-  style={{ width: 40, height: 40,   borderRadius: 5 }} 
-/>
+          <TouchableOpacity style={styles.option} onPress={() => {
+            handleadoptme(); triggerHapticFeedback('impactLight');
+          }}>
+            <Image
+              source={require('../../assets/adoptme.png')}
+              style={{ width: 40, height: 40, borderRadius: 5 }}
+            />
 
-  <Text style={styles.optionText}>Adopt Me Values</Text>
-</TouchableOpacity>
+            <Text style={styles.optionText}>Adopt Me Values</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.optionLast} onPress={() => {
+            handleBloxFruit(); triggerHapticFeedback('impactLight');
+          }}>
+            <Image
+              source={require('../../assets/icon.webp')}
+              style={{ width: 40, height: 40, borderRadius: 5 }}
+            />
+
+            <Text style={styles.optionText}>Blox Fruits Values</Text>
+          </TouchableOpacity>
 
 
 
-</View>
-<Text style={styles.subtitle}>Business Enquiries
-</Text>
+        </View>
+        <Text style={styles.subtitle}>Business Enquiries
+        </Text>
 
-<Text style={styles.text}>
-    For collaborations, partnerships, or other business-related queries, feel free to contact us at:{' '}
-    <TouchableOpacity onPress={() => Linking.openURL('mailto:thesolanalabs@gmail.com')}>
-      <Text style={styles.emailText}>thesolanalabs@gmail.com</Text>
-    </TouchableOpacity>
-  </Text>
+        <Text style={styles.text}>
+          For collaborations, partnerships, or other business-related queries, feel free to contact us at:{' '}
+          <TouchableOpacity onPress={() => Linking.openURL('mailto:thesolanalabs@gmail.com')}>
+            <Text style={styles.emailText}>thesolanalabs@gmail.com</Text>
+          </TouchableOpacity>
+        </Text>
 
 
       </ScrollView>
@@ -636,14 +647,14 @@ const formatPlanName = (plan) => {
           </View>
         </ConditionalKeyboardWrapper>
       </Modal>
-     
-      <SubscriptionScreen visible={showOfferWall} onClose={() => setShowofferWall(false)} track='Setting'/>
+
+      <SubscriptionScreen visible={showOfferWall} onClose={() => setShowofferWall(false)} track='Setting' />
       <SignInDrawer
         visible={openSingnin}
         onClose={() => setOpenSignin(false)}
         selectedTheme={selectedTheme}
         message='Signin to access all features'
-         screen='Setting'
+        screen='Setting'
       />
 
     </View>

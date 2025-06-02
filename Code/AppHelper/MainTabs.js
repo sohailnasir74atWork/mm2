@@ -10,6 +10,7 @@ import { TradeStack } from '../Trades/TradeNavigator';
 import { useTranslation } from 'react-i18next';
 import config from '../Helper/Environment';
 import FontAwesome from 'react-native-vector-icons/FontAwesome6';
+import { useLocalState } from '../LocalGlobelStats';
 
 
 
@@ -61,8 +62,10 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
         tabBarButton: (props) => {
           const { accessibilityState, children, onPress } = props;
           const isSelected = accessibilityState?.selected;
+          
       
           return (
+            
             <TouchableOpacity
               onPress={onPress}
               activeOpacity={0.9}
@@ -125,14 +128,14 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
         {() => <HomeScreen selectedTheme={selectedTheme} />}
       </Tab.Screen>
 
-      <Tab.Screen
+      {/* <Tab.Screen
         name="Stock"
         options={{
           title: t('tabs.stock'), // Translation applied here
         }}
       >
         {() => <TimerScreen selectedTheme={selectedTheme} />}
-      </Tab.Screen>
+      </Tab.Screen> */}
 
       <Tab.Screen
         name="Trade"

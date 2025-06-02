@@ -7,7 +7,7 @@ import { createNewUser, firebaseConfig, registerForNotifications } from './Globe
 import { useLocalState } from './LocalGlobelStats';
 import { requestPermission } from './Helper/PermissionCheck';
 import { useColorScheme, InteractionManager } from 'react-native';
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const app = getApp()
 const auth = getAuth(app);
 const firestoreDB = getFirestore(app);
 const appdatabase = getDatabase(app);
@@ -21,7 +21,7 @@ export const GlobalStateProvider = ({ children }) => {
 
   const colorScheme = useColorScheme(); // 'light' or 'dark'
 
-  const resolvedTheme = localState.theme === 'system' ? colorScheme : localState.theme;
+  const resolvedTheme = localState.theme === 'dark' ? 'dark' : localState.theme;
   const [theme, setTheme] = useState(resolvedTheme);
   const [api, setApi] = useState(null);
   const [freeTranslation, setFreeTranslation] = useState(null);
@@ -52,8 +52,8 @@ export const GlobalStateProvider = ({ children }) => {
 
   // Track theme changes
   useEffect(() => {
-    setTheme(localState.theme === 'system' ? colorScheme : localState.theme);
-  }, [localState.theme, colorScheme]);
+    setTheme(localState.theme === 'dark' ? 'dark' : localState.theme);
+  }, [localState.theme]);
 
   // const isAdmin = user?.id  ? user?.id == '3CAAolfaX3UE3BLTZ7ghFbNnY513' : false
   // console.log(isAdmin, user)
@@ -253,7 +253,7 @@ export const GlobalStateProvider = ({ children }) => {
 
     const lastActivity = localState.lastactivity ? new Date(localState.lastactivity).getTime() : 0;
     const now = Date.now();
-    const THREE_HOURS = 36 * 60 * 60 * 1000; // 3 hours in milliseconds
+    const THREE_HOURS = 6 * 60 * 60 * 1000; 
 
     if (now - lastActivity > THREE_HOURS) {
       updateLocalStateAndDatabase('lastactivity', new Date().toISOString());
@@ -261,110 +261,75 @@ export const GlobalStateProvider = ({ children }) => {
     }
   }, [localState.lastactivity]);
 
-
+console.log(localState.isMM2, 'update home')
 
   const fetchStockData = async (refresh) => {
+    // console.log(refresh, 'refresh')
     try {
       setLoading(true);
-
-      // ✅ Check when `codes & data` were last fetched
+  
       const lastActivity = localState.lastActivity ? new Date(localState.lastActivity).getTime() : 0;
       const now = Date.now();
       const timeElapsed = now - lastActivity;
-      const TWENTY_FOUR_HOURS = refresh ? 1 * 60 * 1000 : 6 * 60 * 60 * 1000;
-      // console.log(TWENTY_FOUR_HOURS, refresh)
-
-      // ✅ Fetch `codes & data` only if 24 hours have passed OR they are missing
-      const shouldFetchCodesData =
-        timeElapsed > TWENTY_FOUR_HOURS ||
-        !localState.codes ||
-        !Object.keys(localState.codes).length ||
+      const EXPIRY_LIMIT = refresh ? 10 * 1000 : 6 * 60 * 1000; // 10s for refresh, 6min default
+  
+      const shouldFetch =
+        timeElapsed > EXPIRY_LIMIT ||
         !localState.data ||
-        !Object.keys(localState.data).length;
-
-      if (shouldFetchCodesData) {
-        // console.log("📌 Fetching codes & data from database...");
-
-        let codes = {};
+        !Object.keys(localState.data).length ||
+        !localState.imgurl;
+  
+      if (shouldFetch) {
         let data = {};
-        
+        let suprime = {};
+        let image = '';
+  
+        // ✅ Choose CDN URL based on isMM2 flag
+        const suprimeUrl = 'https://mm2api-suprime.b-cdn.net/supreme_mm2values.json'
+        const cdnUrl  = 'https://mm2-api.b-cdn.net/mm2values.json';
+  
         try {
-          const [codesRes, dataRes] = await Promise.all([
-            fetch('https://blox-api.b-cdn.net/codes.json'),
-            fetch('https://blox-api.b-cdn.net/data.json')
-          ]);
-        
-          const codesJson = await codesRes.json();
+          const dataRes = await fetch(cdnUrl);
           const dataJson = await dataRes.json();
-        
-          // Assign values or keep as empty object
-          codes = codesJson || {};
-          data = dataJson || {};
-        
-          // If either is empty, force fallback
-          if (!Object.keys(codes).length || !Object.keys(data).length) {
-            throw new Error('CDN data incomplete');
+          const dataSuprime = await fetch(suprimeUrl);
+          const suprimeJson = await dataSuprime.json();
+  
+          if (!dataJson || typeof dataJson !== 'object' || dataJson.error || !Object.keys(dataJson).length) {
+            throw new Error('CDN returned invalid or error data');
           }
-        
-          // console.log('✅ Loaded codes & data from CDN');
-        
+          if (!dataSuprime || typeof dataSuprime !== 'object' || dataSuprime.error || !Object.keys(dataSuprime).length) {
+            throw new Error('CDN returned invalid or error data');
+          }
+  
+          data = dataJson;
+          suprime = suprimeJson
+          console.log('✅ Loaded data from CDN:', cdnUrl);
         } catch (err) {
-          console.warn('⚠️ Fallback to Firebase:', err.message);
-        
-          const [xlsSnapshot, codeSnapShot] = await Promise.all([
-            get(ref(appdatabase, 'fruit_data')),
-            get(ref(appdatabase, 'codes')),
-          ]);
-        
-          codes = codeSnapShot.exists() ? codeSnapShot.val() : {};
-          data = xlsSnapshot.exists() ? xlsSnapshot.val() : {};
-                  // console.log(data, codes)
-
+          console.warn('⚠️ Failed to load from CDN, falling back to Firebase:', err.message);
+  
+          const fallbackNode = localState.isMM2 ? 'mm2Data' : 'xlsData';
+          const dbSnapshot = await get(ref(appdatabase, fallbackNode));
+          data = dbSnapshot.exists() ? dbSnapshot.val() : {};
         }
-        
-
-
-
-
-        // ✅ Store fetched data locally
-        await updateLocalState('codes', JSON.stringify(codes));
+  
+        // ✅ Always fetch `image_url` from Firebase
+        const imageSnapShot = await get(ref(appdatabase, 'image_url'));
+        image = imageSnapShot.exists() ? imageSnapShot.val() : '';
+  
+        // ✅ Store in local state
         await updateLocalState('data', JSON.stringify(data));
-        // console.log(data)
-        // ✅ Update last fetch timestamp
+        await updateLocalState('suprime', JSON.stringify(suprime));
+        await updateLocalState('imgurl', JSON.stringify(image));
         await updateLocalState('lastActivity', new Date().toISOString());
-
-        // console.log("✅ Data updated successfully.");
-      } else {
-        // console.log("⏳ Using cached codes & data, no need to fetch.");
       }
-
-      // ✅ Always fetch stock data (`calcData`) on app load
-      // console.log("📌 Fetching fresh stock data...");
-      const [calcSnapshot, preSnapshot] = await Promise.all([
-        get(ref(appdatabase, 'calcData')), // ✅ Always updated stock data
-        get(ref(appdatabase, 'previousStock')),
-      ]);
-
-      // ✅ Extract relevant stock data
-      const normalStock = calcSnapshot.exists() ? calcSnapshot.val()?.test || {} : {};
-      const mirageStock = calcSnapshot.exists() ? calcSnapshot.val()?.mirage || {} : {};
-      const prenormalStock = preSnapshot.exists() ? preSnapshot.val()?.normalStock || {} : {};
-      const premirageStock = preSnapshot.exists() ? preSnapshot.val()?.mirageStock || {} : {};
-
-
-      // ✅ Store frequently updated stock data
-      await updateLocalState('normalStock', JSON.stringify(normalStock));
-      await updateLocalState('mirageStock', JSON.stringify(mirageStock));
-      await updateLocalState('prenormalStock', JSON.stringify(prenormalStock));
-      await updateLocalState('premirageStock', JSON.stringify(premirageStock));
-
-      // console.log("✅ Stock data processed and stored successfully.");
+  
     } catch (error) {
       console.error("❌ Error fetching stock data:", error);
     } finally {
       setLoading(false);
     }
   };
+  
   // console.log(user)
 
   // ✅ Run the function only if needed

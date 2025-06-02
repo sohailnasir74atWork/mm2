@@ -99,6 +99,13 @@ I would like to share the following suggestions:
     );
   };
 
+  export const handleBloxFruit = () => {
+    const websiteUrl = config.otherapplink2;
+    Linking.openURL(websiteUrl).catch(() =>
+      Alert.alert('Error', 'Unable to open the website. Please try again later.')
+    );
+  };
+
   export const imageOptions = [
     'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
     'https://bloxfruitscalc.com/wp-content/uploads/2025/eagle.png',
@@ -118,3 +125,16 @@ I would like to share the following suggestions:
   ];
  
 
+  export const handleRefresh = async (reload) => {
+    // setRefreshing(true);
+
+    try {
+      await reload(); // Re-fetch stock data
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      // setRefreshing(false);
+    }
+  };
+
+  

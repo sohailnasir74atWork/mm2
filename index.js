@@ -37,7 +37,7 @@ const App = React.memo(() => (
   <MenuProvider skipInstanceCheck>
   <LanguageProvider>
     <LocalStateProvider>
-      <GlobalStateProvider>
+      <GlobalStateProvider > 
         <ErrorBoundary>
           <AppWrapper />
         </ErrorBoundary>

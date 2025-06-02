@@ -18,15 +18,17 @@ import { useTranslation } from 'react-i18next';
 import {  GestureHandlerRootView } from 'react-native-gesture-handler';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { mixpanel } from './MixPenel';
+import { useLocalState } from '../LocalGlobelStats';
 
 const { width } = Dimensions.get('window');
 
-const icon = config.isNoman ? require('../../assets/icon.webp') : require('../../assets/logo.webp');
+const icon = config.isNoman ? require('../../assets/logo.webp') : require('../../assets/logo.webp');
 
 
 const OnboardingScreen = ({ onFinish, selectedTheme }) => {
   const [screenIndex, setScreenIndex] = useState(0);
   const [openSignin, setOpenSignin] = useState(false);
+  const { updateLocalState, localState } = useLocalState();
   const { theme, user, analytics } = useGlobalState();
   const isDarkMode = theme === 'dark' || selectedTheme === 'dark';
   const { language, changeLanguage } = useLanguage();
@@ -48,7 +50,7 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
   //   { code: "ar", label: t("settings.languages.ar"), flag: "🇸🇦" }
 
   // ];
-
+  
   const handleNext = () => {
     if (screenIndex === 0) {
       mixpanel.track("New Install");
@@ -161,7 +163,36 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
         {renderScreen()}
 
         {screenIndex !== 2 && <View style={styles.bottomContainer}>
-         
+       {screenIndex === 0 && (
+  
+  <TouchableOpacity
+      style={localState.isMM2 ? styles.button : styles.buttonOutline}
+      onPress={() => updateLocalState('isMM2', true)}
+    >
+      <Text style={localState.isMM2 ? styles.buttonText : styles.buttonTextOutline}>
+        MM2 VALUES
+      </Text>
+    </TouchableOpacity>
+
+
+)}
+ {screenIndex === 0 && (
+  
+  <TouchableOpacity
+      style={!localState.isMM2 ? styles.button : styles.buttonOutline}
+      onPress={() => updateLocalState('isMM2', false)}
+    >
+      <Text style={!localState.isMM2 ? styles.buttonText : styles.buttonTextOutline}>
+        SUPREME VALUES
+      </Text>
+    </TouchableOpacity>
+)}
+
+
+
+
+
+
           <TouchableOpacity style={styles.button} onPress={handleNext}>
             <Text style={styles.buttonText}>{screenIndex === 1 && !user.id ? t("first.signin") : t("first.continue")}</Text>
           </TouchableOpacity>

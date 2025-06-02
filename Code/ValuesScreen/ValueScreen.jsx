@@ -23,7 +23,7 @@ import { mixpanel } from '../AppHelper/MixPenel';
 import { Menu, MenuOption, MenuOptions, MenuTrigger } from 'react-native-popup-menu';
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
-import { handleadoptme, handleShareApp } from '../SettingScreen/settinghelper';
+import { handleadoptme, handleBloxFruit, handleShareApp } from '../SettingScreen/settinghelper';
 
 const ValueScreen = ({ selectedTheme }) => {
   const [searchText, setSearchText] = useState('');
@@ -33,11 +33,11 @@ const ValueScreen = ({ selectedTheme }) => {
   const isDarkMode = theme === 'dark'
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
   const [filteredData, setFilteredData] = useState([]);
-  const { localState } = useLocalState()
+  const { localState, toggleAd } = useLocalState()
   const [valuesData, setValuesData] = useState([]);
   const [codesData, setCodesData] = useState([]);
   const { t } = useTranslation();
-  const filters = ['All', 'COMMON', 'UNCOMMON', 'RARE', 'LEGENDARY', 'MYTHICAL', 'GAME PASS', 'LIMITED'];
+  const filters = !localState.isMM2 ?  ['All', 'Ancient', 'Unique', 'Chroma', 'Godly', 'Legend', 'Rare', 'Uncommon', 'Common', 'Vintage', 'Pets', 'Misc'] : ['All', 'Sets',  'Ancients', 'Evos', 'Uniques', 'Chromas', 'Godlies', 'Legendaries', 'Rares', 'Uncommons', 'Commons', 'Vintages', 'Pets', 'Mis', 'Untradables'];
   const displayedFilter = selectedFilter === 'PREMIUM' ? 'GAME PASS' : selectedFilter;
   const formatName = (name) => name.replace(/^\+/, '').replace(/\s+/g, '-');
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
@@ -48,6 +48,7 @@ const ValueScreen = ({ selectedTheme }) => {
   const [selectedFruit, setSelectedFruit] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false); // State for pull-to-refresh
+  const [showAd1, setShowAd1] = useState(localState.showAd1);
 
   const editValuesRef = useRef({
     Value: '',
@@ -101,66 +102,6 @@ const ValueScreen = ({ selectedTheme }) => {
     mixpanel.track("Code Drawer Open");
   }
 
-  // const updateFruitData = () => {
-  //   if (!selectedFruit || !selectedFruit.Name) {
-  //     console.error("❌ No fruit selected for update or missing Name property");
-  //     return;
-  //   }
-
-  //   let localData = localState.data;
-
-  //   // Ensure localState.data is parsed correctly if it's a string
-  //   if (typeof localData === "string") {
-  //     try {
-  //       localData = JSON.parse(localData);
-  //     } catch (error) {
-  //       console.error("❌ Failed to parse localState.data as JSON", error, localData);
-  //       return;
-  //     }
-  //   }
-
-  //   // Check again to ensure it's a valid object
-  //   if (!localData || typeof localData !== "object" || Array.isArray(localData)) {
-  //     console.error("❌ localState.data is missing or not a valid object", localData);
-  //     return;
-  //   }
-
-  //   // Find the correct record key (case-insensitive match)
-  //   const recordKey = Object.keys(localData).find(key => {
-  //     const record = localData[key];
-
-  //     if (!record || !record.Name) {
-  //       console.warn(`⚠️ Skipping record ${key} due to missing Name field`, record);
-  //       return false;
-  //     }
-
-  //     return record.Name.trim().toLowerCase() === selectedFruit.Name.trim().toLowerCase();
-  //   });
-
-  //   if (!recordKey) {
-  //     console.error(`❌ Error: Record key not found for ${selectedFruit.Name}`);
-  //     return;
-  //   }
-
-  //   // Ensure values are valid before updating
-  //   const updatedValues = {
-  //     Value: isNaN(Number(editValuesRef.current.Value)) ? 0 : Number(editValuesRef.current.Value),
-  //     Permanent: isNaN(Number(editValuesRef.current.Permanent)) ? 0 : Number(editValuesRef.current.Permanent),
-  //     Biliprice: isNaN(Number(editValuesRef.current.Biliprice)) ? 0 : Number(editValuesRef.current.Biliprice),
-  //     Robuxprice: editValuesRef.current.Robuxprice || "N/A",
-  //   };
-
-  //   // Reference to the correct Firebase record
-  //   const fruitRef = ref(appdatabase, `/fruit_data/${recordKey}`);
-
-  //   update(fruitRef, updatedValues)
-  //     .then(() => {
-  //       setIsModalVisible(false);
-  //     })
-  //     .catch((error) => {
-  //       console.error("❌ Error updating fruit:", error);
-  //     });
-  // };
   const applyFilter = (filter) => {
     setSelectedFilter(filter);
   };
@@ -178,32 +119,61 @@ const ValueScreen = ({ selectedTheme }) => {
         </View>
       </View>
       <TouchableOpacity style={styles.downloadButton} onPress={() => {
-            handleadoptme(); triggerHapticFeedback('impactLight');
-          }}>
+        handleadoptme(); triggerHapticFeedback('impactLight');
+      }}>
         <Text style={styles.downloadButtonText}>Download</Text>
       </TouchableOpacity>
     </View>
   );
-  
-  
+  const CustomAd2 = () => (
+    <View style={styles.adContainer}>
+      <View style={styles.adContent}>
+        <Image
+          source={require('../../assets/icon.webp')} // Replace with your ad icon
+          style={styles.adIcon}
+        />
+        <View>
+          <Text style={styles.adTitle}>Blox Fruit Values</Text>
+          <Text style={styles.tryNowText}>Try Our other app</Text>
+        </View>
+      </View>
+      <TouchableOpacity style={styles.downloadButton} onPress={() => {
+        handleBloxFruit(); triggerHapticFeedback('impactLight');
+      }}>
+        <Text style={styles.downloadButtonText}>Download</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   useEffect(() => {
     if (localState.data) {
       try {
-        // ✅ Ensure it's a string before parsing
-        const parsedValues = typeof localState.data === 'string' ? JSON.parse(localState.data) : localState.data;
+        const parsedValues = typeof localState.data === 'string'
+          ? JSON.parse(localState.data)
+          : localState.data;
 
         if (typeof parsedValues !== 'object' || parsedValues === null) {
           throw new Error('Parsed data is not a valid object');
         }
 
-        setValuesData(Object.values(parsedValues));
+        const flattened = Object.entries(parsedValues).flatMap(([category, tiers]) =>
+          Object.entries(tiers).flatMap(([tier, items]) =>
+            items.map((item) => ({
+              ...item,
+              category,
+              tier,
+              type: category // Optional: add this for filtering
+            }))
+          )
+        );
+
+        setValuesData(flattened);
       } catch (error) {
         console.error("❌ Error parsing data:", error, "📝 Raw Data:", localState.data);
-        setValuesData([]); // Fallback to empty array
+        setValuesData([]);
       }
     }
   }, [localState.data]);
-
 
   useEffect(() => {
     if (localState.codes) {
@@ -225,6 +195,12 @@ const ValueScreen = ({ selectedTheme }) => {
     }
   }, [localState.codes]);
 
+  useEffect(() => {
+    // Toggle the ad state when the screen is mounted
+    const newAdState = toggleAd();
+    setShowAd1(newAdState);
+  }, []);
+
   const handleFilterChange = (filter) => {
     triggerHapticFeedback('impactLight');
     setSelectedFilter(filter === 'GAME PASS' ? 'PREMIUM' : filter);
@@ -244,15 +220,13 @@ const ValueScreen = ({ selectedTheme }) => {
     }
 
     const filtered = valuesData.filter((item) => {
-      if (!item?.name) return false;
-
-      const itemType =
-        item?.rarity == 'gamepass' ? 'GAME PASS' : item?.rarity?.toUpperCase();
-      return (
-        item.name.toLowerCase().includes(searchText.toLowerCase()) &&
-        (selectedFilter === 'All' || itemType === selectedFilter)
-      );
+      if (!item?.name || !item?.category) return false;
+      const matchesSearch = item.name.toLowerCase().includes(searchText.toLowerCase());
+      const matchesFilter = selectedFilter === 'All' || item.category === selectedFilter;
+      return matchesSearch && matchesFilter;
     });
+
+
 
     setFilteredData(filtered);
   }, [valuesData, searchText, selectedFilter]);
@@ -312,106 +286,69 @@ const ValueScreen = ({ selectedTheme }) => {
       <View style={styles.headerContainer}>
         <View style={styles.imageContainer}>
           <Image
-            source={{ uri: `https://bloxfruitscalc.com/wp-content/uploads/2024/09/${formatName(item.name)}_Icon.webp` }}
+            source={{ uri: localState.isMM2 ? `https://supremevaluelist.com/${item.image}` : `https://mm2values.com/${item.image}` }}
             style={styles.icon}
             resizeMode="cover"
           />
-
           <View>
             <Text style={styles.name}>{item.name}</Text>
-            <Text style={styles.value}> Robux Price: ${Number(item?.robux).toLocaleString()}</Text>
-            <Text style={styles.value}> Beli Price: ${Number(item?.beli).toLocaleString()}</Text>
-
+            <Text style={styles.value}>Value: {item.value}</Text>
           </View>
         </View>
-
-        <View>
-
+        <View style={styles.imageContainer}>
+          {/* <Image
+            source={{ uri: `https://mm2values.com/${item.image}` }}
+            style={styles.icon}
+            resizeMode="cover"
+          /> */}
+          <View>
+            <Text style={styles.name}>{item.tier}</Text>
+            <Text style={styles.value}></Text>
+          </View>
         </View>
-        <View>
-          <Text style={styles.rarity}>{item.rarity}</Text>
-        </View>
-
       </View>
+
       <View style={styles.headerContainer}>
+        
+    
         <View style={styles.pointsBox}>
-          <View style={styles.rowcenter}>
-            <Text style={styles.headertext}>Value: </Text>
-            <Text style={styles.value}>${item?.value ? Number(item?.value).toLocaleString() : 'N/A'} </Text>
+        <View style={{flexDirection:'column'}}>
+          <View style={{flexDirection:'row', marginVertical:5}}>
+          <Text style={styles.headertext}>Demand:</Text>
+          <Text style={styles.value}>{item.demand !== '' ? item.demand : 'N/A'} </Text>
           </View>
-          <View style={styles.rowcenter}>
-            <Text style={styles.headertext}>Status: </Text>
-            <Text style={styles.value}>{item?.physicalStatus ? item?.physicalStatus : 'N/A'} </Text>
-          </View>
-          <View style={styles.rowcenter}>
-            <Text style={styles.headertext}>Demand: </Text>
-            <Text style={styles.value}>{item?.demand ? item?.demand : 'N/A'} </Text>
+          <View style={{flexDirection:'row'}}>
+          <Text style={styles.headertext}>Rarity:</Text>
+          <Text style={styles.value}>{item.rarity !== '' ? item.rarity : 'N/A'}</Text>
           </View>
         </View>
-
+        </View>
         <View style={styles.pointsBox}>
-          <View style={styles.rowcenter}>
-            <Text style={styles.headertext}>Perm Value: </Text>
-            <Text style={styles.value}>${item?.permValue ? Number(item?.permValue).toLocaleString() : 'N/A'}</Text>
+        <View style={{flexDirection:'column'}}>
+          <View style={{flexDirection:'row', marginVertical:5}}>
+          <Text style={styles.headertext}>Stability:</Text>
+          <Text style={styles.value}>{item.stability ?? 'N/A'}</Text>
           </View>
-          <View style={styles.rowcenter}>
-            <Text style={styles.headertext}>Perm Status: </Text>
-            <Text style={styles.value}>{item?.permanentStatus ? item?.permanentStatus : 'N/A'}</Text>
+          <View style={{flexDirection:'row'}}>
+          <Text style={styles.headertext}>Range:</Text>
+          <Text style={styles.value}>{item.range !== '' ? item.range : 'N/A'}</Text>
           </View>
-          <View style={styles.rowcenter}>
-            <Text style={styles.headertext}>Perm Demand: </Text>
-            <Text style={styles.value}>{item?.permDemand ? item?.permDemand : 'N/A'}</Text>
-          </View>
-
         </View>
-
-
+        </View>
       </View>
-      <View style={{ backgroundColor: isDarkMode ? '#34495E' : '#CCCCFF', width: '100%', borderRadius: 8, padding: 10, marginTop: 10 }}>
-        <View style={styles.rowcenter}>
-          <Text style={styles.headertext}>TYPE : </Text>
-          <Text style={styles.value}>{item.type ? item.type : 'N/A'} </Text>
-        </View>
-        <View style={styles.rowcenter}>
-          <Text style={styles.headertext}>BEST USED FOR :</Text>
-          <Text style={styles.value}>{item.bestUsedFor ? item.bestUsedFor :'N/A'} </Text>
+    
 
-        </View>
-        <View style={styles.rowcenter}>
-          {/* <Text style={styles.headertext}>AWAKENING PRICE (Fragments)</Text> */}
-        </View>
-
-        {/* <View style={styles.rowcenter}>
-  {["X", "V", "Z", "F", "C"].map((key) => {
-    const value = item.fragments?.[key.toLowerCase()] ?? "N/A"; // ✅ Prevent undefined values
-    return (
-      <Text key={key} style={[styles.value, { paddingRight: 10 }]}>{key}: {value}</Text>
-    );
-  })}
-</View>
-
-<Text style={styles.value}>
-  Total Price: {Object.values(item.fragments || {}).reduce((sum, val) => sum + (val || 0), 0)}
-</Text> */}
-
-
-
-      </View>
       {isAdmin && (
         <TouchableOpacity onPress={() => openEditModal(item)} style={styles.editButton}>
           <Text style={styles.editButtonText}>Edit</Text>
         </TouchableOpacity>
       )}
       <View style={styles.devider}></View>
-
     </View>
-  ));
+  ), []);
 
 
-
-
-
-
+  // console.log(filteredData)
   return (
     <>
       <GestureHandlerRootView>
@@ -420,7 +357,11 @@ const ValueScreen = ({ selectedTheme }) => {
           {/* <Text style={[styles.description, { color: selectedTheme.colors.text }]}>
             {t("value.description")}
           </Text> */}
-                  <CustomAd />
+          {showAd1 ? (
+            <CustomAd />
+          ) : (
+            <CustomAd2 />
+          )}
 
           <View style={styles.searchFilterContainer}>
             <TextInput
@@ -431,7 +372,7 @@ const ValueScreen = ({ selectedTheme }) => {
 
             />
             <Menu>
-              <MenuTrigger onPress={() => {}}>
+              <MenuTrigger onPress={() => { }}>
                 <View style={styles.filterButton}>
                   <Text style={styles.filterText}>{displayedFilter}</Text>
                   <Icon name="chevron-down-outline" size={18} color="white" />
@@ -471,7 +412,10 @@ const ValueScreen = ({ selectedTheme }) => {
             <>
               <FlatList
                 data={filteredData}
-                keyExtractor={(item) => item.name}
+                keyExtractor={(item, index) =>
+                  `${item.name?.replace(/\s+/g, '_')}_${item.category}_${item.tier}_${index}`
+                }
+
                 renderItem={renderItem}
                 showsVerticalScrollIndicator={false}
                 removeClippedSubviews={true}
@@ -492,7 +436,7 @@ const ValueScreen = ({ selectedTheme }) => {
         </View>
         <CodesDrawer isVisible={isDrawerVisible} toggleModal={toggleDrawer} codes={codesData} />
       </GestureHandlerRootView>
-      {!localState.isPro && <BannerAdComponent/>}
+      {!localState.isPro && <BannerAdComponent />}
 
       {/* {!localState.isPro && <View style={{ alignSelf: 'center' }}>
         {isAdVisible && (
@@ -512,9 +456,10 @@ const ValueScreen = ({ selectedTheme }) => {
 };
 export const getStyles = (isDarkMode) =>
   StyleSheet.create({
-    container: { paddingHorizontal: 8, marginHorizontal: 2, flex: 1 },
+    container: { paddingHorizontal: 8, marginHorizontal: 2, flex: 1, backgroundColor:'#141414' },
     searchFilterContainer: { flexDirection: 'row', marginVertical: 5, alignItems: 'center' },
-    searchInput: {   height: 40,
+    searchInput: {
+      height: 40,
       borderColor: isDarkMode ? config.colors.primary : 'white',
       backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
 
@@ -524,14 +469,14 @@ export const getStyles = (isDarkMode) =>
       paddingHorizontal: 10,
       color: isDarkMode ? 'white' : 'black',
       flex: 1,
-      borderRadius: 10, marginRight:10 // Ensure smooth corners
-       },
+      borderRadius: 10, marginRight: 10 // Ensure smooth corners
+    },
     filterDropdown: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E0E0E0', padding: 10, borderRadius: 10, height: 40, marginLeft: 10 },
     filterOption: { padding: 10, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' },
     filterTextOption: { fontSize: 12 },
     // itemContainer: { alignItems: 'flex-start', backgroundColor: 'red', borderRadius: 10, padding: 10, 
     //    width: '100%', marginVertical: 5 },
-    icon: { width: 50, height: 50, borderRadius: 5, marginRight: 10 },
+    icon: { width: 50, height: 50, borderRadius: 5, marginRight: 10, backgroundColor: 'transparent' },
     infoContainer: { flex: 1 },
     name: {
       fontSize: 16, fontFamily: 'Lato-Bold',
@@ -575,7 +520,9 @@ export const getStyles = (isDarkMode) =>
       justifyContent: 'space-between',
       // flex: 1,
       alignItems: 'center',
-      
+      padding:5,
+
+
     },
     headerContainer: {
       flexDirection: 'row',
@@ -583,7 +530,10 @@ export const getStyles = (isDarkMode) =>
       flex: 1,
       alignItems: 'center',
       width: '100%',
-      marginBottom:3
+      marginBottom: 3,
+      backgroundColor:'#1B1B1B',
+      borderRadius:10
+
 
     },
     devider: {
@@ -699,6 +649,7 @@ export const getStyles = (isDarkMode) =>
       borderRadius: 8,
       // alignItems: 'center',
       padding: 10,
+      flexDirection:'row'
     },
     rowcenter: {
       flexDirection: 'row',
@@ -736,13 +687,13 @@ export const getStyles = (isDarkMode) =>
     },
     adContainer: {
       // backgroundColor: '#F5F5F5', // Light background color for the ad
-      padding: 15,
+      padding: 5,
       borderRadius: 10,
       marginBottom: 15,
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      borderWidth:1,
+      borderWidth: 1,
 
     },
     adContent: {
@@ -759,7 +710,7 @@ export const getStyles = (isDarkMode) =>
     adTitle: {
       fontSize: 18,
       fontFamily: 'Lato-Bold',
-      color: '#333',
+      color: 'white',
       // marginBottom: 5, // Adds space below the title
     },
     tryNowText: {

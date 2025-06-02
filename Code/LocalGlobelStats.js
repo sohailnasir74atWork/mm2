@@ -30,11 +30,12 @@ export const LocalStateProvider = ({ children }) => {
     updateCount: Number(storage.getString('updateCount')) || 0,
     featuredCount: safeParseJSON('featuredCount', { count: 0, time: null }),
     isHaptic: storage.getBoolean('isHaptic') ?? true,
-    theme: storage.getString('theme') || 'system',
+    theme: storage.getString('theme') || 'dark',
     consentStatus: storage.getString('consentStatus') || 'UNKNOWN',
     isPro: storage.getBoolean('isPro') ?? false,
     fetchDataTime: storage.getString('fetchDataTime') || null,
     data: safeParseJSON('data', {}),
+    suprime: safeParseJSON('suprime', {}),
     codes: safeParseJSON('codes', {}),
     normalStock: safeParseJSON('normalStock', []),
     bannedUsers: safeParseJSON('bannedUsers', []),
@@ -46,7 +47,9 @@ export const LocalStateProvider = ({ children }) => {
     showOnBoardingScreen: storage.getBoolean('showOnBoardingScreen') ?? true,
     user_name: storage.getString('user_name') || 'Anonymous',
     translationUsage: safeParseJSON('translationUsage', { count: 0, date: new Date().toDateString() }),
-
+    favorites: safeParseJSON('favorites', []),
+    isMM2: storage.getBoolean('isMM2') ?? true,
+    showAd1: storage.getBoolean('showAd1') ?? true,
   }));
 
 
@@ -60,7 +63,7 @@ export const LocalStateProvider = ({ children }) => {
 
   // Listen for system theme changes
   useEffect(() => {
-    if (localState.theme === 'system') {
+    if (localState.theme === 'dark') {
       const listener = Appearance.addChangeListener(({ colorScheme }) => {
         updateLocalState('theme', colorScheme);
       });
@@ -289,6 +292,12 @@ export const LocalStateProvider = ({ children }) => {
     return date === today ? 20 - count : 20;
   };
 
+  // Add this function to toggle between ads
+  const toggleAd = () => {
+    const newAdState = !localState.showAd1;
+    updateLocalState('showAd1', newAdState);
+    return newAdState;
+  };
 
   const contextValue = useMemo(
     () => ({
@@ -303,7 +312,8 @@ export const LocalStateProvider = ({ children }) => {
       restorePurchases,
       canTranslate,
       incrementTranslationCount,
-      getRemainingTranslationTries
+      getRemainingTranslationTries,
+      toggleAd,
     }),
     [localState, customerId, packages, mySubscriptions]
   );

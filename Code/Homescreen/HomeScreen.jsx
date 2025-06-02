@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, FlatList, TextInput, Image,  Keyboard, Pressable, Platform } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, FlatList, TextInput, Image, Keyboard, Pressable, Platform } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import ViewShot from 'react-native-view-shot';
 import { useGlobalState } from '../GlobelStats';
@@ -33,90 +33,163 @@ const HomeScreen = ({ selectedTheme }) => {
   const [searchText, setSearchText] = useState('');
   const [hasTotal, setHasTotal] = useState({ price: 0, value: 0 });
   const [wantsTotal, setWantsTotal] = useState({ price: 0, value: 0 });
-  const [isAdVisible, setIsAdVisible] = useState(true);
   const { triggerHapticFeedback } = useHaptic();
-  const { localState } = useLocalState()
+  const { localState, updateLocalState } = useLocalState()
   const [modalVisible, setModalVisible] = useState(false);
   const [description, setDescription] = useState('');
   const [isSigninDrawerVisible, setIsSigninDrawerVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { language } = useLanguage();
-  const [showNotification, setShowNotification] = useState(false);
-  const [pinnedMessages, setPinnedMessages] = useState([]);
   const [lastTradeTime, setLastTradeTime] = useState(null); // 🔄 Store last trade timestamp locally
   const [openShareModel, setOpenShareModel] = useState(false);
   const [selectedTrade, setSelectedTrade] = useState(null);
   const [type, setType] = useState(null); // 🔄 Store last trade timestamp locally
-  const platform = Platform.OS.toLowerCase();
+  const [selectedPetType, setSelectedPetType] = useState('All');
+  const [isAddingToFavorites, setIsAddingToFavorites] = useState(false);
+
   const { t } = useTranslation();
   // const pinnedMessagesRef = useMemo(() => ref(appdatabase, 'pin_messages'), []);
+  const CATEGORIES = useMemo(() => {
+    return localState.isMM2
+      ? ['All', 'Ancient', 'Unique', 'Chroma', 'Godly', 'Legend', 'Rare', 'Uncommon', 'Common', 'Vintage', 'Pets', 'Misc', 'Favorite']
+      : ['All', 'Sets', 'Ancients', 'Evos', 'Uniques', 'Chromas', 'Godlies', 'Legendaries', 'Rares', 'Uncommons', 'Commons', 'Vintages', 'Pets', 'Mis', 'Untradables', 'Favorite'];
+  }, [localState.isMM2]);
+
+  const extractMM2Values = (data) => {
+
+    const items = [];
+
+    try {
+      for (const [category, tiers] of Object.entries(data)) {
+        for (const [tier, values] of Object.entries(tiers)) {
+          for (const item of values) {
+            if (!item?.name || !item?.value || !item?.image) continue;
+
+            const cleanedValue = String(item.value).replace(/,/g, '');
+            const numericValue = !isNaN(cleanedValue) ? Number(cleanedValue) : null;
+
+            items.push({
+              Name: item.name,
+              FormattedValue: numericValue !== null ? numericValue.toLocaleString() : item.value,
+              Value: numericValue !== null ? numericValue : 0, // fallback to 0 or any safe number
+              Image: !localState.isMM2 ? `https://supremevaluelist.com/${item.image}` : `https://mm2values.com/${item.image}`,
+              Category: category,
+              Tier: tier,
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error("❌ Failed to extract MM2 values:", error);
+    }
+
+    return items;
+  };
+
+  const toggleFavorite = useCallback((item) => {
+    if (!item) return;
+
+    const currentFavorites = localState.favorites || [];
+    const isFavorite = currentFavorites.some(fav => fav.Name === item.Name);
+
+    const newFavorites = isFavorite
+      ? currentFavorites.filter(fav => fav.Name !== item.Name) // ✅ remove
+      : [...currentFavorites, item]; // ✅ add
+
+    updateLocalState('favorites', newFavorites);
+    triggerHapticFeedback('impactLight');
+  }, [localState.favorites, updateLocalState, triggerHapticFeedback]);
 
 
 
-  const CURRENT_APP_VERSION = DeviceInfo.getVersion();
-  // useEffect(() => {
-  //   let isMounted = true; // ✅ Track mounted state
-  //   const checkForUpdate = async () => {
-  //     try {
-  //       const database = getDatabase();
-  //       const platformKey = Platform.OS === "ios" ? "ios_app_version" : (config.isNoman ? "noman_app_version" : 'waqas_app_version');
-  //       const versionRef = ref(database, platformKey);
-  //       const snapshot = await get(versionRef);
-  //       if (snapshot.exists() && snapshot.val().app_version !== CURRENT_APP_VERSION) {
-  //         setShowNotification(true);
-  //       } else {
-  //         setShowNotification(false);
-  //       }
-  //     } catch (error) {
-  //       console.error("🔥 Error checking for updates:", error);
-  //     }
-  //   };
-  //   checkForUpdate();
-  //   return () => {
-  //     isMounted = false; // ✅ Prevent updates after unmount
-  //   };
-  // }, []);
+
+  const renderFavoritesHeader = useCallback(() => {
+    if (selectedPetType === 'FAVORITES') {
+      return (
+        <View style={styles.favoritesHeader}>
+          <Text style={styles.favoritesTitle}>Your Favorites</Text>
+        </View>
+      );
+    }
+    return null;
+  }, [selectedPetType]);
+
+  const keyExtractor = useCallback((item) =>
+    item.id?.toString() || Math.random().toString()
+    , []);
+  const renderGridItem = useCallback(({ item }) => {
+    const isFavorite = (localState.favorites || []).some(fav => fav.Name === item.Name);
+
+    return (
+      <TouchableOpacity
+        style={styles.gridItem}
+        onPress={() => {
+          if (isAddingToFavorites) {
+            toggleFavorite(item);
+          } else {
+            selectItem(item);
+          }
+        }}
+      >
+        <Image
+          source={{ uri: item.Image }}
+          style={styles.gridItemImage}
+          onError={(e) => console.log("Image load error:", e.nativeEvent.error)}
+        />
+        <Text numberOfLines={1} style={styles.gridItemText}>
+          {item.Name}
+        </Text>
+
+        {/* Show heart icon in Add-to-Favorites mode */}
+        {isAddingToFavorites && (
+          <TouchableOpacity
+            style={styles.favoriteButton}
+            onPress={() => toggleFavorite(item)}
+          >
+            <Icon
+              name={isFavorite ? "heart" : "heart-outline"}
+              size={20}
+              color={isFavorite ? "#e74c3c" : "#666"}
+            />
+          </TouchableOpacity>
+        )}
+
+        {/* Show delete icon in Favorites category */}
+        {selectedPetType === 'FAVORITES' && (
+          <TouchableOpacity
+            style={styles.removeButton}
+            onPress={() => toggleFavorite(item)}
+          >
+            <Icon
+              name="close-circle"
+              size={20}
+              color="#e74c3c"
+            />
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
+    );
+  }, [selectItem, toggleFavorite, localState.favorites, isAddingToFavorites, selectedPetType]);
+
+
+  const getItemLayout = useCallback((data, index) => ({
+    length: 100, // Approximate height of each item
+    offset: 100 * index,
+    index,
+  }), []);
+
+
 
   const handleLoginSuccess = () => {
     setIsSigninDrawerVisible(false);
   };
 
- 
-
   // useEffect(() => {
-  //   const loadPinnedMessages = async () => {
-  //     try {
-  //       const snapshot = await pinnedMessagesRef.once('value');
-  //       if (snapshot.exists()) {
-  //         const data = snapshot.val();
-  //         const parsedPinnedMessages = Object.entries(data).map(([key, value]) => ({
-  //           firebaseKey: key, // Use the actual Firebase key here
-  //           ...value,
-  //         }));
-  //         setPinnedMessages(parsedPinnedMessages); // Store the parsed messages with the Firebase key
-  //       } else {
-  //         setPinnedMessages([]); // No pinned messages
-  //       }
-  //     } catch (error) {
-  //       console.error('Error loading pinned messages:', error);
-  //       Alert.alert(t('home.alert.error'), 'Could not load pinned messages. Please try again.');
-  //     }
-  //   };
-
-  //   loadPinnedMessages();
-  //   return () => pinnedMessagesRef.off(); // ✅ Clean up Firebase reference
-
-  // }, [pinnedMessagesRef]);
-  // Run this once when the app starts
+  //   setRefreshKey(prev => prev + 1); 
+  // }, [localState.isMM2]);
 
 
 
-
-
-  // const onClose = () => { setShowNotification(false) }
-  // const onClosePinMessage = (index) => {
-  //   setPinnedMessages((prevMessages) => prevMessages.filter((_, i) => i !== index));
-  // };
   const isDarkMode = theme === 'dark'
   const viewRef = useRef();
 
@@ -127,15 +200,6 @@ const HomeScreen = ({ selectedTheme }) => {
     setWantsTotal({ price: 0, value: 0 });
     setHasItems([null, null, null, null]);
     setWantsItems([null, null, null, null]);
-  };
-  const resetTradeState = () => {
-    setHasItems([null, null, null, null]);
-    setWantsItems([null, null, null, null]);
-    setHasTotal({ price: 0, value: 0 });
-    setWantsTotal({ price: 0, value: 0 });
-    setDescription("");  // ✅ Reset description field
-    setSelectedSection(null);
-    setModalVisible(false); // ✅ Close modal after successful trade
   };
 
   const handleCreateTradePress = async (type) => {
@@ -199,10 +263,10 @@ const HomeScreen = ({ selectedTheme }) => {
       const database = getDatabase();
       const avgRatingSnap = await ref(database, `averageRatings/${user.id}`).once('value');
       const avgRatingData = avgRatingSnap.val();
-      
+
       const userRating = avgRatingData?.value || null;
       const ratingCount = avgRatingData?.count || 0; // 👈 total users who rated
-      
+
 
       // ✅ Build new trade object
       let newTrade = {
@@ -219,7 +283,7 @@ const HomeScreen = ({ selectedTheme }) => {
         timestamp: firestore.FieldValue.serverTimestamp(),
         rating: userRating,
         ratingCount: ratingCount
-        
+
       };
       if (type === 'share') {
         setModalVisible(false); // Close modal
@@ -278,104 +342,49 @@ const HomeScreen = ({ selectedTheme }) => {
     }
   };
 
-  const adjustedData = (fruitRecords) => {
-    let transformedData = [];
-
-    fruitRecords.forEach((fruit) => {
-      if (!fruit.name) return; // Skip invalid entries
-// console.log(fruit)
-      const permValueInvalid = fruit.permValue === 0 || fruit.permValue === "0" || fruit.permValue === "N/A";
-      const notperavailable = fruit.rarity == 'gamepass';
-
-      // ✅ If both permValue & value exist (permValue must be valid)
-      if (fruit.permValue !== undefined && fruit.value !== undefined) {
-       if(!notperavailable){ transformedData.push({
-          Name: fruit.name,
-          Value: permValueInvalid ? 0 :fruit.permValue,
-          Type: 'p', // Permanent type
-          Price: 0
-        });}
-
-        transformedData.push({
-          Name: fruit.name,
-          Value: fruit.value,
-          Type: 'n', // Normal type
-          Price: fruit.beli || 0
-        });
-
-        // console.log(`✅ Added ${fruit.name}: Permanent (${fruit.permValue}), Normal (${fruit.value})`);
-
-      } else if ( fruit.permValue !== undefined) {
-        // ✅ If only permValue exists (must be valid)
-        transformedData.push({
-          Name: fruit.name,
-          Value: permValueInvalid ? 0 :fruit.permValue,
-          Type: 'p', // Permanent type
-          Price: 0
-        });
-
-        // console.log(`⚠️ Only Permanent found for ${fruit.name}: ${fruit.permValue}`);
-
-      } else if (fruit.value !== undefined) {
-        // ✅ If only value exists
-        transformedData.push({
-          Name: fruit.name,
-          Value: fruit.value,
-          Type: 'n', // Normal type
-          Price: fruit.beli || 0
-        });
-
-        // console.log(`⚠️ Only Normal found for ${fruit.name}: ${fruit.value}`);
-      } else {
-        console.warn(`🚨 No valid values found for ${fruit.name}, skipping!`);
-      }
-    });
-
-    return transformedData;
-  };
-
 
 
 
   useEffect(() => {
-    let isMounted = true; // Track mounted state
+    let isMounted = true;
+    const MM2 = localState.isMM2;
 
-    const parseAndSetData = () => {
-      if (!localState.data) return;
-
+    if (MM2 && localState.data) {
       try {
-        let parsedData = localState.data;
+        const parsed = typeof localState.data === 'string'
+          ? JSON.parse(localState.data)
+          : localState.data;
 
-        // Ensure `localState.data` is always an object
-        if (typeof localState.data === 'string') {
-          parsedData = JSON.parse(localState.data);
-        }
-
-        // Ensure `parsedData` is a valid object before using it
-        if (parsedData && typeof parsedData === 'object' && Object.keys(parsedData).length > 0) {
-          const formattedData = adjustedData(Object.values(parsedData));
-          if (isMounted) {
-            setFruitRecords(formattedData);
-          }
-        } else {
-          if (isMounted) {
-            setFruitRecords([]);
-          }
-        }
-      } catch (error) {
-        console.error("❌ Error parsing data:", error);
+        const extracted = extractMM2Values(parsed);
         if (isMounted) {
-          setFruitRecords([]);
+          setFruitRecords(extracted);
         }
+      } catch (err) {
+        console.error("❌ Error parsing MM2 data in HomeScreen:", err);
+        setFruitRecords([]);
       }
-    };
+    }
+    if (!MM2 && localState.suprime) {
+      try {
+        const parsed = typeof localState.suprime === 'string'
+          ? JSON.parse(localState.suprime)
+          : localState.data;
 
-    parseAndSetData();
+        const extracted = extractMM2Values(parsed);
+        if (isMounted) {
+          setFruitRecords(extracted);
+        }
+      } catch (err) {
+        console.error("❌ Error parsing MM2 data in HomeScreen:", err);
+        setFruitRecords([]);
+      }
+    }
 
     return () => {
-      isMounted = false; // Cleanup on unmount
+      isMounted = false;
     };
-  }, [localState.data]);
+  }, [localState.isMM2]);
+
 
 
   const openDrawer = (section) => {
@@ -403,11 +412,9 @@ const HomeScreen = ({ selectedTheme }) => {
   const updateTotal = (item, section, add = true, isNew = false) => {
     // console.log(item);
 
-    // Convert `item.Price` and `item.Value` to numbers to prevent string concatenation
     const price = Number(item.Price) || 0; // Ensure it's a number or default to 0
     const value = Number(item.Value) || 0;
 
-    // Only update price if item.Type is NOT "p"
     const priceChange = add ? price : -price;
 
     // Update value only if item.Type isNew
@@ -428,11 +435,7 @@ const HomeScreen = ({ selectedTheme }) => {
 
 
 
-  const formatName = (name) => {
-    let formattedName = name.replace(/^\+/, '');
-    formattedName = formattedName.replace(/\s+/g, '-');
-    return formattedName;
-  }
+
   const selectItem = (item) => {
     // console.log(item)
     triggerHapticFeedback('impactLight');
@@ -454,7 +457,25 @@ const HomeScreen = ({ selectedTheme }) => {
     closeDrawer();
 
   };
-
+  const renderFavoritesFooter = useCallback(() => {
+    if (selectedPetType === 'FAVORITES') {
+      return (
+        <View style={styles.badgeContainer}>
+          <TouchableOpacity
+            style={styles.addToFavoritesButton}
+            onPress={() => {
+              setIsAddingToFavorites(true);
+              setSelectedPetType('All');
+            }}
+          >
+            <Icon name="add-circle" size={30} color={config.colors.primary} />
+            <Text style={styles.addToFavoritesText}>Add Items to Favorites</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return null;
+  }, [selectedPetType]);
   const removeItem = (index, isHas) => {
     triggerHapticFeedback('impactLight');
     const section = isHas ? 'has' : 'wants';
@@ -471,11 +492,24 @@ const HomeScreen = ({ selectedTheme }) => {
     }
   };
 
-  const filteredData = fruitRecords.filter((item) =>
-    item.Name.toLowerCase().includes(searchText.toLowerCase())
-  );
+  const filteredData = useMemo(() => {
+    const search = searchText.toLowerCase();
 
-  // console.log(filteredData)
+    // ✅ Show only favorite items
+    if (selectedPetType === 'FAVORITES') {
+      return (localState.favorites || []).filter((fav) =>
+        fav.Name.toLowerCase().includes(search)
+      );
+    }
+
+    // ✅ Otherwise, filter normal items by name and category
+    return fruitRecords.filter((item) =>
+      item.Name.toLowerCase().includes(search) &&
+      (selectedPetType === 'All' || item.Category.toLowerCase() === selectedPetType.toLowerCase())
+    );
+  }, [fruitRecords, localState.favorites, selectedPetType, searchText, localState.isMM2]);
+
+
   const profitLoss = wantsTotal.value - hasTotal.value;
   const isProfit = profitLoss >= 0;
   const neutral = profitLoss === 0;
@@ -492,81 +526,65 @@ const HomeScreen = ({ selectedTheme }) => {
 
   return (
     <>
-      <GestureHandlerRootView>
+      <GestureHandlerRootView key={localState.isMM2}>
 
         <View style={styles.container} key={language}>
           <ScrollView showsVerticalScrollIndicator={false}>
-            {/* {showNotification && <View style={[styles.notification]}>
-              <Text style={styles.text}>A new update is available! Please update your app.</Text>
-              <TouchableOpacity onPress={onClose} style={styles.closeButtonNotification}>
-                <Icon name="close-outline" size={18} color="white" />
 
-              </TouchableOpacity>
-            </View>}
-            {pinnedMessages.length > 0 && pinnedMessages.map((message, index) => (
-              <View key={index} style={styles.notification}>
-                <Text style={styles.text}>{message.text}</Text>
-                <TouchableOpacity onPress={() => onClosePinMessage(index)} style={styles.closeButtonNotification}>
-                  <Icon name="close-outline" size={18} color="white" />
-                </TouchableOpacity>
-              </View>
-            ))} */}
 
 
 
             <ViewShot ref={viewRef} style={styles.screenshotView}>
-            {config.isNoman &&  <View style={styles.summaryContainer}>
+              {config.isNoman && <View style={styles.summaryContainer}>
                 <View style={[styles.summaryBox, styles.hasBox]}>
                   <Text style={[styles.summaryText]}>{t('home.you')}</Text>
                   <View style={{ width: '90%', backgroundColor: '#e0e0e0', height: 1, alignSelf: 'center' }} />
                   <Text style={styles.priceValue}>{t('home.value')}: {hasTotal.value?.toLocaleString()}</Text>
-                  <Text style={styles.priceValue}>{t('home.price')}: ${hasTotal.price?.toLocaleString()}</Text>
+                  {/* <Text style={styles.priceValue}>{t('home.price')}: ${hasTotal.price?.toLocaleString()}</Text> */}
                 </View>
                 <View style={[styles.summaryBox, styles.wantsBox]}>
                   <Text style={styles.summaryText}>{t('home.them')}</Text>
                   <View style={{ width: '90%', backgroundColor: '#e0e0e0', height: 1, alignSelf: 'center' }} />
                   <Text style={styles.priceValue}>{t('home.value')}: {wantsTotal.value?.toLocaleString()}</Text>
-                  <Text style={styles.priceValue}>{t('home.price')}: ${wantsTotal.price?.toLocaleString()}</Text>
+                  {/* <Text style={styles.priceValue}>{t('home.price')}: ${wantsTotal.price?.toLocaleString()}</Text> */}
                 </View>
               </View>}
               <View style={styles.profitLossBox}>
                 <Text style={[styles.profitLossText, { color: selectedTheme.colors.text }]}>
                   {isProfit ? t('home.profit') : t('home.loss')}:
                 </Text>
-                <Text style={[styles.profitLossValue, { color: isProfit ? config.colors.hasBlockGreen : config.colors.wantBlockRed }]}>
+                <Text style={[styles.profitLossValue, { color: isProfit ? config.colors.primary : config.colors.primary }]}>
                   ${Math.abs(profitLoss).toLocaleString()} ({profitPercentage}%)
                 </Text>
                 {!neutral && <Icon
                   name={isProfit ? 'arrow-up-outline' : 'arrow-down-outline'}
                   size={20}
-                  color={isProfit ? config.colors.hasBlockGreen : config.colors.wantBlockRed}
+                  color={isProfit ? config.colors.primary : config.colors.primary}
                   style={styles.icon}
                 />}
               </View>
 
               <Text style={[styles.sectionTitle, { color: selectedTheme.colors.text }]}>{t('home.you')}</Text>
               <View style={styles.itemRow}>
-                {/* <TouchableOpacity onPress={() => { openDrawer('has') }} style={styles.addItemBlock}>
-                  <Icon name="add-circle" size={40} color="white" />
-                  <Text style={styles.itemText}>{t('home.add_item')}</Text>
-                </TouchableOpacity> */}
+
 
                 {config.isNoman && hasItems?.map((item, index) => (
-                  <TouchableOpacity key={index} style={[styles.addItemBlockNew, { backgroundColor: item?.Type === 'p' ? '#FFD700' : isDarkMode ? '#34495E' : '#CCCCFF' }]} onPress={() => { openDrawer('has') }} disabled={item !== null}>
+                  <TouchableOpacity key={index} style={[styles.addItemBlockNew, { backgroundColor: '#1B1B1B' }]} onPress={() => { openDrawer('has') }} disabled={item !== null}>
                     {item ? (
                       <>
-                        <Image
-                          source={{ uri: item.Type !== 'p' ? `https://bloxfruitscalc.com/wp-content/uploads/2024/09/${formatName(item.Name)}_Icon.webp` : `https://bloxfruitscalc.com/wp-content/uploads/2024/08/${formatName(item.Name)}_Icon.webp` }}
-                          style={[styles.itemImageOverlay,
 
-                          ]}
+                        <Image
+                          source={{ uri: item.Image }}
+                          resizeMode="cover"
+                          style={[styles.itemImageOverlay]}
                         />
-                        <Text style={[styles.itemText, { color: item.Type === 'p' ? 'black' : (isDarkMode ? 'white' : 'black') }
-                        ]}>{item.usePermanent 
-                          ? (Number(item.Permanent) === 0 ? "Special" : Number(item.Permanent).toLocaleString()) 
+
+                        <Text style={[styles.itemText, { color: 'white' }
+                        ]}>{item.usePermanent
+                          ? (Number(item.Permanent) === 0 ? "Special" : Number(item.Permanent).toLocaleString())
                           : (Number(item.Value) === 0 ? "Special" : Number(item.Value).toLocaleString())
-                        }</Text>
-                        <Text style={[styles.itemText, { color: item.Type === 'p' ? 'black' : (isDarkMode ? 'white' : 'black') }
+                          }</Text>
+                        <Text style={[styles.itemText, { color: 'white' }
                         ]}>{item.Type === 'p' && 'Perm'}  {item.Name}</Text>
                         {/* {item.Type === 'p' && <Text style={styles.perm}>P</Text>} */}
                         <TouchableOpacity onPress={() => removeItem(index, true)} style={styles.removeButton}>
@@ -581,39 +599,7 @@ const HomeScreen = ({ selectedTheme }) => {
                     )}
                   </TouchableOpacity>
                 ))}
-                    {!config.isNoman && hasItems?.map((item, index) => (
-                  <TouchableOpacity key={index} style={[styles.addItemBlockNewNoman,]} onPress={() => { openDrawer('has') }} disabled={item !== null}>
-                    {item ? (
-                      <>
-                      <View style={{backgroundColor:'#1dc226', paddingVertical:6, borderTopLeftRadius:6, borderTopRightRadius:6}}>
-                         <Text style={[styles.itemText, { color: item.Type === 'p' ? 'black' : (isDarkMode ? 'black' : 'black') }
-                        ]}>{item.Type === 'p' && 'Perm'}  {item.Name}</Text></View>
-                        <Image
-                          source={{ uri: item.Type !== 'p' ? `https://bloxfruitscalc.com/wp-content/uploads/2024/09/${formatName(item.Name)}_Icon.webp` : `https://bloxfruitscalc.com/wp-content/uploads/2024/08/${formatName(item.Name)}_Icon.webp` }}
-                          style={[styles.itemImageOverlayNoman, {alignSelf:'center'}
 
-                          ]}
-                        />
-                        <View style={{backgroundColor:'#fe01ea', paddingVertical:6, borderBottomLeftRadius:6, borderBottomRightRadius:6}}>
-                        <Text style={[styles.itemText, { color: item.Type === 'p' ? 'black' : (isDarkMode ? 'black' : 'black') }
-                        ]}>${item.usePermanent 
-                          ? (Number(item.Permanent) === 0 ? "Special" : Number(item.Permanent).toLocaleString()) 
-                          : (Number(item.Value) === 0 ? "Special" : Number(item.Value).toLocaleString())
-                        }</Text></View>
-                     
-                        {/* {item.Type === 'p' && <Text style={styles.perm}>P</Text>} */}
-                        <TouchableOpacity onPress={() => removeItem(index, true)} style={styles.removeButton}>
-                          <Icon name="close-outline" size={18} color="white" />
-                        </TouchableOpacity>
-                      </>
-                    ) : (
-                      <View style={{flex:1, justifyContent:'center', alignItems:'center'}}>
-                        {index === lastFilledIndexHas + 1 && <Icon name="add-circle" size={30} color={isDarkMode ? "lightgrey" : 'grey' }/>}
-                        {index === lastFilledIndexHas + 1 && <Text style={[styles.itemText, {color:isDarkMode ? "lightgrey" : 'grey'}]}>{t('home.add_item')}</Text>}
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
               </View>
 
               <View style={styles.divider}>
@@ -626,25 +612,20 @@ const HomeScreen = ({ selectedTheme }) => {
 
               <Text style={[styles.sectionTitle, { color: selectedTheme.colors.text }]}>{t('home.them')}</Text>
               <View style={[styles.itemRow, { marginBottom: 0 }]}>
-                {/* <TouchableOpacity onPress={() => { openDrawer('wants'); }} style={styles.addItemBlockNew}>
-                  <Icon name="add-circle" size={40} color="white" />
-                  <Text style={styles.itemText}>{t('home.add_item')}</Text>
-                </TouchableOpacity> */}
+
                 {config.isNoman && wantsItems?.map((item, index) => (
-                  <TouchableOpacity key={index} style={[styles.addItemBlockNew, { backgroundColor: item?.Type === 'p' ? '#FFD700' : isDarkMode ? '#34495E' : '#CCCCFF' }]} onPress={() => { openDrawer('wants'); }} disabled={item !== null}>
+                  <TouchableOpacity key={index} style={[styles.addItemBlockNew, { backgroundColor:  '#1B1B1B' }]} onPress={() => { openDrawer('wants'); }} disabled={item !== null}>
                     {item ? (
                       <>
                         <Image
-                          source={{ uri: item.Type !== 'p' ? `https://bloxfruitscalc.com/wp-content/uploads/2024/09/${formatName(item.Name)}_Icon.webp` : `https://bloxfruitscalc.com/wp-content/uploads/2024/08/${formatName(item.Name)}_Icon.webp` }}
+                          source={{ uri: item.Image }}
+                          resizeMode="cover"
                           style={[styles.itemImageOverlay]}
                         />
-                        <Text style={[styles.itemText, { color: item.Type === 'p' ? 'black' : (isDarkMode ? 'white' : 'black') }
-                        ]}>{item.usePermanent 
-                          ? (Number(item.Permanent) === 0 ? "Special" : Number(item.Permanent).toLocaleString()) 
-                          : (Number(item.Value) === 0 ? "Special" : Number(item.Value).toLocaleString())
-                        }</Text>
-                        <Text style={[styles.itemText, { color: item.Type === 'p' ? 'black' : (isDarkMode ? 'white' : 'black') }
-                        ]}>{item.Type === 'p' && 'Perm'} {item.Name}</Text>
+                        <Text style={[styles.itemText, { color: 'white' }
+                        ]}>{(Number(item.Value) === 0 ? "Special" : Number(item.Value).toLocaleString())}</Text>
+                        <Text style={[styles.itemText, { color: 'white' }
+                        ]}>{item.Name}</Text>
                         {/* {item.Type === 'p' && <Text style={styles.perm}>P</Text>} */}
                         <TouchableOpacity onPress={() => removeItem(index, false)} style={styles.removeButton}>
                           <Icon name="close-outline" size={18} color="white" />
@@ -661,64 +642,9 @@ const HomeScreen = ({ selectedTheme }) => {
                   </TouchableOpacity>
                 ))}
 
-{!config.isNoman && wantsItems?.map((item, index) => (
-                  <TouchableOpacity key={index} style={[styles.addItemBlockNewNoman,]} onPress={() => { openDrawer('wants') }} disabled={item !== null}>
-                    {item ? (
-                      <>
-                      <View style={{backgroundColor:'#1dc226', paddingVertical:6, borderTopLeftRadius:6, borderTopRightRadius:6}}>
-                         <Text style={[styles.itemText, { color: item.Type === 'p' ? 'black' : (isDarkMode ? 'black' : 'black') }
-                        ]}>{item.Type === 'p' && 'Perm'}  {item.Name}</Text></View>
-                        <Image
-                          source={{ uri: item.Type !== 'p' ? `https://bloxfruitscalc.com/wp-content/uploads/2024/09/${formatName(item.Name)}_Icon.webp` : `https://bloxfruitscalc.com/wp-content/uploads/2024/08/${formatName(item.Name)}_Icon.webp` }}
-                          style={[styles.itemImageOverlayNoman, {alignSelf:'center'}
 
-                          ]}
-                        />
-                        <View style={{backgroundColor:'#fe01ea', paddingVertical:6, borderBottomLeftRadius:6, borderBottomRightRadius:6}}>
-                        <Text style={[styles.itemText, { color: item.Type === 'p' ? 'black' : (isDarkMode ? 'black' : 'black') }
-                        ]}>${item.usePermanent 
-                          ? (Number(item.Permanent) === 0 ? "Special" : Number(item.Permanent).toLocaleString()) 
-                          : (Number(item.Value) === 0 ? "Special" : Number(item.Value).toLocaleString())
-                        }</Text></View>
-                     
-                        {/* {item.Type === 'p' && <Text style={styles.perm}>P</Text>} */}
-                        <TouchableOpacity onPress={() => removeItem(index, false)} style={styles.removeButton}>
-                          <Icon name="close-outline" size={18} color="white" />
-                        </TouchableOpacity>
-                      </>
-                    ) : (
-                      <View style={{flex:1, justifyContent:'center', alignItems:'center'}}>
-                        {index === lastFilledIndexWant + 1 && <Icon name="add-circle" size={30} color={isDarkMode ? "lightgrey" : 'grey'} />}
-                        {index === lastFilledIndexWant + 1 && <Text style={[styles.itemText, {color:isDarkMode ? "lightgrey" : 'grey'}]}>{t('home.add_item')}</Text>}
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
               </View>
-              {!config.isNoman &&  <View style={styles.summaryContainer}>
-                <View style={[styles.summaryBox, styles.hasBox]}>
-                  <View style={{ width: '90%', backgroundColor: '#e0e0e0', alignSelf: 'center', }} />
-                  <View style={{justifyContent:'space-between', flexDirection:'row' }} >
-                  <Text style={styles.priceValue}>{t('home.value')}:</Text>
-                  <Text style={styles.priceValue}>${hasTotal.value?.toLocaleString()}</Text>
-                  </View>
-                  <View style={{justifyContent:'space-between', flexDirection:'row' }}>
-                  <Text style={styles.priceValue}>{t('home.price')}:</Text>
-                  <Text style={styles.priceValue}>${hasTotal.price?.toLocaleString()}</Text>
-                  </View>
-                </View>
-                <View style={[styles.summaryBox, styles.wantsBox]}>
-                  <View style={{ width: '90%', backgroundColor: '#e0e0e0', alignSelf: 'center', }} />
-                  <View style={{justifyContent:'space-between', flexDirection:'row' }} >
-                  <Text style={styles.priceValue}>{t('home.value')}:</Text>
-                  <Text style={styles.priceValue}>${wantsTotal.value?.toLocaleString()}</Text>
-                  </View>
-                  <View style={{justifyContent:'space-between', flexDirection:'row' }}>
-                  <Text style={styles.priceValue}>{t('home.price')}:</Text>
-                  <Text style={styles.priceValue}>${wantsTotal.price?.toLocaleString()}</Text>
-                  </View>
-                </View>
-              </View>}
+
             </ViewShot>
             <View style={styles.createtrade} >
               <TouchableOpacity style={styles.createtradeButton} onPress={() => handleCreateTradePress('create')}><Text style={{ color: 'white' }}>{t('home.create_trade')}</Text></TouchableOpacity>
@@ -728,61 +654,67 @@ const HomeScreen = ({ selectedTheme }) => {
             visible={isDrawerVisible}
             transparent={true}
             animationType="slide"
-            onRequestClose={closeDrawer}
+            onRequestClose={() => setIsDrawerVisible(false)}
           >
-            <Pressable style={styles.modalOverlay} onPress={closeDrawer} />
-            <ConditionalKeyboardWrapper>
-              <View>
+            <Pressable style={styles.modalOverlay} onPress={() => setIsDrawerVisible(false)} />
+            <View style={styles.drawerContainer}>
+              <View style={styles.drawerHeader}>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search..."
+                  value={searchText}
+                  onChangeText={setSearchText}
+                  placeholderTextColor={isDarkMode ? '#999' : '#666'}
+                />
+                <TouchableOpacity
+                  onPress={() => setIsDrawerVisible(false)}
+                  style={styles.closeButton}
+                >
+                  <Text style={styles.closeButtonText}>{t('home.close')}</Text>
+                </TouchableOpacity>
+              </View>
 
-                <View style={[styles.drawerContainer, { backgroundColor: isDarkMode ? '#3B404C' : 'white' }]}>
+              <View style={styles.drawerContent}>
+                <View style={styles.categoryList}>
+                  {CATEGORIES.map((category) => (
+                    <TouchableOpacity
+                      key={category}
+                      style={[
+                        styles.categoryButton,
+                        selectedPetType === category && styles.categoryButtonActive
+                      ]}
+                      onPress={() => {
+                        setSelectedPetType(category);
+                        if (category !== 'FAVORITES') {
+                          setIsAddingToFavorites(false);
+                        }
+                      }}
+                    >
+                      <Text style={[
+                        styles.categoryButtonText,
+                        selectedPetType === category && styles.categoryButtonTextActive
+                      ]}>{category}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-                  <View style={{
-                    flexDirection: 'row', justifyContent: 'space-between', marginVertical: 10,
-                  }}
-
-                  >
-
-                    <TextInput
-                      style={styles.searchInput}
-                      placeholder={t('home.search_placeholder')}
-                      value={searchText}
-                      onChangeText={setSearchText}
-                      placeholderTextColor={isDarkMode ? 'white' : 'black'}
-
-                    />
-                    <TouchableOpacity onPress={closeDrawer} style={styles.closeButton}>
-                      <Text style={styles.closeButtonText}>{t('home.close')}</Text>
-                    </TouchableOpacity></View>
+                <View style={styles.gridContainer}>
+                  {renderFavoritesHeader()}
                   <FlatList
-                    onScroll={() => Keyboard.dismiss()}
-                    onTouchStart={() => Keyboard.dismiss()}
-                    keyboardShouldPersistTaps="handled" // Ensures taps o
-
                     data={filteredData}
-                    keyExtractor={(item) => item.Name}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity style={[styles.itemBlock, { backgroundColor: item.Type === 'p' ? '#FFD700' : isDarkMode ? '#34495E' : '#CCCCFF' }]} onPress={() => selectItem(item)}>
-                        <>
-                          <Image
-                            source={{ uri: item.Type !== 'p' ? `https://bloxfruitscalc.com/wp-content/uploads/2024/09/${formatName(item.Name)}_Icon.webp` : `https://bloxfruitscalc.com/wp-content/uploads/2024/08/${formatName(item.Name)}_Icon.webp` }}
-                            style={[styles.itemImageOverlay]}
-                          />
-                          <Text style={[[styles.itemText, { color: item.Type === 'p' ? 'black' : (isDarkMode ? 'white' : 'black') }
-                          ]]}>${Number(item.Value)?.toLocaleString()}</Text>
-                          <Text style={[[styles.itemText, { color: item.Type === 'p' ? 'black' : (isDarkMode ? 'white' : 'black') }
-                          ]]}>{item.Type === 'p' && 'Perm'} {item.Name}</Text>
-                          {/* {item.Type === 'p' && <Text style={styles.perm}>P</Text>} */}
-                        </>
-                      </TouchableOpacity>
-                    )}
+                    keyExtractor={keyExtractor}
+                    renderItem={renderGridItem}
                     numColumns={3}
-                    contentContainerStyle={styles.flatListContainer}
-                    columnWrapperStyle={styles.columnWrapper}
-
+                    initialNumToRender={12}
+                    maxToRenderPerBatch={12}
+                    windowSize={5}
+                    removeClippedSubviews={true}
+                    getItemLayout={getItemLayout}
                   />
+                  {selectedPetType === 'FAVORITES' && renderFavoritesFooter()}
                 </View>
               </View>
-            </ConditionalKeyboardWrapper>
+            </View>
           </Modal>
           <Modal
             visible={modalVisible}
@@ -841,21 +773,7 @@ const HomeScreen = ({ selectedTheme }) => {
           />
         </View>
       </GestureHandlerRootView>
-      {!localState.isPro && <BannerAdComponent/>}
-
-      {/* {!localState.isPro && <View style={{ alignSelf: 'center' }}>
-        {isAdVisible && (
-          <BannerAd
-            unitId={bannerAdUnitId}
-            size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
-            onAdLoaded={() => setIsAdVisible(true)}
-            onAdFailedToLoad={() => setIsAdVisible(false)}
-            requestOptions={{
-              requestNonPersonalizedAdsOnly: true,
-            }}
-          />
-        )}
-      </View>} */}
+      {!localState.isPro && <BannerAdComponent />}
     </>
   );
 }
@@ -863,7 +781,7 @@ const getStyles = (isDarkMode) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDarkMode ? '#121212' : '#f2f2f7',
+      backgroundColor: isDarkMode ? '#141414' : '#f2f2f7',
       paddingBottom: 5,
     },
 
@@ -878,10 +796,10 @@ const getStyles = (isDarkMode) =>
       borderRadius: 8,
     },
     hasBox: {
-      backgroundColor: config.colors.hasBlockGreen,
+      backgroundColor: config.colors.primary,
     },
     wantsBox: {
-      backgroundColor: config.colors.wantBlockRed,
+      backgroundColor: config.colors.primary,
     },
     summaryText: {
       fontSize: 16,
@@ -914,48 +832,58 @@ const getStyles = (isDarkMode) =>
     addItemBlockNew: {
       width: '48%',
       height: config.isNoman ? 80 : 110,
-      backgroundColor: isDarkMode ? '#34495E' : '#CCCCFF', // Dark: darker contrast, Light: White
+      backgroundColor: isDarkMode ? '#1B1B1B' : '#CCCCFF', // Dark: darker contrast, Light: White
       borderWidth: Platform.OS === 'android' ? 0 : 1,
       borderColor: 'lightgrey',
       justifyContent: 'center',
       alignItems: 'center',
       borderRadius: 8,
       marginBottom: 5,
+      borderWidth: 1,
+      borderColor: '#2A3942'
 
     },
     addItemBlockNewNoman: {
       width: '49%',
       height: config.isNoman ? 80 : 110,
-      backgroundColor: isDarkMode ? '#2d3337' : '#CCCCFF', // Dark: darker contrast, Light: White
+      backgroundColor: isDarkMode ? '#1B1B1B' : '#CCCCFF', // Dark: darker contrast, Light: White
       borderWidth: Platform.OS === 'android' ? 0 : 1,
       borderColor: 'lightgrey',
       justifyContent: 'space-between',
       // alignItems: 'center',
       borderRadius: 8,
       marginBottom: 5,
+      borderWidth: 1,
+      borderColor: '#2A3942',
+      borderWidth: 1,
+      borderColor: '#2A3942'
 
     },
     addItemBlock: {
       width: '32%',
       height: 85,
-      backgroundColor: isDarkMode ? '#34495E' : '#CCCCFF', // Dark: darker contrast, Light: White
+      backgroundColor: isDarkMode ? '#1B1B1B' : '#CCCCFF', // Dark: darker contrast, Light: White
       justifyContent: 'center',
       alignItems: 'center',
       borderRadius: 10,
       marginBottom: 10,
+      borderWidth: 1,
+      borderColor: '#2A3942'
     },
     itemBlock: {
       width: '32%',
       height: 110,
-      backgroundColor: isDarkMode ? '#34495E' : '#CCCCFF', // Dark: darker contrast, Light: White
+      backgroundColor: isDarkMode ? '#1B1B1B' : '#CCCCFF', // Dark: darker contrast, Light: White
       justifyContent: 'center',
       alignItems: 'center',
       borderRadius: 10,
       marginBottom: 10,
       position: 'relative',
+      borderWidth: 1,
+      borderColor: '#2A3942',
       ...(!config.isNoman && {
         borderWidth: 5,
-        borderColor: config.colors.hasBlockGreen,
+        borderColor: config.colors.primary,
       }),
     },
 
@@ -969,14 +897,18 @@ const getStyles = (isDarkMode) =>
       color: '#CCC',
       textAlign: 'center',
     },
+    favoriteButton: {
+      position: 'absolute',
+      top: 6,
+      right: 6,
+    },
+
     removeButton: {
       position: 'absolute',
-      top: 2,
-      right: 2,
-      backgroundColor: config.colors.wantBlockRed,
-      borderRadius: 50,
-      opacity: .7
+      bottom: 6,
+      right: 6,
     },
+
     divider: {
       justifyContent: 'center',
       alignItems: 'center',
@@ -986,23 +918,115 @@ const getStyles = (isDarkMode) =>
       padding: 5,
     },
     drawerContainer: {
-      borderTopLeftRadius: 10,
-      borderTopRightRadius: 10,
-      paddingHorizontal: 10,
-      paddingTop: 20,
-      maxHeight: 400,
-      overflow: 'hidden',
       position: 'absolute',
       bottom: 0,
       left: 0,
       right: 0,
+      backgroundColor: isDarkMode ? '#1B1B1B' : 'white',
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      height: '90%',
+      paddingTop: 16,
+      paddingHorizontal: 16,
+    },
+    drawerContainer2: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: isDarkMode ? '#1B1B1B' : 'white',
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      // height: '80%',
+      paddingTop: 16,
+      paddingHorizontal: 16,
+    },
+    drawerHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    drawerContent: {
+      flex: 1,
+      flexDirection: 'row',
+    },
+    categoryList: {
+      width: '30%',
+      paddingRight: 12,
+    },
+    categoryButton: {
+      marginVertical: 4,
+      paddingVertical: 8,
+      paddingHorizontal: 8,
+      backgroundColor: '#2A3942',
+      borderRadius: 12,
+      alignItems: 'center',
+    },
+    categoryButtonActive: {
+      backgroundColor: '#FF9999',
+    },
+    categoryButtonText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: 'white',
+    },
+    categoryButtonTextActive: {
+      color: '#fff',
+    },
+    gridContainer: {
+      flex: 1,
+      // paddingBottom: 60,
+    },
+    gridContainer: {
+      flex: 1,
+      // paddingBottom: 60,
+    },
+    gridItem: {
+      flex: 1,
+      margin: 4,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderRadius: 10,
+      paddingHorizontal: 3,
+      borderWidth: 1,
+      borderColor: '#2A3942'
+
+    },
+    gridItemImage: {
+      width: 60,
+      height: 60,
+      borderRadius: 10,
+    },
+    gridItemText: {
+      fontSize: 11,
+      marginBottom: 2,
+      marginTop: -2,
+      color: isDarkMode ? '#fff' : '#333',
+    },
+    badgeContainer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      paddingVertical: 8,
+      borderTopWidth: 1,
+      borderTopColor: isDarkMode ? '#4A4A4A' : '#E0E0E0',
+      // marginTop: 8,
+    },
+    modalOverlay: {
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      flex: 1,
+    },
+    searchInput: {
+      width: '75%',
+      borderColor: '#333',
+      borderWidth: 1,
+      borderRadius: 5,
+      height: 40,
+      paddingHorizontal: 10,
+      backgroundColor: '#fff',
+      color: '#000',
     },
 
-    drawerTitle: {
-      fontSize: 16,
-      textAlign: 'center',
-      fontFamily: 'Lato-Bold'
-    },
     profitLossBox: { flexDirection: 'row', justifyContent: 'center', marginVertical: 0, alignItems: 'center' },
     profitLossText: { fontSize: 14, fontFamily: 'Lato-Bold' },
     profitLossValue: { fontSize: 14, marginLeft: 5, fontFamily: 'Lato-Bold' },
@@ -1024,10 +1048,12 @@ const getStyles = (isDarkMode) =>
       color: '#000',
     },
     closeButton: {
-      backgroundColor: config.colors.wantBlockRed,
+      backgroundColor: config.colors.primary,
       padding: 10,
       borderRadius: 5,
-      width: '22%',
+      height: 48,
+
+      width: '24%',
       alignItems: 'center',
       justifyContent: 'center'
     },
@@ -1102,7 +1128,7 @@ const getStyles = (isDarkMode) =>
       flexDirection: 'row'
     },
     createtradeButton: {
-      backgroundColor: config.colors.hasBlockGreen,
+      backgroundColor: config.colors.primary,
       alignSelf: 'center',
       padding: 10,
       justifyContent: 'center',
@@ -1113,7 +1139,7 @@ const getStyles = (isDarkMode) =>
       marginRight: 1
     },
     shareTradeButton: {
-      backgroundColor: config.colors.wantBlockRed,
+      backgroundColor: config.colors.primary,
       alignSelf: 'center',
       padding: 10,
       flexDirection: 'row',
@@ -1161,10 +1187,10 @@ const getStyles = (isDarkMode) =>
       borderRadius: 5,
     },
     cancelButton: {
-      backgroundColor: config.colors.wantBlockRed,
+      backgroundColor: config.colors.primary,
     },
     confirmButton: {
-      backgroundColor: config.colors.hasBlockGreen,
+      backgroundColor: config.colors.primary,
     },
     buttonText: {
       color: 'white',
@@ -1180,28 +1206,131 @@ const getStyles = (isDarkMode) =>
       fontFamily: 'Lato-Bold',
       color: 'white',
     },
-    notification: {
-      justifyContent: "space-between",
-      padding: 12,
-      paddingTop: 20,
-      backgroundColor: config.colors.secondary,
-      marginHorizontal: 10,
-      marginTop: 10,
-      borderRadius: 8
-    },
+
     text: {
       color: "white",
       fontSize: 12,
       fontFamily: "Lato-Regular",
       lineHeight: 12
     },
-    closeButtonNotification: {
-      marginLeft: 10,
-      padding: 5,
-      position: 'absolute',
-      top: 0,
-      right: 0
+
+    gridItemImage: {
+      width: 60,
+      height: 60,
+      borderRadius: 6,
+      marginBottom: 6,
+      alignSelf: 'center'
     },
+    modalMessagefooter: {
+      fontSize: 10,
+      marginBottom: 10,
+      color: isDarkMode ? 'grey' : 'grey',
+      fontFamily: 'Lato-Regular'
+    },
+    input: {
+      width: '100%',
+      height: 40,
+      borderColor: 'gray',
+      borderWidth: 1,
+      borderRadius: 5,
+      paddingHorizontal: 10,
+      marginBottom: 20,
+      color: isDarkMode ? 'white' : 'black',
+      fontFamily: 'Lato-Ragular'
+    },
+    buttonContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      width: '100%',
+      marginBottom: 10,
+      paddingHorizontal: 20
+    },
+    button: {
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      borderRadius: 5,
+    },
+    cancelButton: {
+      backgroundColor: config.colors.primary,
+    },
+    confirmButton: {
+      backgroundColor: config.colors.primary,
+    },
+    buttonText: {
+      color: 'white',
+      fontSize: 14,
+      fontFamily: 'Lato-Bold',
+    },
+
+    text: {
+      color: "white",
+      fontSize: 12,
+      fontFamily: "Lato-Regular",
+      lineHeight: 12
+    },
+
+    itemBlock: {
+      width: '11.11%',
+      height: 110,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: 10,
+      marginBottom: 10,
+      position: 'relative',
+      ...(!config.isNoman && {
+        borderColor: config.colors.primary,
+      }),
+    },
+
+
+
+
+
+    favoriteButton: {
+      position: 'absolute',
+      top: 5,
+      right: 5,
+      padding: 5,
+      borderRadius: 50,
+    },
+    emptyFavoritesContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+      marginTop: 50,
+    },
+    emptyFavoritesText: {
+      fontSize: 16,
+      color: isDarkMode ? '#fff' : '#666',
+      marginTop: 10,
+      marginBottom: 20,
+    },
+    addToFavoritesButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDarkMode ? '#2A2A2A' : '#f0f0f0',
+      padding: 15,
+      borderRadius: 8,
+      margin: 10,
+      width: '100%',
+    },
+    addToFavoritesText: {
+      marginLeft: 8,
+      fontSize: 14,
+      color: isDarkMode ? '#fff' : '#666',
+    },
+    favoritesHeader: {
+      padding: 10,
+      alignItems: 'center',
+    },
+    favoritesTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDarkMode ? '#fff' : '#333',
+    },
+
 
   });
 

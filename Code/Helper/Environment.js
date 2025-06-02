@@ -31,17 +31,18 @@ const config = {
 
   isNoman: isNoman ? true : false,
 
-otherapplink: Platform.OS == 'android' ? 'https://play.google.com/store/apps/details?id=com.adoptmevaluescalc' : 'https://apps.apple.com/us/app/adoptme-values/id6745400111',
+  otherapplink: Platform.OS == 'android' ? 'https://play.google.com/store/apps/details?id=com.adoptmevaluescalc' : 'https://apps.apple.com/us/app/adoptme-values/id6745400111',
+  otherapplink2: Platform.OS == 'android' ? 'https://play.google.com/store/apps/details?id=com.bloxfruitevalues' : 'https://apps.apple.com/us/app/fruits-values-calculator/id6737775801',
   colors: isNoman
     ? {
       primary: '#6A5ACD', // Muted grayish blue
       secondary: '#3E8BFC', // Bright action blue
-      hasBlockGreen: '#29AB87', // Vibrant success green
-      wantBlockRed: '#FF3B30', // Vivid warning red
+      hasBlockGreen: '#6A5ACD', // Vibrant success green
+      wantBlockRed: '#6A5ACD', // Vivid warning red
       backgroundLight: '#f2f2f7',
       backgroundDark: '#121212',
-      white:'white',
-      black:'black'
+      white: 'white',
+      black: 'black'
     }
     : {
       primary: '#697565', // Deep navy blue
@@ -50,8 +51,8 @@ otherapplink: Platform.OS == 'android' ? 'https://play.google.com/store/apps/det
       wantBlockRed: '#E63946', // Warm, soft red
       backgroundLight: '#f2f2f7',
       backgroundDark: '#121212',
-       white:'white',
-      black:'black'
+      white: 'white',
+      black: 'black'
     },
 
 };

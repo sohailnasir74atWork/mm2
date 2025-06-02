@@ -43,7 +43,7 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
     const isDarkMode = theme === 'dark';
     useEffect(() => {
         GoogleSignin.configure({
-            webClientId: '409137828081-ig2uul01r95lj9fu6l1jgbgrp1es9060.apps.googleusercontent.com',
+            webClientId: '312806709908-c579rlm0rhdem882lisnpvd21no3onc8.apps.googleusercontent.com',
             offlineAccess: true,
         });
     }, [])

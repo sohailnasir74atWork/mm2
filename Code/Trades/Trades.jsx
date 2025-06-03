@@ -626,12 +626,12 @@ const TradeList = ({ route }) => {
     // Function to group items and count duplicates
     const groupItems = (items) => {
       const grouped = {};
-      items.forEach(({ name, type }) => {
-        const key = `${name}-${type}`;
+      items.forEach(({ name, image }) => {
+        const key = `${name}-${image}`;
         if (grouped[key]) {
           grouped[key].count += 1;
         } else {
-          grouped[key] = { name, type, count: 1 };
+          grouped[key] = { name, image, count: 1 };
         }
       });
       return Object.values(grouped);
@@ -721,13 +721,13 @@ const TradeList = ({ route }) => {
               </Text>
 
             </View>} */}
- <FontAwesome
-        name='message'
-         size={18}
+            <FontAwesome
+              name='message'
+              size={18}
               color={config.colors.primary}
               onPress={handleChatNavigation}
-        solid={false}
-      />
+              solid={false}
+            />
             {/* <Icon
               name="chatbox-outline"
               size={18}
@@ -745,12 +745,12 @@ const TradeList = ({ route }) => {
                 <View key={`${hasItem.name}-${hasItem.type}`} style={{ justifyContent: 'center', alignItems: 'center' }}>
                   <Image
                     source={{
-                      uri: hasItem.type === 'p' ? `https://bloxfruitscalc.com/wp-content/uploads/2024/08/${formatName(hasItem.name)}_Icon.webp` : `https://bloxfruitscalc.com/wp-content/uploads/2024/09/${formatName(hasItem.name)}_Icon.webp`,
+                      uri: hasItem.image,
                     }}
-                    style={[styles.itemImage, { backgroundColor: hasItem.type === 'p' ? '#FFCC00' : '' }]}
+                    style={[styles.itemImage, { backgroundColor: '#1B1B1B' }]}
                   />
                   <Text style={styles.names}>
-                    {hasItem.name}{hasItem.type === 'p' && " (P)"}
+                    {hasItem.name}
                   </Text>
                   {hasItem.count > 1 && (
                     <View style={styles.tagcount}>
@@ -779,12 +779,12 @@ const TradeList = ({ route }) => {
                 <View key={`${wantnItem.name}-${wantnItem.type}`} style={{ justifyContent: 'center', alignItems: 'center' }}>
                   <Image
                     source={{
-                      uri: wantnItem.type === 'p' ? `https://bloxfruitscalc.com/wp-content/uploads/2024/08/${formatName(wantnItem.name)}_Icon.webp` : `https://bloxfruitscalc.com/wp-content/uploads/2024/09/${formatName(wantnItem.name)}_Icon.webp`,
+                      uri: wantnItem.image,
                     }}
-                    style={[styles.itemImage, { backgroundColor: wantnItem.type === 'p' ? '#FFCC00' : '' }]}
+                    style={[styles.itemImage, { backgroundColor: '#1B1B1B' }]}
                   />
                   <Text style={styles.names}>
-                    {wantnItem.name}{wantnItem.type === 'p' && " (P)"}
+                    {wantnItem.name}
                   </Text>
                   {wantnItem.count > 1 && (
                     <View style={styles.tagcount}>
@@ -915,7 +915,7 @@ const TradeList = ({ route }) => {
         screen='Trade'
 
       />
-     
+
       {!localState.isPro && <BannerAdComponent />}
 
       {/* {!isProStatus && <View style={{ alignSelf: 'center' }}>

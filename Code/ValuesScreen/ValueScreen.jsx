@@ -30,14 +30,18 @@ const ValueScreen = ({ selectedTheme }) => {
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [filterDropdownVisible, setFilterDropdownVisible] = useState(false);
   const { analytics, appdatabase, isAdmin, reload, theme } = useGlobalState()
-  const isDarkMode = theme === 'dark'
+  const isDarkMode = true; // Force dark mode
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
   const [filteredData, setFilteredData] = useState([]);
   const { localState, toggleAd } = useLocalState()
   const [valuesData, setValuesData] = useState([]);
   const [codesData, setCodesData] = useState([]);
   const { t } = useTranslation();
-  const filters = !localState.isMM2 ?  ['All', 'Ancient', 'Unique', 'Chroma', 'Godly', 'Legend', 'Rare', 'Uncommon', 'Common', 'Vintage', 'Pets', 'Misc'] : ['All', 'Sets',  'Ancients', 'Evos', 'Uniques', 'Chromas', 'Godlies', 'Legendaries', 'Rares', 'Uncommons', 'Commons', 'Vintages', 'Pets', 'Mis', 'Untradables'];
+  const filters = useMemo(() => {
+    return localState.isMM2
+      ? ['All', 'Ancient', 'Unique', 'Chroma', 'Godly', 'Legend', 'Rare', 'Uncommon', 'Common', 'Vintage', 'Pets', 'Misc']
+      : ['All', 'Sets', 'Ancients', 'Evos', 'Uniques', 'Chromas', 'Godlies', 'Legendaries', 'Rares', 'Uncommons', 'Commons', 'Vintages', 'Pets', 'Mis', 'Untradables'];
+  }, [localState.isMM2]);
   const displayedFilter = selectedFilter === 'PREMIUM' ? 'GAME PASS' : selectedFilter;
   const formatName = (name) => name.replace(/^\+/, '').replace(/\s+/g, '-');
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
@@ -146,7 +150,7 @@ const ValueScreen = ({ selectedTheme }) => {
   );
 
   useEffect(() => {
-    if (localState.data) {
+    if (localState.data && localState.isMM2) {
       try {
         const parsedValues = typeof localState.data === 'string'
           ? JSON.parse(localState.data)
@@ -172,8 +176,34 @@ const ValueScreen = ({ selectedTheme }) => {
         console.error("❌ Error parsing data:", error, "📝 Raw Data:", localState.data);
         setValuesData([]);
       }
+    } else {
+      try {
+        const parsedValues = typeof localState.suprime === 'string'
+          ? JSON.parse(localState.suprime)
+          : localState.suprime;
+
+        if (typeof parsedValues !== 'object' || parsedValues === null) {
+          throw new Error('Parsed data is not a valid object');
+        }
+
+        const flattened = Object.entries(parsedValues).flatMap(([category, tiers]) =>
+          Object.entries(tiers).flatMap(([tier, items]) =>
+            items.map((item) => ({
+              ...item,
+              category,
+              tier,
+              type: category // Optional: add this for filtering
+            }))
+          )
+        );
+
+        setValuesData(flattened);
+      } catch (error) {
+        console.error("❌ Error parsing data:", error, "📝 Raw Data:", localState.data);
+        setValuesData([]);
+      }
     }
-  }, [localState.data]);
+  }, [localState.isMM2]);
 
   useEffect(() => {
     if (localState.codes) {
@@ -286,7 +316,7 @@ const ValueScreen = ({ selectedTheme }) => {
       <View style={styles.headerContainer}>
         <View style={styles.imageContainer}>
           <Image
-            source={{ uri: localState.isMM2 ? `https://supremevaluelist.com/${item.image}` : `https://mm2values.com/${item.image}` }}
+            source={{ uri: !localState.isMM2 ? `https://supremevaluelist.com/${item.image}` : `https://mm2values.com/${item.image}` }}
             style={styles.icon}
             resizeMode="cover"
           />
@@ -345,7 +375,7 @@ const ValueScreen = ({ selectedTheme }) => {
       )}
       <View style={styles.devider}></View>
     </View>
-  ), []);
+  ), [localState.isMM2]);
 
 
   // console.log(filteredData)
@@ -456,54 +486,92 @@ const ValueScreen = ({ selectedTheme }) => {
 };
 export const getStyles = (isDarkMode) =>
   StyleSheet.create({
-    container: { paddingHorizontal: 8, marginHorizontal: 2, flex: 1, backgroundColor:'#141414' },
+    container: { paddingHorizontal: 8, marginHorizontal: 2, flex: 1, backgroundColor: '#141414' },
     searchFilterContainer: { flexDirection: 'row', marginVertical: 5, alignItems: 'center' },
     searchInput: {
       height: 40,
-      borderColor: isDarkMode ? config.colors.primary : 'white',
-      backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
-
+      borderColor: config.colors.primary,
+      backgroundColor: '#1e1e1e',
       borderWidth: 1,
       borderRadius: 5,
       marginVertical: 8,
       paddingHorizontal: 10,
-      color: isDarkMode ? 'white' : 'black',
+      color: 'white',
       flex: 1,
-      borderRadius: 10, marginRight: 10 // Ensure smooth corners
+      borderRadius: 10,
+      marginRight: 10
     },
-    filterDropdown: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E0E0E0', padding: 10, borderRadius: 10, height: 40, marginLeft: 10 },
-    filterOption: { padding: 10, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' },
-    filterTextOption: { fontSize: 12 },
-    // itemContainer: { alignItems: 'flex-start', backgroundColor: 'red', borderRadius: 10, padding: 10, 
-    //    width: '100%', marginVertical: 5 },
+    filterDropdown: { 
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      backgroundColor: '#1e1e1e', 
+      padding: 10, 
+      borderRadius: 10, 
+      height: 40, 
+      marginLeft: 10 
+    },
+    filterOption: { 
+      padding: 10, 
+      borderBottomWidth: 1, 
+      borderBottomColor: '#2e2e2e' 
+    },
+    filterTextOption: { 
+      fontSize: 12,
+      color: 'black'
+    },
     icon: { width: 50, height: 50, borderRadius: 5, marginRight: 10, backgroundColor: 'transparent' },
     infoContainer: { flex: 1 },
     name: {
-      fontSize: 16, fontFamily: 'Lato-Bold',
-      color: isDarkMode ? '#fff' : '#000',
+      fontSize: 16,
+      fontFamily: 'Lato-Bold',
+      color: '#fff',
       lineHeight: 18,
     },
     value: {
-      fontSize: 10, fontFamily: 'Lato-Regular',
-      color: isDarkMode ? '#fff' : '#000',
+      fontSize: 10,
+      fontFamily: 'Lato-Regular',
+      color: '#fff',
       lineHeight: 14,
     },
     permanentValue: {
-      fontSize: 10, fontFamily: 'Lato-Regular', color: 'white', lineHeight: 14,
+      fontSize: 10,
+      fontFamily: 'Lato-Regular',
+      color: 'white',
+      lineHeight: 14,
     },
     beliPrice: {
-      fontSize: 10, fontFamily: 'Lato-Regular', color: 'white', lineHeight: 14,
+      fontSize: 10,
+      fontFamily: 'Lato-Regular',
+      color: 'white',
+      lineHeight: 14,
     },
     robuxPrice: {
-      fontSize: 10, fontFamily: 'Lato-Regular', color: 'white', lineHeight: 14,
+      fontSize: 10,
+      fontFamily: 'Lato-Regular',
+      color: 'white',
+      lineHeight: 14,
     },
-    // statusContainer: { alignItems: 'left', alignSelf: 'flex-end', position: 'absolute', bottom: 0 },
     status: {
-      paddingHorizontal: 8, paddingVertical: 4, borderTopLeftRadius: 10, borderBottomRightRadius: 10, color: '#FFF', fontSize: 12, fontFamily: 'Lato-Bold'
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderTopLeftRadius: 10,
+      borderBottomRightRadius: 10,
+      color: '#FFF',
+      fontSize: 12,
+      fontFamily: 'Lato-Bold'
     },
-    filterText: { fontSize: 14, fontFamily: 'Lato-Regular', marginRight: 5 },
+    filterText: {
+      fontSize: 14,
+      fontFamily: 'Lato-Regular',
+      marginRight: 5,
+      color: 'white'
+    },
     description: {
-      fontSize: 14, lineHeight: 18, marginVertical: 10, fontFamily: 'Lato-Regular',
+      fontSize: 14,
+      lineHeight: 18,
+      marginVertical: 10,
+      fontFamily: 'Lato-Regular',
+      color: 'white'
     },
     loadingIndicator: { marginVertical: 20, alignSelf: 'center' },
     containerBannerAd: {
@@ -644,12 +712,11 @@ export const getStyles = (isDarkMode) =>
 
     },
     pointsBox: {
-      width: '49%', // Ensures even spacing
-      backgroundColor: isDarkMode ? '#34495E' : '#CCCCFF', // Dark: darker contrast, Light: White
+      width: '49%',
+      backgroundColor: '#34495E',
       borderRadius: 8,
-      // alignItems: 'center',
       padding: 10,
-      flexDirection:'row'
+      flexDirection: 'row'
     },
     rowcenter: {
       flexDirection: 'row',
@@ -670,23 +737,17 @@ export const getStyles = (isDarkMode) =>
       paddingHorizontal: 15,
       borderRadius: 8,
     },
-    filterText: {
-      color: "white",
-      fontSize: 14,
-      fontFamily: 'Lato-Bold',
-      marginRight: 5,
-    },
     filterOptionText: {
       fontSize: 14,
       padding: 10,
-      color: "#333",
+      color: 'black'
+
     },
     selectedOption: {
       fontFamily: 'Lato-Bold',
       color: "#34C759",
     },
     adContainer: {
-      // backgroundColor: '#F5F5F5', // Light background color for the ad
       padding: 5,
       borderRadius: 10,
       marginBottom: 15,
@@ -694,7 +755,8 @@ export const getStyles = (isDarkMode) =>
       justifyContent: 'space-between',
       alignItems: 'center',
       borderWidth: 1,
-
+      borderColor: '#2e2e2e',
+      backgroundColor: '#1e1e1e'
     },
     adContent: {
       flexDirection: 'row',
@@ -711,13 +773,11 @@ export const getStyles = (isDarkMode) =>
       fontSize: 18,
       fontFamily: 'Lato-Bold',
       color: 'white',
-      // marginBottom: 5, // Adds space below the title
     },
     tryNowText: {
       fontSize: 14,
       fontFamily: 'Lato-Regular',
-      color: '#6A5ACD', // Adds a distinct color for the "Try Now" text
-      // marginTop: 5, // Adds space between the title and the "Try Now" text
+      color: '#6A5ACD',
     },
     downloadButton: {
       backgroundColor: '#34C759',

@@ -19,13 +19,10 @@ export const useGlobalState = () => useContext(GlobalStateContext);
 export const GlobalStateProvider = ({ children }) => {
   const { localState, updateLocalState } = useLocalState()
 
-  const colorScheme = useColorScheme(); // 'light' or 'dark'
-
-  const resolvedTheme = localState.theme === 'dark' ? 'dark' : localState.theme;
-  const [theme, setTheme] = useState(resolvedTheme);
+  // Remove colorScheme and theme switching logic
+  const [theme] = useState('dark'); // Force dark theme
   const [api, setApi] = useState(null);
   const [freeTranslation, setFreeTranslation] = useState(null);
-
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [user, setUser] = useState({
@@ -48,15 +45,6 @@ export const GlobalStateProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   // const [robloxUsername, setRobloxUsername] = useState('');
   const robloxUsernameRef = useRef('');
-
-
-  // Track theme changes
-  useEffect(() => {
-    setTheme(localState.theme === 'dark' ? 'dark' : localState.theme);
-  }, [localState.theme]);
-
-  // const isAdmin = user?.id  ? user?.id == '3CAAolfaX3UE3BLTZ7ghFbNnY513' : false
-  // console.log(isAdmin, user)
 
   const updateLocalStateAndDatabase = async (keyOrUpdates, value) => {
     if (!user.id) return; // Prevent updates if user is not logged in

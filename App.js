@@ -26,8 +26,8 @@ import {
 import getAdUnitId from './Code/Ads/ads';
 import OnboardingScreen from './Code/AppHelper/OnBoardingScreen';
 import { useTranslation } from 'react-i18next';
-import RewardCenterScreen from './Code/SettingScreen/RewardCenter';
-import RewardRulesModal from './Code/SettingScreen/RewardRulesModel';
+// import RewardCenterScreen from './Code/SettingScreen/RewardCenter';
+// import RewardRulesModal from './Code/SettingScreen/RewardRulesModel';
 import InterstitialAdManager from './Code/Ads/IntAd';
 import AppOpenAdManager from './Code/Ads/openApp';
 import RNBootSplash from "react-native-bootsplash";
@@ -36,12 +36,8 @@ import SystemNavigationBar from 'react-native-system-navigation-bar';
 
 
 const Stack = createNativeStackNavigator();
-const setNavigationBarAppearance = (theme) => {
-  if (theme === 'dark') {
-    SystemNavigationBar.setNavigationColor('#000000', 'light', 'navigation');
-  } else {
-    SystemNavigationBar.setNavigationColor('#FFFFFF', 'dark', 'navigation');
-  }
+const setNavigationBarAppearance = () => {
+  SystemNavigationBar.setNavigationColor('#000000', 'light', 'navigation');
 };
 
 // const adUnitId = getAdUnitId('openapp');
@@ -51,36 +47,18 @@ function App() {
   const { t } = useTranslation();
 
   const selectedTheme = useMemo(() => {
-    if (!theme && !localState.warnedAboutTheme) {
-      console.warn("⚠️ Theme not found! Falling back to Light Theme.");
-      updateLocalState('warnedAboutTheme', true); // Prevent future warnings
-    }
-    return theme === 'dark' ? MyDarkTheme : MyLightTheme;
-  }, [theme]);
-
+    return MyDarkTheme; // Always use dark theme
+  }, []);
 
   const { localState, updateLocalState } = useLocalState();
   const [chatFocused, setChatFocused] = useState(true);
-  const [modalVisibleChatinfo, setModalVisibleChatinfo] = useState(false)
+  const [modalVisibleChatinfo, setModalVisibleChatinfo] = useState(false);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     InterstitialAdManager.init();
   }, []);
-
-
-
-  useEffect(() => {
-    const listener = Appearance.addChangeListener(({ colorScheme }) => {
-      if (theme === 'system') {
-        setNavigationBarAppearance(colorScheme);
-      }
-    });
-
-    return () => listener.remove();
-  }, [theme]);
-
 
   useEffect(() => {
     let isMounted = true;
@@ -176,11 +154,11 @@ function App() {
 
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: selectedTheme.colors.background, }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: selectedTheme.colors.background }}>
       <Animated.View style={{ flex: 1 }}>
         <NavigationContainer theme={selectedTheme}>
           <StatusBar
-            barStyle={theme === 'dark' ? 'light-content' : 'dark-content'}
+            barStyle="light-content"
             backgroundColor={selectedTheme.colors.background}
           />
 
@@ -188,7 +166,7 @@ function App() {
             <Stack.Screen name="Home" options={{ headerShown: false }} >
               {() => <MainTabs selectedTheme={selectedTheme} setChatFocused={setChatFocused} chatFocused={chatFocused} setModalVisibleChatinfo={setModalVisibleChatinfo} modalVisibleChatinfo={modalVisibleChatinfo} />}
             </Stack.Screen>
-            <Stack.Screen
+            {/* <Stack.Screen
               name="Reward"
               options={{
                 title: "Reward Center",
@@ -202,7 +180,7 @@ function App() {
               }}
             >
               {() => <RewardCenterScreen selectedTheme={selectedTheme} />}
-            </Stack.Screen>
+            </Stack.Screen> */}
 
             {/* Move this outside of <Stack.Navigator> */}
 
@@ -219,9 +197,9 @@ function App() {
             </Stack.Screen>
           </Stack.Navigator>
         </NavigationContainer>
-        {modalVisible && (
+        {/* {modalVisible && (
           <RewardRulesModal visible={modalVisible} onClose={() => setModalVisible(false)} selectedTheme={selectedTheme} />
-        )}
+        )} */}
       </Animated.View>
     </SafeAreaView>
   );
@@ -239,11 +217,8 @@ export default function AppWrapper() {
   }, [localState.isAppReady]);
 
   const selectedTheme = useMemo(() => {
-    if (!theme) {
-      console.warn("⚠️ Theme not found! Falling back to Light Theme.");
-    }
-    return theme === 'dark' ? MyDarkTheme : MyLightTheme;
-  }, [theme]);
+    return MyDarkTheme; // Always use dark theme
+  }, []);
 
   const handleSplashFinish = () => {
     updateLocalState('showOnBoardingScreen', false); // ✅ Set onboarding as finished

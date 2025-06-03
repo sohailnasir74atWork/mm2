@@ -6,7 +6,7 @@ const isNoman = true; // Toggle this to switch configurations
 //waqas app id = ca-app-pub-3701208411582706~4267174419
 // noman pkgName= com.mm2tradesvalues
 //waqas pkgName = com.bloxfruitstock
-const rev_cat_id = Platform.OS === 'ios' ? 'appl_QKRWvOpeEbPWTIEzrRZScJuJDtz' : 'goog_vbOdGmvwsPRXPVNHgrVHiCRtnez'
+const rev_cat_id = Platform.OS === 'ios' ? 'appl_QKRWvOpeEbPWTIEzrRZScJuJDtz' : 'goog_DwvubjYPPPfqdtdrSvjSbrmAXFU'
 
 const config = {
   appName: isNoman ? 'Blox Fruit Values Calc' : 'Blox Fruit Stock',
@@ -24,15 +24,15 @@ const config = {
   apiKey: isNoman ? rev_cat_id : 'goog_hNbzYuzixIbRtuJzgHltVeZzYos',
 
   supportEmail: isNoman ? 'thesolanalabs@gmail.com' : 'mindfusionio.help@gmail.com',
-  andriodShareLink: isNoman ? 'https://play.google.com/store/apps/details?id=com.bloxfruitevalues' : 'https://play.google.com/store/apps/details?id=com.bloxfruitstock',
+  andriodShareLink: isNoman ? 'https://play.google.com/store/apps/details?id=com.mm2tradesvalues' : 'https://play.google.com/store/apps/details?id=com.bloxfruitstock',
   IOsShareLink: isNoman ? 'https://apps.apple.com/us/app/app-name/id6737775801' : '',
   IOsShareLink: isNoman ? 'https://apps.apple.com/us/app/app-name/id6737775801' : '',
-  webSite: isNoman ? 'https://bloxfruitscalc.com/' : 'https://bloxfruitvalue.today',
+  webSite: isNoman ? 'https://mm2values.app/' : 'https://bloxfruitvalue.today',
 
   isNoman: isNoman ? true : false,
 
   otherapplink: Platform.OS == 'android' ? 'https://play.google.com/store/apps/details?id=com.adoptmevaluescalc' : 'https://apps.apple.com/us/app/adoptme-values/id6745400111',
-  otherapplink2: Platform.OS == 'android' ? 'https://play.google.com/store/apps/details?id=com.bloxfruitevalues' : 'https://apps.apple.com/us/app/fruits-values-calculator/id6737775801',
+  otherapplink2: Platform.OS == 'android' ? 'https://play.google.com/store/apps/details?id=com.mm2tradesvalues' : 'https://apps.apple.com/us/app/fruits-values-calculator/id6737775801',
   colors: isNoman
     ? {
       primary: '#6A5ACD', // Muted grayish blue

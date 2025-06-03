@@ -38,7 +38,7 @@ const ShareTradeModal = ({ visible, onClose, tradeData }) => {
     const tradePercentage = Math.abs(((tradeRatio - 1) * 100).toFixed(0));
     const isProfit = tradeRatio < 1; // Loss if tradeRatio < 1, Profit if > 1
     const neutral = tradeRatio === 1; // Exactly 1:1 trade
-
+// console.log(hasItems)
     const formatName = (name) => name.replace(/\s+/g, '-');
 
     const callbackfunction = () => {
@@ -83,7 +83,7 @@ const ShareTradeModal = ({ visible, onClose, tradeData }) => {
     const ensureFourItems = (items) => {
         const filledItems = [...items];
         while (filledItems.length < 4) {
-            filledItems.push({ name: '', type: 'placeholder' }); // Placeholder item
+            filledItems.push({ name: '', type: 'placeholder', image:'' }); // Placeholder item
         }
         return filledItems;
     };
@@ -147,7 +147,7 @@ const ShareTradeModal = ({ visible, onClose, tradeData }) => {
                                                             </Text></View>
                                                         <Image
                                                             source={{
-                                                                uri: item.type !== 'p' ? `https://bloxfruitscalc.com/wp-content/uploads/2024/09/${formatName(item.name)}_Icon.webp` : `https://bloxfruitscalc.com/wp-content/uploads/2024/08/${formatName(item.name)}_Icon.webp`,
+                                                                uri: item.image,
                                                             }}
                                                             style={styles.itemImage}
                                                         />
@@ -180,9 +180,11 @@ const ShareTradeModal = ({ visible, onClose, tradeData }) => {
                                                             <Text style={styles.itemText}>
                                                             {item.name !== '' ? (item.value === 0 || item.value === "N/A" ? 'Special' : item.value) : ''}
                                                             </Text></View>
+                                                            {console.log(item)}
+
                                                         <Image
                                                             source={{
-                                                                uri: item.type !== 'p' ? `https://bloxfruitscalc.com/wp-content/uploads/2024/09/${formatName(item.name)}_Icon.webp` : `https://bloxfruitscalc.com/wp-content/uploads/2024/08/${formatName(item.name)}_Icon.webp`,
+                                                                uri: item.image,
                                                             }}
                                                             style={styles.itemImage}
                                                         />
@@ -207,14 +209,14 @@ const ShareTradeModal = ({ visible, onClose, tradeData }) => {
                                     <View style={[styles.hasBackground, !showRightGrid && styles.fullWidthSummary]}>
                                         <Text style={[styles.priceText]}>Has</Text>
                                         {includeValue && <Text style={[styles.priceText, { borderTopWidth: 1, borderTopColor: 'lightgrey' }]}>Value: {hasTotal.value.toLocaleString()}</Text>}
-                                        {includePrice && <Text style={[styles.priceText]}>Price: {hasTotal.price.toLocaleString()}</Text>}
+                                        {/* {includePrice && <Text style={[styles.priceText]}>Price: {hasTotal.price.toLocaleString()}</Text>} */}
                                     </View>
                                 )}
                                 {showRightGrid && (
                                     <View style={[styles.wantBackground, !showLeftGrid && styles.fullWidthSummary]}>
                                         <Text style={[styles.priceText]}>Want</Text>
                                         {includeValue && <Text style={[styles.priceText, { borderTopWidth: 1, borderTopColor: 'lightgrey' }]}>Value: {wantsTotal.value.toLocaleString()}</Text>}
-                                        {includePrice && <Text style={[styles.priceText]}>Price: {wantsTotal.price.toLocaleString()}</Text>}
+                                        {/* {includePrice && <Text style={[styles.priceText]}>Price: {wantsTotal.price.toLocaleString()}</Text>} */}
                                     </View>
                                 )}
                             </View>

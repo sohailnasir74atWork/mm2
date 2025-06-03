@@ -30,7 +30,7 @@ export const LocalStateProvider = ({ children }) => {
     updateCount: Number(storage.getString('updateCount')) || 0,
     featuredCount: safeParseJSON('featuredCount', { count: 0, time: null }),
     isHaptic: storage.getBoolean('isHaptic') ?? true,
-    theme: storage.getString('theme') || 'dark',
+    theme: 'dark', // Force dark theme
     consentStatus: storage.getString('consentStatus') || 'UNKNOWN',
     isPro: storage.getBoolean('isPro') ?? false,
     fetchDataTime: storage.getString('fetchDataTime') || null,
@@ -62,14 +62,14 @@ export const LocalStateProvider = ({ children }) => {
 
 
   // Listen for system theme changes
-  useEffect(() => {
-    if (localState.theme === 'dark') {
-      const listener = Appearance.addChangeListener(({ colorScheme }) => {
-        updateLocalState('theme', colorScheme);
-      });
-      return () => listener.remove(); // Correct cleanup
-    }
-  }, [localState.theme]);
+  // useEffect(() => {
+  //   if (localState.theme === 'dark') {
+  //     const listener = Appearance.addChangeListener(({ colorScheme }) => {
+  //       updateLocalState('theme', colorScheme);
+  //     });
+  //     return () => listener.remove();
+  //   }
+  // }, [localState.theme]);
 
   useEffect(() => {
     if (localState.data) {

@@ -51,8 +51,8 @@ const HomeScreen = ({ selectedTheme }) => {
   // const pinnedMessagesRef = useMemo(() => ref(appdatabase, 'pin_messages'), []);
   const CATEGORIES = useMemo(() => {
     return localState.isMM2
-      ? ['All', 'Ancient', 'Unique', 'Chroma', 'Godly', 'Legend', 'Rare', 'Uncommon', 'Common', 'Vintage', 'Pets', 'Misc', 'Favorite']
-      : ['All', 'Sets', 'Ancients', 'Evos', 'Uniques', 'Chromas', 'Godlies', 'Legendaries', 'Rares', 'Uncommons', 'Commons', 'Vintages', 'Pets', 'Mis', 'Untradables', 'Favorite'];
+      ? ['All', 'Ancient', 'Unique', 'Chroma', 'Godly', 'Legend', 'Rare', 'Uncommon', 'Common', 'Vintage', 'Pets', 'Misc', 'FAVORITES']
+      : ['All', 'Sets', 'Ancients', 'Evos', 'Uniques', 'Chromas', 'Godlies', 'Legendaries', 'Rares', 'Uncommons', 'Commons', 'Vintages', 'Pets', 'Mis', 'Untradables', 'FAVORITES'];
   }, [localState.isMM2]);
 
   const extractMM2Values = (data) => {
@@ -250,6 +250,7 @@ const HomeScreen = ({ selectedTheme }) => {
 
 
 
+  // console.log(hasItems)
 
   const handleCreateTrade = async () => {
     if (isSubmitting) {
@@ -267,7 +268,6 @@ const HomeScreen = ({ selectedTheme }) => {
       const userRating = avgRatingData?.value || null;
       const ratingCount = avgRatingData?.count || 0; // 👈 total users who rated
 
-
       // ✅ Build new trade object
       let newTrade = {
         userId: user?.id || "Anonymous",
@@ -275,10 +275,10 @@ const HomeScreen = ({ selectedTheme }) => {
         avatar: user?.avatar || null,
         isPro: localState.isPro,
         isFeatured: false,
-        hasItems: hasItems.filter(item => item && item.Name).map(item => ({ name: item.Name, type: item.Type, value: item.Value })),
-        wantsItems: wantsItems.filter(item => item && item.Name).map(item => ({ name: item.Name, type: item.Type, value: item.Value })),
-        hasTotal: { price: hasTotal?.price || 0, value: hasTotal?.value || 0 },
-        wantsTotal: { price: wantsTotal?.price || 0, value: wantsTotal?.value || 0 },
+        hasItems: hasItems.filter(item => item && item.Name).map(item => ({ name: item.Name,  value: item.Value, image:item.Image })),
+        wantsItems: wantsItems.filter(item => item && item.Name).map(item => ({ name: item.Name,  value: item.Value, image:item.Image })),
+        hasTotal: {  value: hasTotal?.value || 0 },
+        wantsTotal: {  value: wantsTotal?.value || 0 },
         description: description || "",
         timestamp: firestore.FieldValue.serverTimestamp(),
         rating: userRating,
@@ -725,7 +725,7 @@ const HomeScreen = ({ selectedTheme }) => {
             <Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)} />
             <ConditionalKeyboardWrapper>
               <View>
-                <View style={[styles.drawerContainer, { backgroundColor: isDarkMode ? '#3B404C' : 'white' }]}>
+                <View style={[styles.drawerContainer2, { backgroundColor: isDarkMode ? '#3B404C' : 'white' }]}>
                   <Text style={styles.modalMessage}>
                     {t("home.trade_description")}
                   </Text>
@@ -964,7 +964,7 @@ const getStyles = (isDarkMode) =>
       alignItems: 'center',
     },
     categoryButtonActive: {
-      backgroundColor: '#FF9999',
+      backgroundColor: config.colors.primary,
     },
     categoryButtonText: {
       fontSize: 13,

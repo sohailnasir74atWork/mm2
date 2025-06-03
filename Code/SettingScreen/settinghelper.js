@@ -14,7 +14,7 @@ export const getAppDownloadLink = () => {
     try {
       const appLink = getAppDownloadLink();
       const shareOptions = {
-        message: `Explore the ultimate Blox Fruits value calculator! Learn about Blox Fruits, check values, and make smarter trades. Download now: ${appLink}`,
+        message: `Explore the MM2 value calculator! Check values, and make smarter trades. Download now: ${appLink}`,
         title: 'Share App',
       };
       await Share.open(shareOptions);

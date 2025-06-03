@@ -37,15 +37,11 @@ const TradeRulesModal = ({ visible, onClose }) => {
             </TouchableOpacity>
           </View>
           <ScrollView showsVerticalScrollIndicator={false}>
-            <Text style={[styles.modalText, { color: isDarkMode ? '#ccc' : '#333' }]}>
-              1. Players can trade <HighlightedText text="up to 4 items" /> per trade.{"\n"}{"\n"}
-              2. A maximum of <HighlightedText text="5 trades" /> is allowed every <HighlightedText text="8 hours" />.{"\n"}{"\n"}
-              3. <HighlightedText text="Game Passes & Permanent Fruits" /> cannot be traded if the receiver already owns them.{"\n"}{"\n"}
-              4. To trade <HighlightedText text="Game Passes & Permanent Fruits" />, they must first be stored by gifting them to yourself.{"\n"}{"\n"}
-              5. The total value difference between traded fruits <HighlightedText text="cannot exceed 40%" />, but adding Robux items can increase it to <HighlightedText text="80-100%" />.{"\n"}{"\n"}
-              6. Players can store <HighlightedText text="only one of each fruit" /> unless they purchase <HighlightedText text="+1 Fruit Storage (R$ 400)" />.{"\n"}{"\n"}
-              7. Once stored in the inventory, <HighlightedText text="fruits cannot be dropped" />.{"\n"}
-            </Text>
+          <Text style={[styles.modalText, { color: isDarkMode ? '#ccc' : '#333' }]}>
+  1. Players can trade <HighlightedText text="up to 4 items per side" /> in a single trade.{"\n"}{"\n"}
+  2. You must be <HighlightedText text="at least level 10" /> to unlock trading.{"\n"}{"\n"}
+  3. Once confirmed, <HighlightedText text="trades are final" /> and cannot be undone.{"\n"}
+</Text>
           </ScrollView>
           <TouchableOpacity
             style={[styles.closeButton, { backgroundColor: config.colors.primary }]}

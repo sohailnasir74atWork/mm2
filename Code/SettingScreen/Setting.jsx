@@ -527,12 +527,12 @@ export default function SettingsScreen({ selectedTheme }) {
             <Icon name="star-outline" size={18} color={'white'} style={{ backgroundColor: '#A2B38B', padding: 5, borderRadius: 5 }} />
             <Text style={styles.optionText}>{t('settings.rate_us')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.option} onPress={() => {
+          {/* <TouchableOpacity style={styles.option} onPress={() => {
             handleOpenFacebook(); triggerHapticFeedback('impactLight');
           }}>
             <Icon name="logo-facebook" size={18} color={'white'} style={{ backgroundColor: '#566D5D', padding: 5, borderRadius: 5 }} />
             <Text style={styles.optionText}>{t('settings.visit_facebook_group')}</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
           <TouchableOpacity style={user?.id ? styles.option : styles.optionLast} onPress={() => {
             handleOpenWebsite(); triggerHapticFeedback('impactLight');
           }}>

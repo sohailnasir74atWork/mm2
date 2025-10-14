@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from 'react-native-vector-icons/Ionicons';
 import config from '../Helper/Environment';
 import { useGlobalState } from '../GlobelStats';
-import ServerScreen from './Server';
+// import ServerScreen from './Server';
 import { useNavigation } from '@react-navigation/native';
 
 const Stack = createNativeStackNavigator();
@@ -85,8 +85,8 @@ export const TradeStack = ({ selectedTheme }) => {
           options={({ navigation }) => ({
             title: t("tabs.trade"),
             headerRight: () => (
-              <View style={{ flexDirection: 'row', }}>
-                <TouchableOpacity onPress={() => navigation.navigate('Server')} style={{ marginRight: 5, backgroundColor:config.colors.hasBlockGreen, borderRadius:5, flexDirection:'row', alignItems:'center', paddingHorizontal:5}}>
+              <View style={{ flexDirection: 'row', flex:1, justifyContent:'flex-end' }}>
+                {/* <TouchableOpacity onPress={() => navigation.navigate('Server')} style={{ marginRight: 5, backgroundColor:config.colors.hasBlockGreen, borderRadius:5, flexDirection:'row', alignItems:'center', paddingHorizontal:5}}>
                   <Image
                     source={
                       isDarkMode
@@ -104,7 +104,7 @@ export const TradeStack = ({ selectedTheme }) => {
                     resizeMode="contain"
                   />
                   <Text style={{color:'white', fontFamily:'Lato-Bold' }}>Pvt Servers</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
           
                 <TouchableOpacity onPress={() => setModalVisible(true)} style={{ marginRight: 8 }}>
                   <Icon
@@ -141,11 +141,11 @@ export const TradeStack = ({ selectedTheme }) => {
           }}
         />
 
-<Stack.Screen
+{/* <Stack.Screen
           name="Server"
           component={ServerScreen}
          
-        />
+        /> */}
       </Stack.Navigator>
 
       {/* Trade Rules Modal */}

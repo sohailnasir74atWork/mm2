@@ -26,13 +26,19 @@ const ReportPopup = ({ visible, message, onClose }) => {
   const handleSubmit = () => {
     const sanitizedId = message.id.startsWith("chat-") ? message.id.replace("chat-", "") : message.id;
 
+    Alert.alert(
+      t("chat.report_submitted"),
+      t("chat.report_submitted_message")
+    );
+    onClose(true);
+
   
     if (!sanitizedId) {
       Alert.alert("Error", "Invalid message. Unable to report.");
       return;
     }
   
-    setLoading(true); // Start loader
+    // setLoading(true); // Start loader
 // console.log(sanitizedId)
     const messageRef = ref(appdatabase, `chat_new/${sanitizedId}`);
   
@@ -51,16 +57,12 @@ const ReportPopup = ({ visible, message, onClose }) => {
         return update(messageRef, { reportCount: updatedReportCount });
       })
       .then(() => {
-        setLoading(false); // Stop loader
-        Alert.alert(
-          t("chat.report_submitted"),
-          t("chat.report_submitted_message")
-        );
-        onClose(true); // Pass `true` to indicate success
+        // setLoading(false); // Stop loader
+       
       })
       .catch((error) => {
         console.error("Error reporting message:", error);
-        setLoading(false); // Stop loader
+        // setLoading(false); // Stop loader
         // Alert.alert("Error", "Failed to submit the report. Please try again.");
       });
   };

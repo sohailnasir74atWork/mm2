@@ -17,7 +17,7 @@ import { useGlobalState } from './Code/GlobelStats';
 import { useLocalState } from './Code/LocalGlobelStats';
 import { AdsConsent, AdsConsentStatus } from 'react-native-google-mobile-ads';
 import MainTabs from './Code/AppHelper/MainTabs';
-import Icon from 'react-native-vector-icons/Ionicons';
+import { getTrackingStatus, requestTrackingPermission } from 'react-native-tracking-transparency';
 import {
   MyDarkTheme,
   MyLightTheme,
@@ -36,15 +36,16 @@ import SystemNavigationBar from 'react-native-system-navigation-bar';
 
 
 const Stack = createNativeStackNavigator();
-const setNavigationBarAppearance = () => {
-  SystemNavigationBar.setNavigationColor('#000000', 'light', 'navigation');
-};
 
 // const adUnitId = getAdUnitId('openapp');
 
 function App() {
   const { theme } = useGlobalState();
   const { t } = useTranslation();
+  useEffect(() => {
+    SystemNavigationBar.setNavigationColor('#000000', true); // black background, light icons
+    SystemNavigationBar.setBarMode('dark'); // forces dark mode (light icons)
+  }, []);
 
   const selectedTheme = useMemo(() => {
     return MyDarkTheme; // Always use dark theme
@@ -56,45 +57,113 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
+
+
   useEffect(() => {
     InterstitialAdManager.init();
   }, []);
-
   useEffect(() => {
-    let isMounted = true;
-    let unsubscribe;
-
-    const initializeAds = async () => {
+    const askPermission = async () => {
       try {
-        await AppOpenAdManager.init();
-      } catch (error) {
-        console.error('❌ Error initializing ads:', error);
-      }
-    };
-
-    const handleAppStateChange = async (state) => {
-      if (!isMounted) return;
-
-      try {
-        if (state === 'active' && !localState?.isPro) {
-          await AppOpenAdManager.showAd();
+        const status = await getTrackingStatus();
+        // console.log('Initial tracking status:', status);
+  
+        if (status === 'not-determined') {
+          const newStatus = await requestTrackingPermission();
+          // console.log('User response:', newStatus);
         }
       } catch (error) {
-        console.error('❌ Error showing ad:', error);
+        // console.error('Error requesting tracking permission:', error);
       }
     };
+  
+    askPermission();
+  }, []);
 
-    initializeAds();
-    unsubscribe = AppState.addEventListener('change', handleAppStateChange);
+  // useEffect(() => {
+  //   const showColdStartAd = async () => {
+  //     // console.log('[OpenAd] ⏳ Checking if app is ready to show cold-start ad...');
+  
+  //     if (
+  //       localState.isAppReady &&
+  //       !localState.isPro &&
+  //       !hasShownColdStartAdRef.current
+  //     ) {
+  //       // console.log('[OpenAd] ✅ App is ready. Proceeding to show Open App Ad...');
+  
+  //       try {
+  //         // await AppOpenAdManager.init();
+  //         // console.log('[OpenAd] 📦 Ad initialized.');
+  
+  //         setTimeout(async () => {
+  //           // console.log('[OpenAd] 🚀 Attempting to show Open App Ad after delay...');
+  
+  //           await AppOpenAdManager.showAd();
+  
+  //           hasShownColdStartAdRef.current = true;
+  //           // console.log('[OpenAd] 🎉 Cold-start Open App Ad shown successfully.');
+  //         }, 3000); // small delay to avoid UI clash
+  
+  //       } catch (err) {
+  //         // console.warn('❌ [OpenAd] Failed to show cold-start ad:', err);
+  //       }
+  //     } else {
+  //       // console.log(
+  //       //   '[OpenAd] ❌ Skipping ad show:',
+  //       //   `isPro=${localState.isPro},`,
+  //       //   `hasShownColdStartAd=${hasShownColdStartAdRef.current}`
+  //       // );
+  //     }
+  //   };
+  
+  //   showColdStartAd();
+  // }, [localState.isPro]);
+  
+  // useEffect(() => {
+  //   let isMounted = true;
+  //   let previousState = AppState.currentState;
+  
+  //   // const initializeAds = async () => {
+  //   //   try {
+  //   //     await AppOpenAdManager.init();
+  //   //   } catch (error) {
+  //   //     console.error('❌ Error initializing ads:', error);
+  //   //   }
+  //   // };
+  
+  //   const handleAppStateChange = async (nextAppState) => {
+  //     if (!isMounted) return;
+  //     // console.log(`AppState: ${previousState} → ${nextAppState}`);
 
-    return () => {
-      isMounted = false;
-      if (unsubscribe) {
-        unsubscribe.remove();
-      }
-      AppOpenAdManager.cleanup();
-    };
-  }, [localState?.isPro]);
+  
+  //     try {
+        
+
+  //       if (
+  //         previousState === 'background' &&
+  //         nextAppState === 'active' &&
+  //         !localState?.isPro
+  //       ) {
+  //         await AppOpenAdManager.showAd();
+  //       }
+  //     } catch (error) {
+  //       console.error('❌ Error showing ad:', error);
+  //     } finally {
+  //       previousState = nextAppState; // update for next change
+  //     }
+  //   };
+  
+  //   // initializeAds();
+  
+  //   const subscription = AppState.addEventListener('change', handleAppStateChange);
+  
+  //   return () => {
+  //     isMounted = false;
+  //     subscription?.remove();
+  //     AppOpenAdManager.cleanup();
+  //   };
+  // }, [localState?.isPro]);
+  
 
 
 
@@ -108,6 +177,7 @@ function App() {
 
 
 
+  
 
   useEffect(() => {
 
@@ -145,10 +215,10 @@ function App() {
   };
 
 
-  // Handle Consent
-  useEffect(() => {
-    handleUserConsent();
-  }, []);
+  // // Handle Consent
+  // useEffect(() => {
+  //   handleUserConsent();
+  // }, []);
   const navRef = useRef();
 
 
@@ -208,6 +278,37 @@ function App() {
 export default function AppWrapper() {
   const { localState, updateLocalState } = useLocalState();
   const { theme } = useGlobalState();
+  const hasShownColdStartAd = useRef(false);
+  const appState = useRef(AppState.currentState);
+
+  useEffect(() => {
+    if (localState.showOnBoardingScreen) return;
+
+    // ✅ Android: Show cold start ad only once
+    if (Platform.OS === 'android' && !hasShownColdStartAd.current) {
+      // AppOpenAdManager.initAndShow();
+      hasShownColdStartAd.current = true;
+    }
+
+    // ✅ iOS: Listen for background → active transition
+    if (Platform.OS === 'ios') {
+      const subscription = AppState.addEventListener('change', nextAppState => {
+        const wasBackground = appState.current === 'background';
+        const nowActive = nextAppState === 'active';
+
+        appState.current = nextAppState;
+
+        if (wasBackground && nowActive && !localState.isPro) {
+          AppOpenAdManager.initAndShow();
+        }
+      });
+
+      return () => subscription?.remove();
+    }
+
+  }, [localState.isPro]);
+
+  // ✅ Hide splash after UI ready
   useEffect(() => {
     if (localState.isAppReady) {
       InteractionManager.runAfterInteractions(() => {
@@ -217,16 +318,16 @@ export default function AppWrapper() {
   }, [localState.isAppReady]);
 
   const selectedTheme = useMemo(() => {
-    return MyDarkTheme; // Always use dark theme
-  }, []);
+    return theme === 'dark' ? MyDarkTheme : MyLightTheme;
+  }, [theme]);
 
   const handleSplashFinish = () => {
-    updateLocalState('showOnBoardingScreen', false); // ✅ Set onboarding as finished
+    updateLocalState('showOnBoardingScreen', false);
   };
 
   if (localState.showOnBoardingScreen) {
     return <OnboardingScreen onFinish={handleSplashFinish} selectedTheme={selectedTheme} />;
   }
 
-  return <App />
+  return <App />;
 }

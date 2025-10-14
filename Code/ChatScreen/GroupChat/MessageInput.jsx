@@ -39,7 +39,7 @@ const MessageInput = ({
       // Increment message count
       setMessageCount(prevCount => {
         const newCount = prevCount + 1;
-        if (!localState.isPro && newCount % 5 === 0) {
+        if (!localState.isPro && newCount % 10 === 0) {
           // Show ad only if user is NOT pro
           InterstitialAdManager.showAd(callbackfunction);
         } else {

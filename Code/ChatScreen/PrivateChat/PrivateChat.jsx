@@ -27,7 +27,7 @@ const PAGE_SIZE = 100;
 
 const PrivateChatScreen = () => {
   const route = useRoute();
-  const { selectedUser, selectedTheme, bannedUsers, item } = route.params || {};
+  const { selectedUser, selectedTheme, item } = route.params || {};
   const { user, theme, appdatabase, updateLocalStateAndDatabase } = useGlobalState();
   const [trade, setTrade] = useState(null)
   const [messages, setMessages] = useState([]);
@@ -79,8 +79,8 @@ const [rating, setRating] = useState(0);
   
   const isBanned = useMemo(() => {
     // const bannedUserIds = bannedUsers?.map((user) => user.id) || [];
-    return bannedUsers.includes(selectedUserId);
-  }, [bannedUsers, selectedUserId]);
+    return localState.bannedUsers.includes(selectedUserId);
+  }, [localState.bannedUsers, selectedUserId]);
   const isDarkMode = theme === 'dark';
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
 
@@ -479,21 +479,21 @@ const handleRating = async () => {
                 />
               )}
 
-              <PrivateMessageInput
+             {!isBanned && <PrivateMessageInput
                 onSend={sendMessage}
                 isBanned={isBanned}
-                bannedUsers={bannedUsers}
+                bannedUsers={localState.bannedUsers}
                 replyTo={replyTo}
                 onCancelReply={() => setReplyTo(null)}
                 input={input}
                 setInput={setInput}
                 selectedTheme={selectedTheme}
-              />
+              />}
             {/* </View>  */}
             </ConditionalKeyboardWrapper>
         </View>
       </GestureHandlerRootView>
-      {!localState.isPro && <BannerAdComponent/>}
+      {/* {!localState.isPro && <BannerAdComponent/>} */}
       {showRatingModal && (
   <View
     style={{

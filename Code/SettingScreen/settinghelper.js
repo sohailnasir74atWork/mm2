@@ -94,6 +94,7 @@ I would like to share the following suggestions:
 
   export const handleadoptme = () => {
     const websiteUrl = config.otherapplink;
+    console.log(websiteUrl)
     Linking.openURL(websiteUrl).catch(() =>
       Alert.alert('Error', 'Unable to open the website. Please try again later.')
     );
@@ -107,23 +108,29 @@ I would like to share the following suggestions:
   };
 
   export const imageOptions = [
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/eagle.png',
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/patch.png',
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate1.png',
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate2.png',
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate3.png',
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate-flag.png',
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate-hat.png',
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate-hat1.png',
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate-ship.png',
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate-ship2.png',
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate-skull.png',
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate.png',
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/steering-wheel.png',
-    'https://bloxfruitscalc.com/wp-content/uploads/2025/woman.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/anatomy.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/axe.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/blood-knife.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/bow.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/crime-scene-2.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/crime-scene-3.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/crime-scene.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/detective.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/gun.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/knife.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/murder.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/murderer.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/Rainbow_Knife.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/self-murder.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/soldier.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/stone-axe.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/target.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/weapon-2.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/weapon-3.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/weapon.png',
+    'https://mm2values.app/wp-content/uploads/2025/profile/weapons.png'
   ];
- 
+  
 
   export const handleRefresh = async (reload) => {
     // setRefreshing(true);

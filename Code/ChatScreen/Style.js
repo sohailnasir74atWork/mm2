@@ -58,7 +58,7 @@ export const getStyles = (isDarkMode) =>
     },
     messageTextBox: {
       // flex: 1,
-      maxWidth:'75%',
+      maxWidth: '75%',
 
       // flexDirection:
     },
@@ -75,7 +75,7 @@ export const getStyles = (isDarkMode) =>
       paddingHorizontal: 10,
       borderRadius: 10,
       fontFamily: 'Lato-Regular',
-      lineHeight:14,
+      lineHeight: 14,
 
 
     },
@@ -88,8 +88,8 @@ export const getStyles = (isDarkMode) =>
       borderRadius: 10,
       paddingBottom: 5,
       fontFamily: 'Lato-Regular',
-      paddingRight:20,
-      lineHeight:14,
+      paddingRight: 20,
+      lineHeight: 14,
       // backgroundColor:'red'
 
 
@@ -146,20 +146,21 @@ export const getStyles = (isDarkMode) =>
       textAlign: 'center',
       marginVertical: 10,
     },
-    adminContainer :{
-      backgroundColor: config.colors.hasBlockGreen,
-      paddingHorizontal:5,
-      paddingVertical:1,
-      borderRadius:3,
+    adminContainer: {
+      backgroundColor: 'lightgreen',
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      borderRadius: 3,
       // marginHorizontal:5
     },
     admin: {
       // alignSelf: 'flex-start',
-      color: 'white',
-      fontSize: 10,
+      color: config.colors.primary,
+      fontSize: 9,
+      lineHeight:10,
       fontFamily: 'Lato-Bold',
 
-      
+
     },
     adminText: {
       fontSize: 12,
@@ -187,7 +188,7 @@ export const getStyles = (isDarkMode) =>
     },
     inputWrapper: {
       paddingHorizontal: 10,
-      paddingVertical:3,
+      paddingVertical: 3,
       borderTopWidth: 1,
       borderTopColor: isDarkMode ? '#333' : '#ddd',
       backgroundColor: isDarkMode ? '#222' : '#fff',
@@ -257,14 +258,14 @@ export const getStyles = (isDarkMode) =>
       height: 34,
       width: 34,
       borderRadius: 17,
-      backgroundColor:'white'
+      backgroundColor: 'white'
     },
     profileImagePvtChat: {
       height: 30,
       width: 30,
       borderRadius: 15,
       marginHorizontal: 5,
-      backgroundColor:'white'
+      backgroundColor: 'white'
     },
 
     userName: {
@@ -274,19 +275,20 @@ export const getStyles = (isDarkMode) =>
     },
     adminActions: {
       // flexDirection: 'row',
-      justifyContent:'center',
+      justifyContent: 'center',
       // alignItems:'flex-end',
       // overflow:'hidden',
       // flexWrap:"wrap"
     },
-    adminTextAction:{
-      backgroundColor:config.colors.wantBlockRed,
-      marginHorizontal:3,
-      paddingHorizontal:10,
-      borderRadius:3,
-      color:'white',
-      alignSelf:'center',
-      width:100
+    adminTextAction: {
+      backgroundColor: config.colors.wantBlockRed,
+      marginHorizontal: 3,
+      padding: 10,
+      borderRadius: 3,
+      color: 'white',
+      alignSelf: 'center',
+      minWidth: 150,
+      // fontSize:10
     },
     dot: {
       color: '#bbb',
@@ -297,7 +299,7 @@ export const getStyles = (isDarkMode) =>
       color: '#1E90FF', // Blue color for links
       textDecorationLine: 'underline', // Underline to indicate a link
     },
- 
+
     menu: {
       borderRadius: 20,
       // backgroundColor:'red'
@@ -313,15 +315,15 @@ export const getStyles = (isDarkMode) =>
       // justifyContent:'space-evenly',
       maxWidth: 150,
       borderRadius: 10,
-      marginLeft:50
+      marginLeft: 50
 
     },
     menuOption: {
       paddingHorizontal: 10,
       paddingVertical: 15,
       borderBottomWidth: 1,
-      borderColor:'lightgrey',
-      backgroundColor:'white',
+      borderColor: 'lightgrey',
+      backgroundColor: 'white',
       borderRadius: 10,
 
     },
@@ -329,14 +331,14 @@ export const getStyles = (isDarkMode) =>
       fontSize: 16,
       color: '#000',
     },
-    reportIcon:{
-      position:'absolute',
-      right:2,
-      top:2,
-      opacity:1,
-      color:config.colors.wantBlockRed,
-      fontSize:8,
-      fontStyle:'italic'
+    reportIcon: {
+      position: 'absolute',
+      right: 2,
+      top: 2,
+      opacity: 1,
+      color: config.colors.wantBlockRed,
+      fontSize: 8,
+      fontStyle: 'italic'
 
     },
     reportedMessage: {
@@ -349,112 +351,114 @@ export const getStyles = (isDarkMode) =>
       // backgroundColor:'red'
 
     },
-    emptyText:{
+    emptyText: {
       color: isDarkMode ? 'white' : 'black',
     }
-,
-tradeDetails: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  backgroundColor: 'grey',
-  paddingHorizontal:10
+    ,
+    tradeDetails: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      backgroundColor: 'grey',
+      paddingHorizontal: 10
 
 
-},
-itemList: {
-  flexDirection: 'row',
-  flexWrap: 'wrap',
-  justifyContent: 'space-evenly',
-  width: "45%",
-  paddingVertical: 0,
-  // backgroundColor:'red'
-},
-itemImage: {
-  width: 30,
-  height: 30,
-  // marginRight: 5,
-  // borderRadius: 25,
-  marginVertical: 5,
-  borderRadius: 5
-  // padding:10
+    },
+    itemList: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-evenly',
+      width: "45%",
+      paddingVertical: 0,
+      // backgroundColor:'red'
+    },
+    itemImage: {
+      width: 30,
+      height: 30,
+      // marginRight: 5,
+      // borderRadius: 25,
+      marginVertical: 5,
+      borderRadius: 5
+      // padding:10
 
-},
+    },
 
-transferImage: {
-  width: 15,
-  height: 15,
-  // marginRight: 5,
-  borderRadius: 5,
-},
-tradeTotals: {
-  flexDirection: 'row',
-  justifyContent: 'center',
-  // marginTop: 10,
-  width: '100%'
+    transferImage: {
+      width: 15,
+      height: 15,
+      // marginRight: 5,
+      borderRadius: 5,
+    },
+    tradeTotals: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      // marginTop: 10,
+      width: '100%'
 
-},
-names:{
-  fontSize: 8,
-  color:'white'
-},
-priceText: {
-  fontSize: 10,
-  fontFamily: 'Lato-Regular',
-  color: '#007BFF',
-  // width: '40%',
-  textAlign: 'center', // Centers text within its own width
-  alignSelf: 'center', // Centers within the parent container
-  color: isDarkMode ? 'white' : "white",
-  marginHorizontal: 'auto',
-  paddingHorizontal: 4,
-  paddingVertical: 2,
-  borderRadius: 6
-},
-priceTextProfit: {
-  fontSize: 10,
-  lineHeight:14,
-  fontFamily: 'Lato-Regular',
-  // color: '#007BFF',
-  // width: '40%',
-  textAlign: 'center', // Centers text within its own width
-  alignSelf: 'center', // Centers within the parent container
-  // color: isDarkMode ? 'white' : "grey",
-  // marginHorizontal: 'auto',
-  // paddingHorizontal: 4,
-  // paddingVertical: 2,
-  // borderRadius: 6
-},
-tagcount: {
-  position: 'absolute',
-  backgroundColor: 'purple',
-  top: 4,
-  left: 1,
-  borderRadius: 50,
-  paddingHorizontal: 3,
-  paddingBottom: 2
+    },
+    names: {
+      fontSize: 8,
+      color: 'white'
+    },
+    priceText: {
+      fontSize: 10,
+      fontFamily: 'Lato-Regular',
+      color: '#007BFF',
+      // width: '40%',
+      textAlign: 'center', // Centers text within its own width
+      alignSelf: 'center', // Centers within the parent container
+      color: isDarkMode ? 'white' : "white",
+      marginHorizontal: 'auto',
+      paddingHorizontal: 4,
+      paddingVertical: 2,
+      borderRadius: 6
+    },
+    priceTextProfit: {
+      fontSize: 10,
+      lineHeight: 14,
+      fontFamily: 'Lato-Regular',
+      // color: '#007BFF',
+      // width: '40%',
+      textAlign: 'center', // Centers text within its own width
+      alignSelf: 'center', // Centers within the parent container
+      // color: isDarkMode ? 'white' : "grey",
+      // marginHorizontal: 'auto',
+      // paddingHorizontal: 4,
+      // paddingVertical: 2,
+      // borderRadius: 6
+    },
+    tagcount: {
+      position: 'absolute',
+      backgroundColor: 'purple',
+      top: 4,
+      left: 1,
+      borderRadius: 50,
+      paddingHorizontal: 3,
+      paddingBottom: 2
 
-},
-tagcounttext: {
-  color: 'white',
-  fontFamily: 'Lato-Bold',
-  fontSize: 10
-},
+    },
+    tagcounttext: {
+      color: 'white',
+      fontFamily: 'Lato-Bold',
+      fontSize: 10
+    },
 
-hasBackground: {
-  backgroundColor: config.colors.hasBlockGreen,
-},
-wantBackground: {
-  backgroundColor: config.colors.wantBlockRed,
-},
-tradeActions: {
-  flexDirection: 'row',
-  alignItems: 'center',
-},
+    hasBackground: {
+      backgroundColor: config.colors.hasBlockGreen,
+    },
+    wantBackground: {
+      backgroundColor: config.colors.wantBlockRed,
+    },
+    tradeActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
 
-transfer: {
-  width: '10%',
-  justifyContent: 'center',
-  alignItems: 'center'
-},
-
+    transfer: {
+      width: '10%',
+      justifyContent: 'center',
+      alignItems: 'center'
+    },
+    deleteButton:{
+      paddingVertical:5
+    }
   });

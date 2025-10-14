@@ -23,10 +23,11 @@ import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 // Initialize dayjs plugins
 dayjs.extend(relativeTime);
 
+let interstitialAdShown = false; // ✅ persists for the entire app session
 
 const TradeList = ({ route }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [isAdVisible, setIsAdVisible] = useState(true);
+  const [isAdVisible, setIsAdVisible] = useState(false);
   const { selectedTheme } = route.params
   const { user, analytics, updateLocalStateAndDatabase, appdatabase } = useGlobalState()
   const [trades, setTrades] = useState([]);
@@ -38,6 +39,7 @@ const TradeList = ({ route }) => {
   const [showofferwall, setShowofferwall] = useState(false);
   const [remainingFeaturedTrades, setRemainingFeaturedTrades] = useState([]);
   const [openShareModel, setOpenShareModel] = useState(false);
+
 
 
 
@@ -99,33 +101,33 @@ const TradeList = ({ route }) => {
           matchesAnyFilter = matchesAnyFilter || trade.userId === user.id;
         }
 
-        const { deal } = getTradeDeal(trade.hasTotal, trade.wantsTotal);
-        const tradeLabel = deal?.label || "trade.unknown_deal"; // Fallback to avoid undefined
+        // const { deal } = getTradeDeal(trade.hasTotal, trade.wantsTotal);
+        // const tradeLabel = deal?.label || "trade.unknown_deal"; // Fallback to avoid undefined
 
 
-        if (selectedFilters.includes("fairDeal")) {
-          matchesAnyFilter = matchesAnyFilter || tradeLabel === "trade.fair_deal";
-        }
+        // if (selectedFilters.includes("fairDeal")) {
+        //   matchesAnyFilter = matchesAnyFilter || tradeLabel === "trade.fair_deal";
+        // }
 
-        if (selectedFilters.includes("riskyDeal")) {
-          matchesAnyFilter = matchesAnyFilter || tradeLabel === "trade.risky_deal";
-        }
+        // if (selectedFilters.includes("riskyDeal")) {
+        //   matchesAnyFilter = matchesAnyFilter || tradeLabel === "trade.risky_deal";
+        // }
 
-        if (selectedFilters.includes("bestDeal")) {
-          matchesAnyFilter = matchesAnyFilter || tradeLabel === "trade.best_deal";
-        }
+        // if (selectedFilters.includes("bestDeal")) {
+        //   matchesAnyFilter = matchesAnyFilter || tradeLabel === "trade.best_deal";
+        // }
 
-        if (selectedFilters.includes("decentDeal")) {
-          matchesAnyFilter = matchesAnyFilter || tradeLabel === "trade.decent_deal";
-        }
+        // if (selectedFilters.includes("decentDeal")) {
+        //   matchesAnyFilter = matchesAnyFilter || tradeLabel === "trade.decent_deal";
+        // }
 
-        if (selectedFilters.includes("weakDeal")) {
-          matchesAnyFilter = matchesAnyFilter || tradeLabel === "trade.weak_deal";
-        }
+        // if (selectedFilters.includes("weakDeal")) {
+        //   matchesAnyFilter = matchesAnyFilter || tradeLabel === "trade.weak_deal";
+        // }
 
-        if (selectedFilters.includes("greatDeal")) {
-          matchesAnyFilter = matchesAnyFilter || tradeLabel === "trade.great_deal";
-        }
+        // if (selectedFilters.includes("greatDeal")) {
+        //   matchesAnyFilter = matchesAnyFilter || tradeLabel === "trade.great_deal";
+        // }
 
         return matchesAnyFilter; // Show if it matches at least one selected filter
       })
@@ -642,7 +644,6 @@ const TradeList = ({ route }) => {
     const groupedWantsItems = groupItems(item.wantsItems || []);
 
     const handleChatNavigation = async () => {
-
       const callbackfunction = () => {
         if (!user?.id) {
           setIsSigninDrawerVisible(true);
@@ -658,20 +659,20 @@ const TradeList = ({ route }) => {
           item,
         });
       };
-
+    
       try {
-        // const isOnline = await isUserOnline(item.userId)
-
-
-        if (!localState.isPro) { InterstitialAdManager.showAd(callbackfunction); }
-        else { callbackfunction() }
-
-
+        if (!interstitialAdShown && !localState.isPro) {
+          interstitialAdShown = true; // ✅ Prevent it from showing again
+          InterstitialAdManager.showAd(callbackfunction);
+        } else {
+          callbackfunction(); // 🚀 Go directly if ad already shown
+        }
       } catch (error) {
         console.error('Error navigating to PrivateChat:', error);
         Alert.alert('Error', 'Unable to navigate to the chat. Please try again later.');
       }
     };
+    
 
     return (
       <View style={[styles.tradeItem, item.isFeatured && { backgroundColor: isDarkMode ? '#34495E' : 'rgba(245, 222, 179, 0.6)' }]}>
@@ -749,9 +750,11 @@ const TradeList = ({ route }) => {
                     }}
                     style={[styles.itemImage, { backgroundColor: '#1B1B1B' }]}
                   />
-                  <Text style={styles.names}>
-                    {hasItem.name}
-                  </Text>
+                <Text style={styles.names}>
+                {hasItem.name?.length > 10 ? hasItem.name.slice(0, 9) + '...' : hasItem.name}
+                </Text>
+
+
                   {hasItem.count > 1 && (
                     <View style={styles.tagcount}>
                       <Text style={styles.tagcounttext}>{hasItem.count}</Text>
@@ -784,7 +787,7 @@ const TradeList = ({ route }) => {
                     style={[styles.itemImage, { backgroundColor: '#1B1B1B' }]}
                   />
                   <Text style={styles.names}>
-                    {wantnItem.name}
+                  {wantnItem.name?.length > 10 ? wantnItem.name.slice(0, 9) + '...' : wantnItem.name}
                   </Text>
                   {wantnItem.count > 1 && (
                     <View style={styles.tagcount}>
@@ -940,14 +943,14 @@ const getStyles = (isDarkMode) =>
   StyleSheet.create({
     container: {
       paddingHorizontal: 8,
-      backgroundColor: isDarkMode ? '#121212' : '#f2f2f7',
+      backgroundColor: isDarkMode ? '#141414' : '#f2f2f7',
       flex: 1,
     },
     tradeItem: {
       padding: 10,
       marginBottom: 10,
       // marginHorizontal: 10,
-      backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
+      backgroundColor: isDarkMode ? '#1B1B1B' : '#ffffff',
 
       borderRadius: 10, // Smooth rounded corners
       borderWidth: !config.isNoman ? 3 : 0,
@@ -1012,6 +1015,8 @@ const getStyles = (isDarkMode) =>
     itemImage: {
       width: 30,
       height: 30,
+      // borderWidth:1,
+      // borderColor: '#2A3942',
       // marginRight: 5,
       // borderRadius: 25,
       marginVertical: 5,
@@ -1134,7 +1139,7 @@ const getStyles = (isDarkMode) =>
 
     },
     names: {
-      fontFamily: 'Lato-Bold',
+      fontFamily: 'Lato-Regular',
       fontSize: 8,
       color: isDarkMode ? 'white' : "black",
       marginTop: -3

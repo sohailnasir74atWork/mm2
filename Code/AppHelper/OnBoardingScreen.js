@@ -22,7 +22,7 @@ import { useLocalState } from '../LocalGlobelStats';
 
 const { width } = Dimensions.get('window');
 
-const icon = config.isNoman ? require('../../assets/logo.webp') : require('../../assets/logo.webp');
+const icon = config.isNoman ? require('../../assets/ios.png') : require('../../assets/logo.webp');
 
 
 const OnboardingScreen = ({ onFinish, selectedTheme }) => {
@@ -237,7 +237,7 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  slide: { width: width, alignItems: 'center', justifyContent: 'space-evenly', paddingHorizontal: 20,  flex: 1 },
+  slide: { width: width, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20,  flex: 1, marginBottom:30 },
   title: { fontSize: 24, fontFamily: 'Lato-Bold', marginBottom: 10, textAlign: 'center', lineHeight: 30},
   text: { fontSize: 12, textAlign: 'center', paddingHorizontal: 20, fontFamily: 'Lato-Regular' },
   welcomeText: { fontSize: 18, fontFamily: 'Lato-Bold', marginBottom: 10, textAlign: 'center' },

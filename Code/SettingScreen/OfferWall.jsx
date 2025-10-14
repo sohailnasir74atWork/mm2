@@ -71,7 +71,7 @@ import { useTranslation } from 'react-i18next';
       }
     }, [visible, packages]);
 
-    const handleSelectPlan = (pkg) => {setActivePlan(pkg); console.log(pkg)
+    const handleSelectPlan = (pkg) => {setActivePlan(pkg); 
     }
 
     const handlePurchase = () => {
@@ -176,7 +176,7 @@ import { useTranslation } from 'react-i18next';
             {!isSelected && <Ionicons name="ellipse-outline" size={20} color={config.colors.hasBlockGreen} style={styles.icon}/>}
           </Text>
                     <Text style={styles.planPrice}>{product.priceString}/{pkg.packageType === 'ANNUAL' ? 'Year' :
-            pkg.packageType === 'THREE_MONTH' ? '3 Months' : 
+            pkg.packageType === 'THREE_MONTH' ? 'Quarter' : 
             'Month'}</Text>
                     <Text style={styles.cancelAnytime}>{t('offer.cancelAnytime')}</Text>
                   </TouchableOpacity>

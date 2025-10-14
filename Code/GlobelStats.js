@@ -35,7 +35,7 @@ export const GlobalStateProvider = ({ children }) => {
     rewardPoints: 0,
     isBlock: false,
     fcmToken: null,
-    lastactivity: null,
+    lastActivity: null,
     online: false,
     isPro: false
 
@@ -47,33 +47,33 @@ export const GlobalStateProvider = ({ children }) => {
   const robloxUsernameRef = useRef('');
 
   const updateLocalStateAndDatabase = async (keyOrUpdates, value) => {
-    if (!user.id) return; // Prevent updates if user is not logged in
-
     try {
-      const userRef = ref(appdatabase, `users/${user.id}`);
       let updates = {};
-
+  
       if (typeof keyOrUpdates === 'string') {
-        // Single update
         updates = { [keyOrUpdates]: value };
+        await updateLocalState(keyOrUpdates, value); // ✅ update local storage (AsyncStorage)
       } else if (typeof keyOrUpdates === 'object') {
-        // Batch update
         updates = keyOrUpdates;
+        for (const [key, val] of Object.entries(updates)) {
+          await updateLocalState(key, val); // ✅ update local storage key by key
+        }
       } else {
         throw new Error('Invalid arguments for update.');
       }
-
-      // ✅ Update local state
+  
+      // ✅ Update in-memory user state
       setUser((prev) => ({ ...prev, ...updates }));
-
-
-      // ✅ Update Firebase database
-      await update(userRef, updates);
+  
+      // ✅ Update Firebase only if user is logged in
+      if (user?.id) {
+        const userRef = ref(appdatabase, `users/${user.id}`);
+        await update(userRef, updates);
+      }
     } catch (error) {
-      console.error('Error updating user state or database:', error);
+      console.error('❌ Error updating user state or database:', error);
     }
   };
-
 
   // console.log(robloxUsernameRef?.current, 'robloxUsername_outside')
 
@@ -90,7 +90,7 @@ export const GlobalStateProvider = ({ children }) => {
       rewardPoints: 0,
       isBlock: false,
       fcmToken: null,
-      lastactivity: null,
+      lastActivity: null,
       online: false,
       isPro: false
     });
@@ -130,7 +130,7 @@ export const GlobalStateProvider = ({ children }) => {
       setUser(userData);
 
       // 🔥 Refresh and update FCM token
-      await Promise.all([registerForNotifications(userId), requestPermission()]);
+      await Promise.all([registerForNotifications(userId)]);
 
     } catch (error) {
       console.error("❌ Auth state change error:", error);
@@ -145,7 +145,7 @@ export const GlobalStateProvider = ({ children }) => {
 
         if (loggedInUser?.uid) {
           await registerForNotifications(loggedInUser.uid);
-          await requestPermission();
+          // await requestPermission();
         }
 
         await updateLocalState('isAppReady', true);
@@ -215,7 +215,10 @@ export const GlobalStateProvider = ({ children }) => {
 
   const checkInternetConnection = async () => {
     try {
-      const response = await fetch('https://www.google.com/favicon.ico', { method: 'HEAD', cache: 'no-store' });
+      const response = await fetch('https://www.google.com/favicon.ico', {
+        method: 'GET',
+        cache: 'no-store',
+      });
       if (!response.ok) {
         throw new Error('Unable to reach the internet.');
       }
@@ -238,18 +241,10 @@ export const GlobalStateProvider = ({ children }) => {
 
 
   useEffect(() => {
-
-    const lastActivity = localState.lastactivity ? new Date(localState.lastactivity).getTime() : 0;
-    const now = Date.now();
-    const THREE_HOURS = 6 * 60 * 60 * 1000; 
-
-    if (now - lastActivity > THREE_HOURS) {
-      updateLocalStateAndDatabase('lastactivity', new Date().toISOString());
-
-    }
-  }, [localState.lastactivity]);
-
-console.log(localState.isMM2, 'update home')
+    // console.log("🕓 Saving lastActivity:", new Date().toISOString());
+    updateLocalStateAndDatabase('lastActivity', new Date().toISOString());
+  }, []);
+// console.log(localState.isMM2, 'update home')
 
   const fetchStockData = async (refresh) => {
     // console.log(refresh, 'refresh')
@@ -259,12 +254,13 @@ console.log(localState.isMM2, 'update home')
       const lastActivity = localState.lastActivity ? new Date(localState.lastActivity).getTime() : 0;
       const now = Date.now();
       const timeElapsed = now - lastActivity;
-      const EXPIRY_LIMIT = refresh ? 10 * 1000 : 6 * 60 * 1000; // 10s for refresh, 6min default
+      const EXPIRY_LIMIT = refresh ? 1 * 1000 : 6 * 60 * 1000; // 10s for refresh, 6min default
   
       const shouldFetch =
         timeElapsed > EXPIRY_LIMIT ||
         !localState.data ||
-        !Object.keys(localState.data).length ||
+        !Object.keys(localState.data).length ||  !localState.suprime ||
+        !Object.keys(localState.suprime).length || 
         !localState.imgurl;
   
       if (shouldFetch) {
@@ -277,9 +273,15 @@ console.log(localState.isMM2, 'update home')
         const cdnUrl  = 'https://mm2-api.b-cdn.net/mm2values.json';
   
         try {
-          const dataRes = await fetch(cdnUrl);
+          const dataRes = await fetch(cdnUrl, {
+            method: 'GET',
+            cache: 'no-store',
+          });
           const dataJson = await dataRes.json();
-          const dataSuprime = await fetch(suprimeUrl);
+          const dataSuprime = await fetch(suprimeUrl, {
+            method: 'GET',
+            cache: 'no-store',
+          });
           const suprimeJson = await dataSuprime.json();
   
           if (!dataJson || typeof dataJson !== 'object' || dataJson.error || !Object.keys(dataJson).length) {

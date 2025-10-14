@@ -61,20 +61,7 @@ const ValueScreen = ({ selectedTheme }) => {
     Robuxprice: '',
   });
 
-  const openEditModal = (fruit) => {
-    if (!fruit) return;
-    setSelectedFruit(fruit);
 
-    // Store values in ref, NOT state
-    editValuesRef.current = {
-      Value: fruit.Value.toString(),
-      Permanent: fruit.Permanent.toString(),
-      Biliprice: fruit.Biliprice.toString(),
-      Robuxprice: fruit.Robuxprice.toString(),
-    };
-
-    setIsModalVisible(true);
-  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -96,7 +83,10 @@ const ValueScreen = ({ selectedTheme }) => {
       setIsDrawerVisible(!isDrawerVisible);
     };
 
-    if (!hasAdBeenShown && !localState.isPro) {
+    // if (!hasAdBeenShown && !localState.isPro) {
+    //   InterstitialAdManager.showAd(callbackfunction);
+    // }
+      if (false) {
       InterstitialAdManager.showAd(callbackfunction);
     }
     else {
@@ -260,54 +250,8 @@ const ValueScreen = ({ selectedTheme }) => {
 
     setFilteredData(filtered);
   }, [valuesData, searchText, selectedFilter]);
-  const EditFruitModal = () => (
-    <Modal visible={isModalVisible} transparent={true} animationType="slide">
-      <View style={styles.modalContainer}>
-        <Text style={styles.modalTitle}>Edit {selectedFruit?.name}</Text>
-
-        <TextInput
-          style={styles.input}
-          defaultValue={editValuesRef.current.Value}
-          onChangeText={(text) => (editValuesRef.current.Value = text)}
-          keyboardType="numeric"
-          placeholder="Value"
-        />
-
-        <TextInput
-          style={styles.input}
-          defaultValue={editValuesRef.current.Permanent}
-          onChangeText={(text) => (editValuesRef.current.Permanent = text)}
-          keyboardType="numeric"
-          placeholder="Permanent Value"
-        />
-
-        <TextInput
-          style={styles.input}
-          defaultValue={editValuesRef.current.Biliprice}
-          onChangeText={(text) => (editValuesRef.current.Biliprice = text)}
-          keyboardType="numeric"
-          placeholder="Beli Price"
-        />
-
-        <TextInput
-          style={styles.input}
-          defaultValue={editValuesRef.current.Robuxprice}
-          onChangeText={(text) => (editValuesRef.current.Robuxprice = text)}
-          keyboardType="default"
-          placeholder="Robux Price"
-        />
 
 
-        <TouchableOpacity style={styles.saveButton}>
-          <Text style={styles.saveButtonText}>Save Changes</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => setIsModalVisible(false)} style={styles.cencelButton}>
-          <Text style={styles.saveButtonText}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
-    </Modal>
-  );
 
 
 
@@ -368,11 +312,11 @@ const ValueScreen = ({ selectedTheme }) => {
       </View>
     
 
-      {isAdmin && (
+      {/* {isAdmin && (
         <TouchableOpacity onPress={() => openEditModal(item)} style={styles.editButton}>
           <Text style={styles.editButtonText}>Edit</Text>
         </TouchableOpacity>
-      )}
+      )} */}
       <View style={styles.devider}></View>
     </View>
   ), [localState.isMM2]);
@@ -387,11 +331,11 @@ const ValueScreen = ({ selectedTheme }) => {
           {/* <Text style={[styles.description, { color: selectedTheme.colors.text }]}>
             {t("value.description")}
           </Text> */}
-          {showAd1 ? (
+          {/* {showAd1 ? (
             <CustomAd />
           ) : (
             <CustomAd2 />
-          )}
+          )} */}
 
           <View style={styles.searchFilterContainer}>
             <TextInput
@@ -454,7 +398,7 @@ const ValueScreen = ({ selectedTheme }) => {
                 onRefresh={handleRefresh}
               // columnWrapperStyle={!config.isNoman ? styles.columnWrapper : styles.columnWrapper}
               />
-              {isModalVisible && selectedFruit && <EditFruitModal />}
+              {/* {isModalVisible && selectedFruit && <EditFruitModal />} */}
             </>
           ) : (
             <Text style={[styles.description, { textAlign: 'center', marginTop: 20, color: 'gray' }]}>
@@ -739,7 +683,7 @@ export const getStyles = (isDarkMode) =>
     },
     filterOptionText: {
       fontSize: 14,
-      padding: 10,
+      // padding: 20,
       color: 'black'
 
     },

@@ -51,8 +51,8 @@ const HomeScreen = ({ selectedTheme }) => {
   // const pinnedMessagesRef = useMemo(() => ref(appdatabase, 'pin_messages'), []);
   const CATEGORIES = useMemo(() => {
     return localState.isMM2
-      ? ['All', 'Ancient', 'Unique', 'Chroma', 'Godly', 'Legend', 'Rare', 'Uncommon', 'Common', 'Vintage', 'Pets', 'Misc', 'FAVORITES']
-      : ['All', 'Sets', 'Ancients', 'Evos', 'Uniques', 'Chromas', 'Godlies', 'Legendaries', 'Rares', 'Uncommons', 'Commons', 'Vintages', 'Pets', 'Mis', 'Untradables', 'FAVORITES'];
+      ? ['All', 'Ancient', 'Unique', 'Chroma', 'Godly', 'Legend', 'Rare', 'Uncommon', 'Common', 'Vintage', 'Pets', 'FAVORITES']
+      : ['All', 'Sets', 'Ancients', 'Uniques', 'Evos', 'Chromas', 'Godlies', 'Legendaries', 'Rares', 'Uncommons', 'Commons', 'Vintages', 'Pets','FAVORITES'];
   }, [localState.isMM2]);
 
   const extractMM2Values = (data) => {
@@ -63,7 +63,7 @@ const HomeScreen = ({ selectedTheme }) => {
       for (const [category, tiers] of Object.entries(data)) {
         for (const [tier, values] of Object.entries(tiers)) {
           for (const item of values) {
-            if (!item?.name || !item?.value || !item?.image) continue;
+            if (!item?.name) continue;
 
             const cleanedValue = String(item.value).replace(/,/g, '');
             const numericValue = !isNaN(cleanedValue) ? Number(cleanedValue) : null;
@@ -73,7 +73,7 @@ const HomeScreen = ({ selectedTheme }) => {
               FormattedValue: numericValue !== null ? numericValue.toLocaleString() : item.value,
               Value: numericValue !== null ? numericValue : 0, // fallback to 0 or any safe number
               Image: !localState.isMM2 ? `https://supremevaluelist.com/${item.image}` : `https://mm2values.com/${item.image}`,
-              Category: category,
+              Category: category.trim(), // no need for .toLowerCase() if comparing using .toLowerCase() later
               Tier: tier,
             });
           }
@@ -221,28 +221,28 @@ const HomeScreen = ({ selectedTheme }) => {
     }
     const tradeRatio = wantsTotal.value / hasTotal.value;
 
-    if (
-      tradeRatio < 0.05 &&
-      hasItems.filter(Boolean).length > 0 &&
-      wantsItems.filter(Boolean).length > 0 && type !== 'share'
-    ) {
-      showErrorMessage(
-        t("home.unfair_trade"),
-        t('home.unfair_trade_description')
-      );
-      return;
-    }
+    // if (
+    //   tradeRatio < 0.05 &&
+    //   hasItems.filter(Boolean).length > 0 &&
+    //   wantsItems.filter(Boolean).length > 0 && type !== 'share'
+    // ) {
+    //   showErrorMessage(
+    //     t("home.unfair_trade"),
+    //     t('home.unfair_trade_description')
+    //   );
+    //   return;
+    // }
 
 
-    if (tradeRatio > 1.95 && type !== 'share' &&
-      hasItems.filter(Boolean).length > 0 &&
-      wantsItems.filter(Boolean).length > 0) {
-      showErrorMessage(
-        t('home.invalid_trade'),
-        t('home.invalid_trade_description')
-      );
-      return;
-    }
+    // if (tradeRatio > 1.95 && type !== 'share' &&
+    //   hasItems.filter(Boolean).length > 0 &&
+    //   wantsItems.filter(Boolean).length > 0) {
+    //   showErrorMessage(
+    //     t('home.invalid_trade'),
+    //     t('home.invalid_trade_description')
+    //   );
+    //   return;
+    // }
 
     setModalVisible(true)
   };
@@ -368,7 +368,7 @@ const HomeScreen = ({ selectedTheme }) => {
       try {
         const parsed = typeof localState.suprime === 'string'
           ? JSON.parse(localState.suprime)
-          : localState.data;
+          : localState.suprime;
 
         const extracted = extractMM2Values(parsed);
         if (isMounted) {
@@ -437,7 +437,6 @@ const HomeScreen = ({ selectedTheme }) => {
 
 
   const selectItem = (item) => {
-    // console.log(item)
     triggerHapticFeedback('impactLight');
     const newItem = { ...item, usePermanent: false };
     const updateItems = selectedSection === 'has' ? [...hasItems] : [...wantsItems];
@@ -494,20 +493,26 @@ const HomeScreen = ({ selectedTheme }) => {
 
   const filteredData = useMemo(() => {
     const search = searchText.toLowerCase();
+    const selected = selectedPetType.toLowerCase().trim();
 
-    // ✅ Show only favorite items
-    if (selectedPetType === 'FAVORITES') {
-      return (localState.favorites || []).filter((fav) =>
-        fav.Name.toLowerCase().includes(search)
-      );
-    }
-
-    // ✅ Otherwise, filter normal items by name and category
-    return fruitRecords.filter((item) =>
-      item.Name.toLowerCase().includes(search) &&
-      (selectedPetType === 'All' || item.Category.toLowerCase() === selectedPetType.toLowerCase())
-    );
+  
+    const results = fruitRecords.filter((item) => {
+      const itemCategory = item.Category?.toLowerCase().trim();
+      const match = item.Name.toLowerCase().includes(search) &&
+        (selected === 'all' || itemCategory === selected);
+  
+      if (itemCategory === selected) {
+        // console.log('✅ Matched:', item.Name, 'in category:', itemCategory);
+      }
+  
+      return match;
+    });
+  
+    // console.log('🧪 Filtered Items for', selectedPetType, ':', results.length);
+  
+    return results;
   }, [fruitRecords, localState.favorites, selectedPetType, searchText, localState.isMM2]);
+  
 
 
   const profitLoss = wantsTotal.value - hasTotal.value;
@@ -569,28 +574,35 @@ const HomeScreen = ({ selectedTheme }) => {
 
 
                 {config.isNoman && hasItems?.map((item, index) => (
-                  <TouchableOpacity key={index} style={[styles.addItemBlockNew, { backgroundColor: '#1B1B1B' }]} onPress={() => { openDrawer('has') }} disabled={item !== null}>
+                  <TouchableOpacity key={index} style={[
+                    styles.addItemBlockNew,
+                    localState.isMM2 ? { backgroundColor: '#393939' } : '#1B1B1B'
+                  ]}
+                  
+                  onPress={() => { openDrawer('has') }} disabled={item !== null}>
                     {item ? (
-                      <>
+                      <View style={{flexDirection:'row', alignItems:'center', flex:1,  width:'100%'}}>
 
                         <Image
                           source={{ uri: item.Image }}
-                          resizeMode="cover"
-                          style={[styles.itemImageOverlay]}
+                          resizeMode="contain"
+                          style={[styles.itemImageOverlay, localState.isMM2 ? { backgroundColor: '#393939' } : null]}
                         />
-
+                        <View  style={{ alignItems:'center', flex:1, }}>
                         <Text style={[styles.itemText, { color: 'white' }
                         ]}>{item.usePermanent
                           ? (Number(item.Permanent) === 0 ? "Special" : Number(item.Permanent).toLocaleString())
                           : (Number(item.Value) === 0 ? "Special" : Number(item.Value).toLocaleString())
                           }</Text>
                         <Text style={[styles.itemText, { color: 'white' }
-                        ]}>{item.Type === 'p' && 'Perm'}  {item.Name}</Text>
+                        ]}>{item.Name}</Text>
                         {/* {item.Type === 'p' && <Text style={styles.perm}>P</Text>} */}
+                        
+                        </View>
                         <TouchableOpacity onPress={() => removeItem(index, true)} style={styles.removeButton}>
-                          <Icon name="close-outline" size={18} color="white" />
+                          <Icon name="close-outline" size={18} color="red" />
                         </TouchableOpacity>
-                      </>
+                      </View>
                     ) : (
                       <>
                         {index === lastFilledIndexHas + 1 && <Icon name="add-circle" size={30} color="grey" />}
@@ -614,23 +626,30 @@ const HomeScreen = ({ selectedTheme }) => {
               <View style={[styles.itemRow, { marginBottom: 0 }]}>
 
                 {config.isNoman && wantsItems?.map((item, index) => (
-                  <TouchableOpacity key={index} style={[styles.addItemBlockNew, { backgroundColor:  '#1B1B1B' }]} onPress={() => { openDrawer('wants'); }} disabled={item !== null}>
+                  <TouchableOpacity key={index} style={[styles.addItemBlockNew,  localState.isMM2 ? { backgroundColor: '#393939' } : '#1B1B1B']} onPress={() => { openDrawer('wants'); }} disabled={item !== null}>
                     {item ? (
-                      <>
-                        <Image
-                          source={{ uri: item.Image }}
-                          resizeMode="cover"
-                          style={[styles.itemImageOverlay]}
-                        />
-                        <Text style={[styles.itemText, { color: 'white' }
-                        ]}>{(Number(item.Value) === 0 ? "Special" : Number(item.Value).toLocaleString())}</Text>
-                        <Text style={[styles.itemText, { color: 'white' }
-                        ]}>{item.Name}</Text>
-                        {/* {item.Type === 'p' && <Text style={styles.perm}>P</Text>} */}
-                        <TouchableOpacity onPress={() => removeItem(index, false)} style={styles.removeButton}>
-                          <Icon name="close-outline" size={18} color="white" />
-                        </TouchableOpacity>
-                      </>
+                     <View style={{flexDirection:'row', alignItems:'center', flex:1,  width:'100%'}}>
+
+                     <Image
+                       source={{ uri: item.Image }}
+                       resizeMode="contain"
+                       style={[styles.itemImageOverlay, localState.isMM2 ? { backgroundColor: '#393939' } : null]}
+                     />
+                     <View  style={{ alignItems:'center', flex:1, }}>
+                     <Text style={[styles.itemText, { color: 'white' }
+                     ]}>{item.usePermanent
+                       ? (Number(item.Permanent) === 0 ? "Special" : Number(item.Permanent).toLocaleString())
+                       : (Number(item.Value) === 0 ? "Special" : Number(item.Value).toLocaleString())
+                       }</Text>
+                     <Text style={[styles.itemText, { color: 'white' }
+                     ]}>{item.Name}</Text>
+                     {/* {item.Type === 'p' && <Text style={styles.perm}>P</Text>} */}
+                     
+                     </View>
+                     <TouchableOpacity onPress={() => removeItem(index, false)} style={styles.removeButton}>
+                       <Icon name="close-outline" size={18} color="red" />
+                     </TouchableOpacity>
+                   </View>
 
                     ) : (
                       <>
@@ -738,6 +757,7 @@ const HomeScreen = ({ selectedTheme }) => {
                     maxLength={40}
                     value={description}
                     onChangeText={setDescription}
+                    placeholderTextColor={'white'}
                   />
                   <View style={styles.buttonContainer}>
                     <TouchableOpacity
@@ -831,7 +851,7 @@ const getStyles = (isDarkMode) =>
     },
     addItemBlockNew: {
       width: '48%',
-      height: config.isNoman ? 80 : 110,
+      height: config.isNoman ? 90 : 110,
       backgroundColor: isDarkMode ? '#1B1B1B' : '#CCCCFF', // Dark: darker contrast, Light: White
       borderWidth: Platform.OS === 'android' ? 0 : 1,
       borderColor: 'lightgrey',
@@ -845,7 +865,7 @@ const getStyles = (isDarkMode) =>
     },
     addItemBlockNewNoman: {
       width: '49%',
-      height: config.isNoman ? 80 : 110,
+      height: config.isNoman ? 100 : 110,
       backgroundColor: isDarkMode ? '#1B1B1B' : '#CCCCFF', // Dark: darker contrast, Light: White
       borderWidth: Platform.OS === 'android' ? 0 : 1,
       borderColor: 'lightgrey',
@@ -905,8 +925,8 @@ const getStyles = (isDarkMode) =>
 
     removeButton: {
       position: 'absolute',
-      bottom: 6,
-      right: 6,
+      top: 0,
+      right: 0,
     },
 
     divider: {
@@ -957,7 +977,7 @@ const getStyles = (isDarkMode) =>
     },
     categoryButton: {
       marginVertical: 4,
-      paddingVertical: 8,
+      paddingVertical: 4,
       paddingHorizontal: 8,
       backgroundColor: '#2A3942',
       borderRadius: 12,
@@ -967,9 +987,11 @@ const getStyles = (isDarkMode) =>
       backgroundColor: config.colors.primary,
     },
     categoryButtonText: {
-      fontSize: 13,
+      fontSize: 10,
       fontWeight: '600',
       color: 'white',
+      paddingVertical:5
+
     },
     categoryButtonTextActive: {
       color: '#fff',
@@ -1072,15 +1094,11 @@ const getStyles = (isDarkMode) =>
       justifyContent: 'space-around',
     },
     itemImageOverlay: {
-      width: 40,
-      height: 40,
+      width: 90,
+      height: 90,
       borderRadius: 5,
     },
-    itemImageOverlayNoman: {
-      width: 50,
-      height: 50,
-      borderRadius: 5,
-    },
+ 
 
 
     screenshotView: {

@@ -130,7 +130,7 @@ const ShareTradeModal = ({ visible, onClose, tradeData }) => {
             <View style={styles.modalOverlay}>
                 <View style={styles.modalContainer}>
                     {/* Trade Details */}
-                    <ViewShot ref={viewRef} style={{ backgroundColor: 'white', padding: 5, borderRadius:8,         backgroundColor:'#E8F9FF'
+                    <ViewShot ref={viewRef} style={{ backgroundColor: 'white', padding: 5, borderRadius:8,         backgroundColor:'#141414'
  }}>
                         {includeHasWants && (
                             <View style={styles.tradeDetails}>
@@ -153,7 +153,7 @@ const ShareTradeModal = ({ visible, onClose, tradeData }) => {
                                                         />
                                                         <View style={item.name !== '' && styles.bottom}>
                                                             <Text style={styles.itemText}>
-                                                                {item.name} {item.type === 'p' && '(P)'}
+                                                                {item.name}
                                                             </Text></View>
                                                     </View>
                                                 ))}
@@ -190,7 +190,7 @@ const ShareTradeModal = ({ visible, onClose, tradeData }) => {
                                                         />
                                                         <View style={item.name !== '' && styles.bottom}>
                                                             <Text style={styles.itemText}>
-                                                                {item.name} {item.type === 'p' && '(P)'}
+                                                                {item.name}
                                                             </Text></View>
                                                     </View>
                                                 ))}
@@ -239,7 +239,7 @@ const ShareTradeModal = ({ visible, onClose, tradeData }) => {
 
                         {includeAppTag &&
                             <View style={styles.footer}>
-                                <Text style={styles.footerText}>Created with {config.appName}</Text>
+                                <Text style={styles.footerText}>Created with MM2 Values</Text>
 
                                 <Image
                                     source={require('../../assets/logo.webp')} // Replace with the actual local image path
@@ -338,7 +338,7 @@ const getStyles = (isDarkMode) =>
 StyleSheet.create({
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -348,6 +348,8 @@ StyleSheet.create({
         borderRadius: 8,
         width: '98%',
         alignItems: 'center',
+        borderWidth: 1, // Optional: Add border for grid feel
+        borderColor: 'grey',
     },
     tradeDetails: {
         flexDirection: 'row',
@@ -429,15 +431,15 @@ StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         // padding: 4,
-        borderWidth: !config.isNoman ? 1 : 0, // Optional: Add border for grid feel
-        borderColor: '#ccc',
-        borderRadius: 6,
-        backgroundColor: isDarkMode ? '#34495E' : '#CCCCFF',
+        borderWidth: 1, // Optional: Add border for grid feel
+        borderColor: '#2A3942',
+                borderRadius: 6,
+        backgroundColor: isDarkMode ? '#1B1B1B' : '#CCCCFF',
     },
     itemImage: {
-        width: 50,
-        height: 50,
-        borderRadius: 8,
+        width: 60,
+        height: 60,
+        borderRadius: 4,
     },
     itemText: {
         fontSize: 10,
@@ -461,10 +463,10 @@ StyleSheet.create({
         // paddingHorizontal:20
     },
     bottom: {
-        backgroundColor: '#fe01ea', width: '100%', borderBottomEndRadius: 4, borderBottomStartRadius: 4
+        backgroundColor: '#1B1B1B', width: '100%', borderBottomEndRadius: 4, borderBottomStartRadius: 4
     },
     top: {
-        backgroundColor: '#1dc226', width: '100%', borderTopEndRadius: 4, borderTopStartRadius: 4
+        backgroundColor: '#1B1B1B', width: '100%', borderTopEndRadius: 4, borderTopStartRadius: 4
     },
     wantBackground: {
         backgroundColor: config.colors.wantBlockRed,

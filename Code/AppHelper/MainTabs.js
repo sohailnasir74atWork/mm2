@@ -103,7 +103,7 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
       <Tab.Screen
         name="Calculator"
         options={({ navigation }) => ({
-          title: t('tabs.calculator'), // Translation applied here
+          title: 'Trade Checker', // Translation applied here
           headerRight: () => (
             <>
               {/* <TouchableOpacity onPress={() => navigation.navigate('Reward')}>

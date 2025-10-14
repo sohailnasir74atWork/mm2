@@ -77,14 +77,18 @@ export const firebaseConfig = {
           let fcmToken = null;
   
           if (Platform.OS === 'ios') {
-              // console.log('🍏 Fetching APNS Token...');
-              const apnsToken = await messaging().getAPNSToken();
-  
-              if (!apnsToken) {
-                  console.error('❌ APNS token is not available. Ensure APNS is configured correctly.');
-                  return;
-              }
-          }
+            // console.log('🍏 Fetching APNS Token...');
+            const apnsToken = await messaging().getAPNSToken();
+            // console.log('📲 APNS Token:', apnsToken);
+        
+            if (!apnsToken) {
+                console.error('❌ APNS token is not available. Ensure APNS is configured correctly.');
+                return;
+            }
+        
+            // 🔐 Set the APNS token manually (important for reliability)
+            await messaging().setAPNSToken(apnsToken);
+        }
   
         //   console.log('📡 Fetching FCM Token...');
           fcmToken = await messaging().getToken();

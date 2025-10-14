@@ -15,7 +15,7 @@ import MessagesList from './MessagesList';
 import MessageInput from './MessageInput';
 import { getStyles } from '../Style';
 import getAdUnitId from '../../Ads/ads';
-import { banUser, isUserOnline, makeAdmin, removeAdmin, unbanUser } from '../utils';
+import { banUser, handleDeleteLast300Messages, isUserOnline, makeAdmin, removeAdmin, unbanUser } from '../utils';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import ProfileBottomDrawer from './BottomDrawer';
 import leoProfanity from 'leo-profanity';
@@ -34,7 +34,7 @@ leoProfanity.loadDictionary('en');
 const bannerAdUnitId = getAdUnitId('banner');
 const ChatScreen = ({ selectedTheme, bannedUsers, modalVisibleChatinfo, setChatFocused,
   setModalVisibleChatinfo, unreadMessagesCount, fetchChats, unreadcount, setunreadcount }) => {
-  const { user, theme, onlineMembersCount, appdatabase, setUser } = useGlobalState();
+  const { user, theme, onlineMembersCount, appdatabase, setUser, isAdmin } = useGlobalState();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [replyTo, setReplyTo] = useState(null);
@@ -338,7 +338,7 @@ const ChatScreen = ({ selectedTheme, bannedUsers, modalVisibleChatinfo, setChatF
 
   const handleSendMessage = () => {
     const MAX_CHARACTERS = 250;
-    const MESSAGE_COOLDOWN = 100;
+    const MESSAGE_COOLDOWN = 3000;
     const LINK_REGEX = /(https?:\/\/[^\s]+)/g;
 
     if (!user?.id || user?.isBlock) {
@@ -384,6 +384,7 @@ const ChatScreen = ({ selectedTheme, bannedUsers, modalVisibleChatinfo, setChatF
         reportCount: 0,
         containsLink,
         isPro: localState.isPro,
+        isAdmin:isAdmin
       });
 
       setInput('');
@@ -395,7 +396,8 @@ const ChatScreen = ({ selectedTheme, bannedUsers, modalVisibleChatinfo, setChatF
       Alert.alert(t('home.alert.error'), 'Could not send your message. Please try again.');
     }
   };
-
+  
+  
   // console.log(isPro)
   return (
     <>
@@ -429,7 +431,7 @@ const ChatScreen = ({ selectedTheme, bannedUsers, modalVisibleChatinfo, setChatF
                 isDarkMode={theme === 'dark'}
                 onPinMessage={handlePinMessage}
                 onDeleteMessage={(messageId) => chatRef.child(messageId.replace('chat_new-', '')).remove()}
-                // isAdmin={isAdmin}
+                onDeleteAllMessage={(senderId) => handleDeleteLast300Messages(senderId)}
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
                 handleLoadMore={handleLoadMore}

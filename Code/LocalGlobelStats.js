@@ -5,6 +5,7 @@ import Purchases from 'react-native-purchases';
 import config from './Helper/Environment';
 import { useTranslation } from 'react-i18next';
 import { InteractionManager } from 'react-native';
+import { off } from '@react-native-firebase/database';
 
 const storage = new MMKV();
 const LocalStateContext = createContext();
@@ -48,6 +49,7 @@ export const LocalStateProvider = ({ children }) => {
     user_name: storage.getString('user_name') || 'Anonymous',
     translationUsage: safeParseJSON('translationUsage', { count: 0, date: new Date().toDateString() }),
     favorites: safeParseJSON('favorites', []),
+    imgurl: storage.getString('imgurl') || 'https://elvebredd.com',
     isMM2: storage.getBoolean('isMM2') ?? true,
     showAd1: storage.getBoolean('showAd1') ?? true,
   }));
@@ -75,7 +77,10 @@ export const LocalStateProvider = ({ children }) => {
     if (localState.data) {
       storage.set('data', JSON.stringify(localState.data)); // Force store
     }
-  }, [localState.data]);
+    if (localState.suprime) {
+      storage.set('suprime', JSON.stringify(localState.suprime)); // Force store
+    }
+  }, [localState.data, localState.suprime]);
 
   // console.log(localState.isPro)
   // Update local state and MMKV storage
@@ -133,7 +138,7 @@ export const LocalStateProvider = ({ children }) => {
       await Purchases.configure({ apiKey: config.apiKey, usesStoreKit2IfAvailable: false });
       const userID = await Purchases.getAppUserID();
       setCustomerId(userID);
-
+      // console.log(Purchases)
       // Run these in parallel for better performance
       await Promise.all([
         fetchOfferings().catch(error => {
@@ -163,6 +168,7 @@ export const LocalStateProvider = ({ children }) => {
   // console.log(isPro)
   // Fetch available subscriptions
   const fetchOfferings = async () => {
+    // console.log('offerings', Purchases)
     try {
       const offerings = await Purchases.getOfferings();
       if (offerings.current?.availablePackages?.length > 0) {
@@ -210,6 +216,8 @@ export const LocalStateProvider = ({ children }) => {
     try {
       const customerInfo = await Purchases.getCustomerInfo();
       const entitlements = customerInfo.entitlements.active;
+      // console.log(entitlements, 'entitlements')
+      
       const proKey = Object.keys(entitlements).find(
         (key) => key.toLowerCase() === 'pro'
       );
@@ -232,7 +240,12 @@ export const LocalStateProvider = ({ children }) => {
   const purchaseProduct = async (packageToPurchase, setLoading, track) => {
     setLoading(true);
     try {
-      const { customerInfo } = await Purchases.purchasePackage(packageToPurchase);
+      // console.log('.statrted')
+      const freshCustomerInfo = await Purchases.getCustomerInfo();
+      // console.log('🔁 Refetched customer info:', freshCustomerInfo);   
+         const { customerInfo } = await Purchases.purchasePackage(packageToPurchase);
+
+
       const entitlements = customerInfo.entitlements.active;
       const proKey = Object.keys(entitlements).find(
         (key) => key.toLowerCase() === 'pro'
@@ -315,7 +328,7 @@ export const LocalStateProvider = ({ children }) => {
       getRemainingTranslationTries,
       toggleAd,
     }),
-    [localState, customerId, packages, mySubscriptions]
+    [localState, customerId, packages, mySubscriptions, ]
   );
 
   return (

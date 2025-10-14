@@ -36,6 +36,8 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
     const [robloxUsernamelocal, setRobloxUsernamelocal] = useState()
     useEffect(()=>{robloxUsernameRef.current = robloxUsernamelocal},[robloxUsernamelocal])
     // useEffect(()=>{setRobloxUsernamelocal()},[robloxUsernamelocal])
+    const [isAppleLoading, setIsAppleLoading] = useState(false);
+
 
 
     const { t } = useTranslation();
@@ -75,23 +77,31 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
     // Updated onAppleButtonPress function
     const onAppleButtonPress = useCallback(async () => {
         triggerHapticFeedback('impactLight');
-        // if (!validateRobloxUsername()) return;
-
-
+    
         try {
+            // Ensure previous sessions are cleared
+    
             const { identityToken, nonce } = await appleAuth.performRequest({
                 requestedOperation: appleAuth.Operation.LOGIN,
                 requestedScopes: [appleAuth.Scope.FULL_NAME, appleAuth.Scope.EMAIL],
             });
     
-            if (!identityToken) throw new Error(t("signin.error_apple_token"));
+            if (!identityToken) {
+                throw new Error(t("signin.error_apple_token"));
+            }
     
-            await auth().signInWithCredential(auth.AppleAuthProvider.credential(identityToken, nonce));
+            const appleCredential = auth.AppleAuthProvider.credential(identityToken, nonce);
+            await auth().signInWithCredential(appleCredential);
+    
+            // ✅ Wait for native Apple view to fully disappear
+           
+              
+    
             showSuccessMessage(
                 t("home.alert.success"),
                 t("signin.success_signin")
             );
-            {Platform.OS !== 'ios' && onClose();}
+    
             mixpanel.track(`Login with apple from ${screen}`);
         } catch (error) {
             showErrorMessage(
@@ -100,6 +110,7 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
             );
         }
     }, [t, triggerHapticFeedback, onClose]);
+    
     
     
     
@@ -142,12 +153,16 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
                     t("home.alert.success"),
                     t("signin.alert_account_created")
                 );
-                {Platform.OS !== 'ios' && onClose();}
+                setTimeout(() => {
+                    onClose();
+                  }, 200);
             } else {
                 // Handle user login
                 await auth().signInWithEmailAndPassword(email, password);
                 mixpanel.track(`Login with email from ${screen}`);
-                {Platform.OS !== 'ios' && onClose();}
+                setTimeout(() => {
+                    onClose();
+                  }, 200);
                 // Alert.alert(t("signin.alert_welcome_back"), t("signin.success_signin"));
                 showSuccessMessage(
                     t("signin.alert_welcome_back"),
@@ -198,7 +213,9 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
                 t("signin.alert_welcome_back"),
                 t("signin.success_signin")
             );
-            {Platform.OS !== 'ios' && onClose();}
+            setTimeout(() => {
+                onClose();
+              }, 200);
             mixpanel.track(`Login with google from ${screen}`);
 
         } catch (error) {
@@ -333,7 +350,13 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
                             buttonStyle={isDarkMode ? AppleButton.Style.WHITE : AppleButton.Style.BLACK}
                             buttonType={AppleButton.Type.SIGN_IN}
                             style={styles.applebUUTON}
-                            onPress={() => onAppleButtonPress().then(() => console.log('Apple sign-in complete!'))}
+                            onPress={() => {
+                                setIsAppleLoading(true);
+                                onAppleButtonPress().finally(() => {setIsAppleLoading(false);   setTimeout(() => {
+                                    onClose(); // safely close your drawer now
+                                }, 100); // slight delay is enough
+                    });
+                            }}
                         />
                     )}
     

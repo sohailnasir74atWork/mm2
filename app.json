@@ -2,8 +2,8 @@
   "name": "bloxfruitevalues",
   "displayName": "bloxfruitevalues",
   "react-native-google-mobile-ads": {
-    "android_app_id": "ca-app-pub-5740215782746766~2511096424",
-    "ios_app_id": "ca-app-pub-5740215782746766~6566725656",
+    "android_app_id": "ca-app-pub-5740215782746766~6229019896",
+    "ios_app_id": "ca-app-pub-5740215782746766~6594069138",
     "delay_app_measurement_init": true,
     "user_tracking_usage_description": "This identifier will be used to deliver personalized ads to you.",
     "sk_ad_network_items": [

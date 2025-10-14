@@ -74,6 +74,11 @@ const CodesDrawer = ({ isVisible, toggleModal, codes }) => {
           renderItem={renderCodeItem}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>
+              Currently no active code is available. Please check back regularly, we’ll update as soon as one is available.
+            </Text>
+          }
         />
           
       </View>
@@ -95,7 +100,8 @@ export const getStyles = (isDarkMode) =>
       position: 'absolute',
       bottom: 0,
       width: '100%',
-      maxHeight: '60%',
+      height: '60%',
+
     },
     headerText: {
       fontSize: 20,
@@ -132,6 +138,13 @@ export const getStyles = (isDarkMode) =>
     },
     copyButton: {
       padding: 5,
+    },
+    emptyText: {
+      textAlign: 'center',
+      marginTop: 100,
+      fontSize: 16,
+      color: isDarkMode ? '#ccc' : '#555',
+      fontFamily: 'Lato-Regular',
     },
   });
 

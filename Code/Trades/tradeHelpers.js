@@ -6,25 +6,23 @@ import config from '../Helper/Environment';
 import { useTranslation } from 'react-i18next';
 
 export const FilterMenu = ({ selectedFilters, setSelectedFilters, analytics, platform }) => {
-  const { t } = useTranslation(); // 🔹 Import translation function
+  const { t } = useTranslation();
 
+  // Toggle any filter (myTrades, win, lose, fair)
   const toggleFilter = (filterKey) => {
     setSelectedFilters((prevFilters) =>
-      prevFilters.includes(filterKey) ? prevFilters.filter((f) => f !== filterKey) : [...prevFilters, filterKey]
+      prevFilters.includes(filterKey)
+        ? prevFilters.filter((f) => f !== filterKey)      // remove filter
+        : [...prevFilters, filterKey]                     // add filter
     );
   };
 
-  // 🔹 Define filter keys and their translation keys
+  // Filter options: My Trades and Status filters
   const filterOptions = [
-    { key: "has", label: t("trade.filter_has") },
-    { key: "wants", label: t("trade.filter_wants") },
     { key: "myTrades", label: t("trade.filter_my_trades") },
-    // { key: "fairDeal", label: t("trade.filter_fair_deal") },
-    // { key: "riskyDeal", label: t("trade.filter_risky_deal") },
-    // { key: "bestDeal", label: t("trade.filter_best_deal") },
-    // { key: "decentDeal", label: t("trade.filter_decent_deal") },
-    // { key: "weakDeal", label: t("trade.filter_weak_deal") },
-    // { key: "greatDeal", label: t("trade.filter_great_deal") }
+    { key: "win", label: "Win" },
+    { key: "lose", label: "Lose" },
+    { key: "fair", label: "Fair" },
   ];
 
   return (
@@ -38,9 +36,11 @@ export const FilterMenu = ({ selectedFilters, setSelectedFilters, analytics, pla
             <MenuOption key={key} onSelect={() => toggleFilter(key)} closeOnSelect={false}>
               <View style={styles.menuRow}>
                 <Text style={[styles.menuOptionText, selectedFilters.includes(key) && styles.selectedText]}>
-                  {label} {/* 🔹 Translated text */}
+                  {label}
                 </Text>
-                {selectedFilters.includes(key) && <Icon name="checkmark" size={16} color={config.colors.hasBlockGreen} />}
+                {selectedFilters.includes(key) && (
+                  <Icon name="checkmark" size={16} color={config.colors.hasBlockGreen} />
+                )}
               </View>
             </MenuOption>
           ))}

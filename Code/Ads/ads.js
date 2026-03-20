@@ -7,7 +7,6 @@ import config from '../Helper/Environment';
 
 export const developmentMode = __DEV__;
 
-
 const adUnits = {
   test: {
     banner: TestIds.BANNER,

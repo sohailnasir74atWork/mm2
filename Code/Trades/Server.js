@@ -19,6 +19,7 @@ import { useLocalState } from '../LocalGlobelStats';
 import BannerAdComponent from '../Ads/bannerAds';
 import InterstitialAdManager from '../Ads/IntAd';
 import { mixpanel } from '../AppHelper/MixPenel';
+import ConditionalKeyboardWrapper from '../Helper/keyboardAvoidingContainer';
 
 
 const ServerScreen = () => {
@@ -171,9 +172,7 @@ const ServerScreen = () => {
     const handleLinkPress = (url) => {
         // console.log(url)
         const trimmedUrl = url?.trim();
-        mixpanel.track("Server Open");
         const openLink = () => {
-        // mixpanel.track("Server Open");
           Linking.openURL(trimmedUrl).catch(err => {
             console.warn('Failed to open link:', err);
             showErrorMessage('Error', 'Failed to open link');
@@ -184,7 +183,7 @@ const ServerScreen = () => {
           InterstitialAdManager.showAd(openLink);
         } else {
           openLink();
-        //   mixpanel.track("Server Open");
+          mixpanel.track("Server Open");
         }
       };
       
@@ -306,6 +305,9 @@ const ServerScreen = () => {
 
 
             <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
+            <View style={{ flexDirection: 'row', flex: 1,   }}>
+
+<ConditionalKeyboardWrapper style={{width:'100%'}}>
                 <View style={styles.modalBackdrop}>
                     <View style={styles.modalContainer}>
                         <TouchableOpacity onPress={() => setModalVisible(false)} style={{ position: 'absolute', top: 10, right: 10 }}>
@@ -336,6 +338,8 @@ const ServerScreen = () => {
                         </TouchableOpacity>
                     </View>
                 </View>
+                </ConditionalKeyboardWrapper>
+                </View>
             </Modal>
         </View>
     );
@@ -360,10 +364,10 @@ const getStyles = (isDarkMode) =>
             marginBottom: 12,
         },
         admincard: {
-            padding: 10,
+            padding: 25,
             backgroundColor: '#FFD700',
             borderRadius: 12,
-            width: '48%',
+            width: '100%',
             alignItems: 'center',
             textAlign: 'center'
         },
@@ -408,10 +412,10 @@ const getStyles = (isDarkMode) =>
         },
         fab: {
             position: 'absolute',
-            bottom: 60,
-            right: 12,
-            width: 56,
-            height: 56,
+            bottom: 65,
+            right: 6,
+            width: 60,
+            height: 60,
             borderRadius: 28,
             justifyContent: 'center',
             alignItems: 'center',
@@ -421,14 +425,16 @@ const getStyles = (isDarkMode) =>
             backgroundColor: 'rgba(0,0,0,0.7)',
             justifyContent: 'center',
             alignItems: 'center',
+            // width:'100%'
+            
         },
         modalContainer: {
             backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
             padding: 20,
             width: '90%',
             borderRadius: 12,
-            elevation: 10,
-            position: 'relative',
+            // elevation: 10,
+            // position: 'relative',
         },
         modalHeader: {
             fontSize: 18,

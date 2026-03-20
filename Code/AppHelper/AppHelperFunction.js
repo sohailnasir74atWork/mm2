@@ -3,15 +3,18 @@ import { DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { AppOpenAd, AdEventType } from 'react-native-google-mobile-ads';
 import InAppReview from 'react-native-in-app-review';
 import { AdsConsent, AdsConsentStatus } from 'react-native-google-mobile-ads';
-
+import config from '../Helper/Environment';
 
 export const MyLightTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    background: '#f2f2f7',
-    text: 'black',
-    primary: '#3E8BFC',
+    background: config.colors.backgroundLight,
+    card: config.colors.surfaceLight,
+    text: config.colors.textLight,
+    primary: config.colors.primary,
+    border: config.colors.borderLight,
+    notification: config.colors.primary,
   },
 };
 
@@ -19,9 +22,12 @@ export const MyDarkTheme = {
   ...DarkTheme,
   colors: {
     ...DarkTheme.colors,
-    background: '#121212',
-    text: 'white',
-    primary: '#BB86FC',
+    background: config.colors.backgroundDark,
+    card: config.colors.surfaceDark,
+    text: config.colors.textDark,
+    primary: config.colors.primary,
+    border: config.colors.borderDark,
+    notification: config.colors.primary,
   },
 };
 
@@ -57,13 +63,13 @@ export const loadAppOpenAd = async (
     });
 
     appOpenAd.addAdEventListener(AdEventType.ERROR, (error) => {
-      console.error('Ad Error:', error);
+      // console.error('Ad Error:', error);
       setIsAdLoaded(false);
     });
 
     await appOpenAd.load(); // Load the ad
   } catch (error) {
-    console.error('Error loading App Open Ad:', error);
+    // console.error('Error loading App Open Ad:', error);
     setIsAdLoaded(false);
   }
 };
@@ -71,11 +77,48 @@ export const loadAppOpenAd = async (
 
 // reviewHelper.js
 
+// ✅ Rate limiting: Track last review request time
+let lastReviewRequestTime = 0;
+const REVIEW_COOLDOWN = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+let isReviewInProgress = false;
+
 export const requestReview = () => {
-  if (InAppReview.isAvailable()) {
+  // ✅ Prevent multiple simultaneous calls
+  if (isReviewInProgress) {
+    return;
+  }
+
+  // ✅ Rate limiting: Don't request review more than once per 24 hours
+  const now = Date.now();
+  if (now - lastReviewRequestTime < REVIEW_COOLDOWN) {
+    return;
+  }
+
+  // ✅ Check availability and handle errors properly
+  try {
+    if (!InAppReview.isAvailable()) {
+      return;
+    }
+
+    isReviewInProgress = true;
+    lastReviewRequestTime = now;
+
     InAppReview.RequestInAppReview()
-      .then(() => console.log('In-App review flow completed'))
-      .catch((error) => console.error('In-App review error:', error));
+      .then(() => {
+        // Success - review flow completed
+        isReviewInProgress = false;
+      })
+      .catch((error) => {
+        // ✅ Silently handle errors to prevent crashes
+        // Don't log errors that might spam the console
+        isReviewInProgress = false;
+        // Reset lastReviewRequestTime on error so user can try again later
+        lastReviewRequestTime = 0;
+      });
+  } catch (error) {
+    // ✅ Catch any synchronous errors
+    isReviewInProgress = false;
+    lastReviewRequestTime = 0;
   }
 };
 
@@ -94,7 +137,7 @@ export const handleUserConsent = async (setConsentStatus, setLoading) => {
       }
     }
   } catch (error) {
-    console.error('Error handling consent:', error);
+    // console.error('Error handling consent:', error);
   } finally {
     setLoading(false);
   }

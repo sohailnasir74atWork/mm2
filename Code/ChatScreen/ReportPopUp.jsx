@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Modal,
   View,
@@ -11,8 +11,10 @@ import {
 } from "react-native";
 import { useGlobalState } from "../GlobelStats";
 import config from "../Helper/Environment";
-import { ref, get, update } from "@react-native-firebase/database";
+import { ref, get, update, remove } from "@react-native-firebase/database";
 import { useTranslation } from "react-i18next";
+import { banUserwithEmail } from "./utils";
+
 
 const ReportPopup = ({ visible, message, onClose }) => {
   const [selectedReason, setSelectedReason] = useState("Spam");
@@ -23,53 +25,82 @@ const ReportPopup = ({ visible, message, onClose }) => {
   const isDarkMode = theme === "dark";
   const { t } = useTranslation();
 
+  // ✅ Memoize reason options array
+  const reasonOptions = useMemo(() => [
+    t("chat.spam"),
+    t("chat.religious"),
+    t("chat.hate_speech")
+  ], [t]);
+
+  // ✅ Memoize styles
+  const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
+
   const handleSubmit = () => {
-    const sanitizedId = message.id.startsWith("chat-") ? message.id.replace("chat-", "") : message.id;
+    // ✅ Safety checks
+    if (!message || !message.id) {
+      Alert.alert("Error", "Invalid message. Unable to report.");
+      return;
+    }
 
-    Alert.alert(
-      t("chat.report_submitted"),
-      t("chat.report_submitted_message")
-    );
-    onClose(true);
+    if (!appdatabase) {
+      Alert.alert("Error", "Database not available. Please try again.");
+      return;
+    }
 
+    const messageId = message.id || '';
+    const sanitizedId = messageId.startsWith("chat-")
+      ? messageId.replace("chat-", "")
+      : messageId;
   
-    if (!sanitizedId) {
+    if (!sanitizedId || sanitizedId.trim().length === 0) {
       Alert.alert("Error", "Invalid message. Unable to report.");
       return;
     }
   
-    // setLoading(true); // Start loader
-// console.log(sanitizedId)
+    setLoading(true);
     const messageRef = ref(appdatabase, `chat_new/${sanitizedId}`);
   
     get(messageRef)
       .then((snapshot) => {
-        let updatedReportCount = 1;
-        if (snapshot.exists()) {
-          const messageData = snapshot.val();
-          // if (developmentMode) {
-          //   const dataSize = JSON.stringify(messageData).length / 1024; 
-          //   console.log(`🚀 Downloaded chat data: ${dataSize.toFixed(2)} KB from report messages`);
-          // }
-          updatedReportCount = (messageData?.reportCount || 0) + 1;
-        }
+        if (!snapshot.exists()) throw new Error("Message not found");
   
-        return update(messageRef, { reportCount: updatedReportCount });
+        const data = snapshot.val();
+        if (!data || typeof data !== 'object') {
+          throw new Error("Invalid message data");
+        }
+
+        const reportCount = Number(data?.reportCount || 0);
+  
+        if (reportCount >= 1) {
+          // ✅ Second report: delete the message
+          // ✅ Await banUserwithEmail to ensure it completes
+          if (message.currentUserEmail) {
+            banUserwithEmail(message.currentUserEmail).catch((error) => {
+              console.error("Error banning user:", error);
+            });
+          }
+          return remove(messageRef).then(() => ({ action: "deleted" }));
+        } else {
+          // ✅ First report: set to 1 (don't increment beyond this)
+          return update(messageRef, { reportCount: 1 }).then(() => ({ action: "reported" }));
+        }
       })
-      .then(() => {
-        // setLoading(false); // Stop loader
-       
+      .then((res) => {
+        setLoading(false);
+        Alert.alert(t("chat.report_submitted"), t("chat.report_submitted_message"));
+        onClose(true);
       })
       .catch((error) => {
         console.error("Error reporting message:", error);
-        // setLoading(false); // Stop loader
-        // Alert.alert("Error", "Failed to submit the report. Please try again.");
+        setLoading(false);
+        Alert.alert("Error", "Failed to submit the report. Please try again.");
       });
   };
-  
-  
 
-  const styles = getStyles(isDarkMode);
+  // ✅ Early return if no message
+  if (!message) {
+    return null;
+  }
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -81,7 +112,7 @@ const ReportPopup = ({ visible, message, onClose }) => {
 
           {/* Standard Reasons */}
           <View style={styles.optionsContainer}>
-            {[ t("chat.spam"),  t("chat.religious"),  t("chat.hate_speech")].map((reason) => (
+            {reasonOptions.map((reason) => (
               <TouchableOpacity
                 key={reason}
                 style={[

@@ -1,58 +1,55 @@
-import auth from '@react-native-firebase/auth';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+// Firebase/UserLogics.js
 
+import { getApp } from '@react-native-firebase/app';
+import {
+  getAuth,
+  signOut,
+  deleteUser as fbDeleteUser,
+} from '@react-native-firebase/auth';
+
+/**
+ * Log out the current user and reset local user state.
+ */
 export const logoutUser = async (setUser) => {
   try {
-    // Firebase sign out
-    await auth().signOut();
+    const app = getApp();              // get the default Firebase app
+    const auth = getAuth(app);         // get Auth instance for that app
 
-    // Google sign out (check if already signed in)
-    if (GoogleSignin?.isSignedIn) {
-      const isGoogleSignedIn = await GoogleSignin.isSignedIn();
-      if (isGoogleSignedIn) {
-        await GoogleSignin.revokeAccess();
-        await GoogleSignin.signOut();
-      }
-    }
-    
-    // (Optional) Handle Apple sign out logic if needed
-    // Apple doesn't maintain persistent sessions like Google,
-    // but if your app saves anything from it, clear here
+    await signOut(auth);               // modular signOut
 
-    // Reset your local state
+    // Reset your global user state
     setUser({
       id: null,
-      selectedFruits: [],
-      isReminderEnabled: false,
-      isSelectedReminderEnabled: false,
       displayName: '',
       avatar: null,
-      points: 0,
       isBlock: false,
       fcmToken: null,
       lastactivity: null,
       online: false,
+      createdAt: null,
     });
-
-    console.log('✅ Logout successful');
   } catch (error) {
-    console.error('🔥 Error logging out:', error.message);
+    console.error('🔥 Error logging out:', error?.message || error);
   }
 };
 
-// Delete the current user
+/**
+ * Delete the currently signed-in user from Firebase Auth.
+ * NOTE: This requires a "recent login" or it will throw auth/requires-recent-login.
+ */
 export const deleteUser = async () => {
-    try {
-        const user = auth().currentUser;
-        if (user) {
-            await user.delete();
-            // console.log('User deleted');
-        } else {
-            // console.log('No user is currently logged in.');
-        }
-    } catch (error) {
-        console.error('Error deleting user:', error.message);
-        throw error;
-    }
-};
+  try {
+    const app = getApp();
+    const auth = getAuth(app);
+    const user = auth.currentUser;
 
+    if (user) {
+      await fbDeleteUser(user);        // modular deleteUser(user)
+    } else {
+      console.warn('No user is currently logged in.');
+    }
+  } catch (error) {
+    console.error('Error deleting user:', error?.message || error);
+    throw error;
+  }
+};

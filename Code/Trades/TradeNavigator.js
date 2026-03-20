@@ -9,8 +9,8 @@ import { useTranslation } from 'react-i18next';
 import Icon from 'react-native-vector-icons/Ionicons';
 import config from '../Helper/Environment';
 import { useGlobalState } from '../GlobelStats';
-// import ServerScreen from './Server';
 import { useNavigation } from '@react-navigation/native';
+import NotifierDrawer from './Notifier';
 
 const Stack = createNativeStackNavigator();
 
@@ -24,24 +24,28 @@ const TradeRulesModal = ({ visible, onClose }) => {
   const { theme } = useGlobalState();
   const isDarkMode = theme === 'dark';
 
+
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
       <View style={styles.modalBackground}>
         <View style={[styles.modalContainer, { backgroundColor: isDarkMode ? '#222' : 'white' }]}>
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: isDarkMode ? 'white' : 'black' }]}>
-              Trade Rules
+              How Trading Works in Adopt Me
             </Text>
             <TouchableOpacity onPress={onClose}>
               <Icon name="close-circle" size={28} color={isDarkMode ? '#bbb' : '#333'} />
             </TouchableOpacity>
           </View>
           <ScrollView showsVerticalScrollIndicator={false}>
-          <Text style={[styles.modalText, { color: isDarkMode ? '#ccc' : '#333' }]}>
-  1. Players can trade <HighlightedText text="up to 4 items per side" /> in a single trade.{"\n"}{"\n"}
-  2. You must be <HighlightedText text="at least level 10" /> to unlock trading.{"\n"}{"\n"}
-  3. Once confirmed, <HighlightedText text="trades are final" /> and cannot be undone.{"\n"}
-</Text>
+            <Text style={[styles.modalText, { color: isDarkMode ? '#ccc' : '#333' }]}>
+              1. <HighlightedText text="Basics:" /> Players trade pets, items, and vehicles using the in-game trading system.{"\n"}{"\n"}
+              2. <HighlightedText text="Trade Window:" /> Each player can offer up to 9 items per trade.{"\n"}{"\n"}
+              3. <HighlightedText text="Two-Step Confirmation:" /> Players must first select items, then confirm again to finalize the trade.{"\n"}{"\n"}
+              4. <HighlightedText text="Trade License:" /> Required for trading ultra-rare or legendary items (obtained by passing a short test).{"\n"}{"\n"}
+              5. <HighlightedText text="Safe Trading:" /> Warnings appear for unfair trades; players should review offers carefully.{"\n"}{"\n"}
+              6. <HighlightedText text="Report Feature:" /> Suspicious trades can be reported directly from the trade window.{"\n"}
+            </Text>
           </ScrollView>
           <TouchableOpacity
             style={[styles.closeButton, { backgroundColor: config.colors.primary }]}
@@ -62,7 +66,8 @@ export const TradeStack = ({ selectedTheme }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const { theme } = useGlobalState();
   const isDarkMode = theme === 'dark';
-  const navigation = useNavigation()
+  // const navigation = useNavigation()
+  const [isDrawerVisible, setIsDrawerVisible] = useState(false);
 
 
   const headerOptions = useMemo(
@@ -85,7 +90,7 @@ export const TradeStack = ({ selectedTheme }) => {
           options={({ navigation }) => ({
             title: t("tabs.trade"),
             headerRight: () => (
-              <View style={{ flexDirection: 'row', flex:1, justifyContent:'flex-end' }}>
+              <View style={{ flexDirection: 'row', }}>
                 {/* <TouchableOpacity onPress={() => navigation.navigate('Server')} style={{ marginRight: 5, backgroundColor:config.colors.hasBlockGreen, borderRadius:5, flexDirection:'row', alignItems:'center', paddingHorizontal:5}}>
                   <Image
                     source={
@@ -105,6 +110,14 @@ export const TradeStack = ({ selectedTheme }) => {
                   />
                   <Text style={{color:'white', fontFamily:'Lato-Bold' }}>Pvt Servers</Text>
                 </TouchableOpacity> */}
+
+                <TouchableOpacity onPress={() => navigation.navigate('Trade Notifier')} style={{ marginRight: 5 }}>
+                  <Icon
+                    name="notifications"
+                    size={24}
+                    color={config.colors.primary}
+                  />
+                </TouchableOpacity>
           
                 <TouchableOpacity onPress={() => setModalVisible(true)} style={{ marginRight: 8 }}>
                   <Icon
@@ -121,32 +134,35 @@ export const TradeStack = ({ selectedTheme }) => {
 
         {/* Private Chat Screen */}
         <Stack.Screen
-          name="PrivateChatTrade"
-          component={PrivateChatScreen}
-          initialParams={{ bannedUsers }}
-          options={({ route }) => {
-            const { selectedUser, isOnline } = route.params;
-            return {
-              headerTitle: () => (
-                <PrivateChatHeader
-                  selectedUser={selectedUser}
-                  isOnline={isOnline}
-                  selectedTheme={selectedTheme}
-                  bannedUsers={bannedUsers}
-                  setBannedUsers={setBannedUsers}
-                  triggerHapticFeedback={triggerHapticFeedback}
-                />
-              ),
-            };
-          }}
-        />
-
-{/* <Stack.Screen
-          name="Server"
-          component={ServerScreen}
+  name="PrivateChatTrade"
+  options={({ route }) => ({
+    headerTitle: () => (
+      <PrivateChatHeader
+        selectedUser={route.params?.selectedUser}
+        selectedTheme={selectedTheme}
+        bannedUsers={bannedUsers}
+        isDrawerVisible={isDrawerVisible}
+        setIsDrawerVisible={setIsDrawerVisible}
+      />
+    ),
+  })}
+>
+  {(props) => (
+    <PrivateChatScreen
+      {...props}
+      bannedUsers={bannedUsers}
+      isDrawerVisible={isDrawerVisible}
+      setIsDrawerVisible={setIsDrawerVisible}
+    />
+  )}
+</Stack.Screen>
+        <Stack.Screen
+          name="Trade Notifier"
+          component={NotifierDrawer}
          
-        /> */}
+        />
       </Stack.Navigator>
+      
 
       {/* Trade Rules Modal */}
       <TradeRulesModal visible={modalVisible} onClose={() => setModalVisible(false)} />

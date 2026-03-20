@@ -118,7 +118,7 @@
             "ad_error": "Error showing interstitial ad",
             "unable_to_create_trade": "Unable to create trade. Please reload the app & try again later.",
             "sign_in_required": "To create a trade, you need to sign in.",
-            "missing_items_error": "Please add at least one item to both 'You' and 'Them' sections."
+            "missing_items_error": "Please add at least one item to both 'Offer' and 'Want' sections."
         }
     },
     "value": {
@@ -288,10 +288,10 @@
         "block": "Block User"
     },
     "first": {
-        "welcome_title": "Welcome to Trade Checker",
-        "welcome_text": "Track mm2 values & optimize your trades.",
+        "welcome_title": "Welcome to Fruit Values",
+        "welcome_text": "Track fruit values & optimize your trades.",
         "signin_or_guest": "Signin or Continue as Guest",
-        "guest_user": "Guest User",
+        "guest_user": "Continue as Guest User",
         "signin": "Signin",
         "continue": "Continue",
         "get_notified_text": "Get notified, create and bid on trades, chat with traders, and join group discussions."

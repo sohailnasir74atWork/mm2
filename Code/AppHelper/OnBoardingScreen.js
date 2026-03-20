@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,6 @@ import { useGlobalState } from '../GlobelStats';
 import SignInDrawer from '../Firebase/SigninDrawer';
 import SubscriptionScreen from '../SettingScreen/OfferWall';
 import config from '../Helper/Environment';
-import { useLanguage } from '../Translation/LanguageProvider';
 import { useTranslation } from 'react-i18next';
 import {  GestureHandlerRootView } from 'react-native-gesture-handler';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -22,19 +21,19 @@ import { useLocalState } from '../LocalGlobelStats';
 
 const { width } = Dimensions.get('window');
 
-const icon = config.isNoman ? require('../../assets/ios.png') : require('../../assets/logo.webp');
+const icon = config.isNoman ? require('../../assets//MM2logo.webp') : require('../../assets/MM2logo.webp');
 
 
 const OnboardingScreen = ({ onFinish, selectedTheme }) => {
   const [screenIndex, setScreenIndex] = useState(0);
   const [openSignin, setOpenSignin] = useState(false);
-  const { updateLocalState, localState } = useLocalState();
-  const { theme, user, analytics } = useGlobalState();
+  const { theme, user, single_offer_wall } = useGlobalState();
   const isDarkMode = theme === 'dark' || selectedTheme === 'dark';
-  const { language, changeLanguage } = useLanguage();
   const { t } = useTranslation();
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
   // const platform = Platform.OS.toLowerCase();
+  const { updateLocalState, localState } = useLocalState();
+  
 
 
   // const languageOptions = [
@@ -50,7 +49,8 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
   //   { code: "ar", label: t("settings.languages.ar"), flag: "🇸🇦" }
 
   // ];
-  
+
+
   const handleNext = () => {
     if (screenIndex === 0) {
       mixpanel.track("New Install");
@@ -64,11 +64,20 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
 
   const handleGuest = () => {
     mixpanel.track("Go as Guest");
-    setScreenIndex(2);
+    // if (Platform.OS === 'ios') {
+    //   onFinish();
+    // } else {
+      setScreenIndex(2);
+    // }
   };
-
+  
   const handleLoginSuccess = () => {
     setOpenSignin(false);
+    // if (Platform.OS === 'ios') {
+    //   onFinish();
+    // } else {
+      setScreenIndex(2);
+    // }
   };
 
   // const createSlideAnimation = (direction) => {
@@ -121,8 +130,8 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
               <View style={styles.sliderContainer}>{renderSlider(translateX3, thirdSliderImages)}</View></View> */}
             <View>
               {/* <View style={styles.spacer}></View> */}
-              <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>{t("first.welcome_title")}</Text>
-              <Text style={[styles.text, { color: isDarkMode ? '#ccc' : '#666' }]}>{t("first.welcome_text")}</Text>
+              <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>Welcome to MM2 Values</Text>
+              <Text style={[styles.text, { color: isDarkMode ? '#ccc' : '#666' }]}>Track pets values & optimize your trades.</Text>
             </View>
           </View>
         );
@@ -149,56 +158,59 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
           </View>
 
         );
-      case 2:
-        return <SubscriptionScreen visible={true} onClose={onFinish} track='On Boarding'/>;
+        case 2:
+          // if (Platform.OS === 'ios') {
+          //   useEffect(() => {
+          //     onFinish();
+          //   }, []);
+          //   return null;
+          // }
+          return <SubscriptionScreen visible={true} onClose={onFinish} track="On Boarding" oneWallOnly={single_offer_wall} showoffer={!single_offer_wall}/>;
       default:
         return null;
     }
   };
 
   return (
-    <GestureHandlerRootView>
-      <View style={[styles.container, { backgroundColor: isDarkMode ? '#121212' : '#f2f2f7' }]}>
+    <GestureHandlerRootView style={{ paddingBottom: 50, flex: 1 }}>
+      <View style={[styles.container, { backgroundColor: isDarkMode ? '#121212' : '#f2f2f7',  }]}>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={isDarkMode ? '#121212' : '#f2f2f7'} />
         {renderScreen()}
+        
 
         {screenIndex !== 2 && <View style={styles.bottomContainer}>
-       {screenIndex === 0 && (
+        {/* {screenIndex === 0 && (
   
   <TouchableOpacity
-      style={localState.isMM2 ? styles.button : styles.buttonOutline}
-      onPress={() => updateLocalState('isMM2', true)}
+      style={!localState.isGG ? styles.buttonOutline : styles.buttonOutline}
+      onPress={() => updateLocalState('isGG', false)}
     >
-      <Text style={localState.isMM2 ? styles.buttonText : styles.buttonTextOutline}>
-        MM2 VALUES
+      <Text style={!localState.isGG ? styles.buttonTextOutline : styles.buttonTextOutline}>
+      ELVEBREDD VALUES
       </Text>
     </TouchableOpacity>
 
 
-)}
- {screenIndex === 0 && (
+)} */}
+ {/* {screenIndex === 0 && (
   
   <TouchableOpacity
-      style={!localState.isMM2 ? styles.button : styles.buttonOutline}
-      onPress={() => updateLocalState('isMM2', false)}
+      style={localState.isGG ? styles.button : styles.buttonOutline}
+      onPress={() => updateLocalState('isGG', true)}
     >
-      <Text style={!localState.isMM2 ? styles.buttonText : styles.buttonTextOutline}>
-        SUPREME VALUES
+      <Text style={localState.isGG ? styles.buttonText : styles.buttonTextOutline}>
+        GG VALUES
       </Text>
     </TouchableOpacity>
-)}
+)} */}
 
-
-
-
-
-
+         
           <TouchableOpacity style={styles.button} onPress={handleNext}>
             <Text style={styles.buttonText}>{screenIndex === 1 && !user.id ? t("first.signin") : t("first.continue")}</Text>
           </TouchableOpacity>
           {screenIndex === 1 && !user?.id && (
             <TouchableOpacity style={styles.buttonOutline} onPress={handleGuest}>
-              <Text style={styles.buttonTextOutline}>Continue as Guest</Text>
+              <Text style={styles.buttonTextOutline}>{t("first.guest_user")}</Text>
             </TouchableOpacity>
           )}
         </View>}
@@ -292,7 +304,7 @@ const styles = StyleSheet.create({
     width: 150,
     alignItems: 'center',
     height: 150,
-    paddingTop: 50
+    // paddingTop: 50
   },
   languageButton: {
     alignSelf: 'center',

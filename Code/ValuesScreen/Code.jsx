@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Pressable,
   FlatList,
-  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../GlobelStats';
@@ -22,7 +21,7 @@ const CodesDrawer = ({ isVisible, toggleModal, codes }) => {
   const { theme, analytics } = useGlobalState();
   const isDarkMode = theme === 'dark';
   const { triggerHapticFeedback } = useHaptic();
-  const platform = Platform.OS.toLowerCase();
+  // const platform = Platform.OS.toLowerCase();
 
 
   const normalizedCodes =
@@ -74,11 +73,6 @@ const CodesDrawer = ({ isVisible, toggleModal, codes }) => {
           renderItem={renderCodeItem}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <Text style={styles.emptyText}>
-              Currently no active code is available. Please check back regularly, we’ll update as soon as one is available.
-            </Text>
-          }
         />
           
       </View>
@@ -100,8 +94,7 @@ export const getStyles = (isDarkMode) =>
       position: 'absolute',
       bottom: 0,
       width: '100%',
-      height: '60%',
-
+      maxHeight: '60%',
     },
     headerText: {
       fontSize: 20,
@@ -138,13 +131,6 @@ export const getStyles = (isDarkMode) =>
     },
     copyButton: {
       padding: 5,
-    },
-    emptyText: {
-      textAlign: 'center',
-      marginTop: 100,
-      fontSize: 16,
-      color: isDarkMode ? '#ccc' : '#555',
-      fontFamily: 'Lato-Regular',
     },
   });
 

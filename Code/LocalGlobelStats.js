@@ -1,13 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { Appearance } from 'react-native';
-import { MMKV } from 'react-native-mmkv';
+import { createMMKV } from 'react-native-mmkv';
 import Purchases from 'react-native-purchases';
 import config from './Helper/Environment';
 import { useTranslation } from 'react-i18next';
 import { InteractionManager } from 'react-native';
-import { off } from '@react-native-firebase/database';
+import { mixpanel } from './AppHelper/MixPenel';
+import { showErrorMessage, showSuccessMessage } from './Helper/MessageHelper';
 
-const storage = new MMKV();
+const storage = createMMKV();
 const LocalStateContext = createContext();
 
 export const useLocalState = () => useContext(LocalStateContext);
@@ -19,7 +20,7 @@ export const LocalStateProvider = ({ children }) => {
       const value = storage.getString(key);
       return value ? JSON.parse(value) : defaultValue;
     } catch (error) {
-      console.error(`🚨 JSON Parse Error for key "${key}":`, error);
+      // console.error(`🚨 JSON Parse Error for key "${key}":`, error);
       return defaultValue; // Return a safe fallback value
     }
   };
@@ -31,12 +32,12 @@ export const LocalStateProvider = ({ children }) => {
     updateCount: Number(storage.getString('updateCount')) || 0,
     featuredCount: safeParseJSON('featuredCount', { count: 0, time: null }),
     isHaptic: storage.getBoolean('isHaptic') ?? true,
-    theme: 'dark', // Force dark theme
+    theme: storage.getString('theme') || 'system',
     consentStatus: storage.getString('consentStatus') || 'UNKNOWN',
     isPro: storage.getBoolean('isPro') ?? false,
     fetchDataTime: storage.getString('fetchDataTime') || null,
     data: safeParseJSON('data', {}),
-    suprime: safeParseJSON('suprime', {}),
+    ggData: safeParseJSON('ggData', {}),
     codes: safeParseJSON('codes', {}),
     normalStock: safeParseJSON('normalStock', []),
     bannedUsers: safeParseJSON('bannedUsers', []),
@@ -50,8 +51,16 @@ export const LocalStateProvider = ({ children }) => {
     translationUsage: safeParseJSON('translationUsage', { count: 0, date: new Date().toDateString() }),
     favorites: safeParseJSON('favorites', []),
     imgurl: storage.getString('imgurl') || 'https://elvebredd.com',
-    isMM2: storage.getBoolean('isMM2') ?? true,
+    imgurlGG: storage.getString('imgurlGG') || 'https://adoptmevalues.gg',
+    isGG: storage.getBoolean('isGG') ?? false,
     showAd1: storage.getBoolean('showAd1') ?? true,
+    postsCache: safeParseJSON('postsCache', []),
+    tradingServerLink: storage.getString('tradingServerLink') || null,
+    lastServerFetch: storage.getString('lastServerFetch') || null,
+    showFlag: storage.getBoolean('showFlag') ?? true, // ✅ Default true (show flag), user can hide to save data
+    showOnlineStatus: storage.getBoolean('showOnlineStatus') ?? true, // ✅ Default true (show online), user can hide to save Firebase costs
+    gameMusicEnabled: storage.getBoolean('gameMusicEnabled') ?? true, // ✅ Default true (music on), user can toggle off/on
+
   }));
 
 
@@ -64,27 +73,24 @@ export const LocalStateProvider = ({ children }) => {
 
 
   // Listen for system theme changes
-  // useEffect(() => {
-  //   if (localState.theme === 'dark') {
-  //     const listener = Appearance.addChangeListener(({ colorScheme }) => {
-  //       updateLocalState('theme', colorScheme);
-  //     });
-  //     return () => listener.remove();
-  //   }
-  // }, [localState.theme]);
+  useEffect(() => {
+    if (localState.theme === 'system') {
+      const listener = Appearance.addChangeListener(({ colorScheme }) => {
+        updateLocalState('theme', colorScheme);
+      });
+      return () => listener.remove(); // Correct cleanup
+    }
+  }, [localState.theme]);
 
   useEffect(() => {
     if (localState.data) {
       storage.set('data', JSON.stringify(localState.data)); // Force store
     }
-    if (localState.suprime) {
-      storage.set('suprime', JSON.stringify(localState.suprime)); // Force store
-    }
-  }, [localState.data, localState.suprime]);
+  }, [localState.data, localState.ggData]);
 
   // console.log(localState.isPro)
-  // Update local state and MMKV storage
-  const updateLocalState = (key, value) => {
+  // ✅ Memoize updateLocalState to prevent recreation on every render
+  const updateLocalState = useCallback((key, value) => {
     setLocalState((prevState) => ({
       ...prevState,
       [key]: value,
@@ -100,10 +106,10 @@ export const LocalStateProvider = ({ children }) => {
     } else if (typeof value === 'object') {
       storage.set(key, JSON.stringify(value)); // ✅ Store objects/arrays as JSON
     } else {
-      console.error('🚨 MMKV supports only string, number, boolean, or JSON stringified objects.');
+      // console.error('🚨 MMKV supports only string, number, boolean, or JSON stringified objects.');
     }
-  };
-  const canTranslate = () => {
+  }, []); // ✅ Empty deps - function is stable, doesn't depend on any props/state
+  const canTranslate = useCallback(() => {
     const today = new Date().toDateString();
     const { count, date } = localState.translationUsage || { count: 0, date: today };
 
@@ -114,10 +120,17 @@ export const LocalStateProvider = ({ children }) => {
       return true;
     }
 
-    return count < 20;
-  };
+    return count < 5;
+  }, [localState.translationUsage, updateLocalState]);
+  
+  // ✅ Memoize toggleAd to prevent recreation on every render
+  const toggleAd = useCallback(() => {
+    const newAdState = !localState.showAd1;
+    updateLocalState('showAd1', newAdState);
+    return newAdState;
+  }, [localState.showAd1, updateLocalState]);
 
-  const incrementTranslationCount = () => {
+  const incrementTranslationCount = useCallback(() => {
     const today = new Date().toDateString();
     const { count, date } = localState.translationUsage || { count: 0, date: today };
 
@@ -127,7 +140,7 @@ export const LocalStateProvider = ({ children }) => {
     };
 
     updateLocalState('translationUsage', updatedUsage);
-  };
+  }, [localState.translationUsage, updateLocalState]);
 
 
   // console.log(localState.data)
@@ -138,20 +151,20 @@ export const LocalStateProvider = ({ children }) => {
       await Purchases.configure({ apiKey: config.apiKey, usesStoreKit2IfAvailable: false });
       const userID = await Purchases.getAppUserID();
       setCustomerId(userID);
-      // console.log(Purchases)
+
       // Run these in parallel for better performance
       await Promise.all([
         fetchOfferings().catch(error => {
-          console.error('❌ Error fetching offerings:', error.message);
+          // console.error('❌ Error fetching offerings:', error.message);
           return null; // Return null instead of throwing
         }),
         checkEntitlements().catch(error => {
-          console.error('❌ Error checking entitlements:', error.message);
+          // console.error('❌ Error checking entitlements:', error.message);
           return null; // Return null instead of throwing
         })
       ]);
     } catch (error) {
-      console.error('❌ Error initializing RevenueCat:', error.message);
+      // console.error('❌ Error initializing RevenueCat:', error.message);
       // Set a default state in case of failure
       setCustomerId(null);
       setPackages([]);
@@ -168,7 +181,6 @@ export const LocalStateProvider = ({ children }) => {
   // console.log(isPro)
   // Fetch available subscriptions
   const fetchOfferings = async () => {
-    // console.log('offerings', Purchases)
     try {
       const offerings = await Purchases.getOfferings();
       if (offerings.current?.availablePackages?.length > 0) {
@@ -181,7 +193,7 @@ export const LocalStateProvider = ({ children }) => {
     }
   };
 
-
+// console.log(packages)
 
 
   const restorePurchases = async (setLoadingReStore) => {
@@ -204,7 +216,7 @@ export const LocalStateProvider = ({ children }) => {
           : []
       );
     } catch (error) {
-      console.error('❌ Restore Purchases Error:', error);
+      // console.error('❌ Restore Purchases Error:', error);
     } finally {
       setLoadingReStore(false); // Ensure loading state resets
     }
@@ -216,11 +228,10 @@ export const LocalStateProvider = ({ children }) => {
     try {
       const customerInfo = await Purchases.getCustomerInfo();
       const entitlements = customerInfo.entitlements.active;
-      // console.log(entitlements, 'entitlements')
-      
       const proKey = Object.keys(entitlements).find(
         (key) => key.toLowerCase() === 'pro'
       );
+
 
       // console.log(customerInfo.activeSubscriptions)
       const proStatus = !!(proKey && entitlements[proKey]);
@@ -233,19 +244,14 @@ export const LocalStateProvider = ({ children }) => {
         setMySubscriptions(activePlansWithExpiry);
       }
     } catch (error) {
-      console.error('❌ Error checking entitlements:', error);
+      // console.error('❌ Error checking entitlements:', error);
     }
   };
   // Handle in-app purchase
   const purchaseProduct = async (packageToPurchase, setLoading, track) => {
     setLoading(true);
     try {
-      // console.log('.statrted')
-      const freshCustomerInfo = await Purchases.getCustomerInfo();
-      // console.log('🔁 Refetched customer info:', freshCustomerInfo);   
-         const { customerInfo } = await Purchases.purchasePackage(packageToPurchase);
-
-
+      const { customerInfo } = await Purchases.purchasePackage(packageToPurchase);
       const entitlements = customerInfo.entitlements.active;
       const proKey = Object.keys(entitlements).find(
         (key) => key.toLowerCase() === 'pro'
@@ -273,7 +279,7 @@ export const LocalStateProvider = ({ children }) => {
       showSuccessMessage("Success", "Purchase completed successfully!");
     } catch (error) {
       if (!error.userCancelled) {
-        console.error('❌ Purchase Error:', error);
+        // console.error('❌ Purchase Error:', error);
         showErrorMessage("Error", "Failed to complete purchase. Please try again.");
       }
     } finally {
@@ -299,18 +305,12 @@ export const LocalStateProvider = ({ children }) => {
     storage.clearAll();
   };
 
-  const getRemainingTranslationTries = () => {
+  const getRemainingTranslationTries = useCallback(() => {
     const today = new Date().toDateString();
     const { count = 0, date = today } = localState.translationUsage || {};
-    return date === today ? 20 - count : 20;
-  };
+    return date === today ? 5 - count : 5;
+  }, [localState.translationUsage]);
 
-  // Add this function to toggle between ads
-  const toggleAd = () => {
-    const newAdState = !localState.showAd1;
-    updateLocalState('showAd1', newAdState);
-    return newAdState;
-  };
 
   const contextValue = useMemo(
     () => ({
@@ -325,10 +325,9 @@ export const LocalStateProvider = ({ children }) => {
       restorePurchases,
       canTranslate,
       incrementTranslationCount,
-      getRemainingTranslationTries,
-      toggleAd,
+      getRemainingTranslationTries, toggleAd
     }),
-    [localState, customerId, packages, mySubscriptions, ]
+    [localState, customerId, packages, mySubscriptions]
   );
 
   return (

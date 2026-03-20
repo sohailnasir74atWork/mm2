@@ -14,7 +14,7 @@ export const getAppDownloadLink = () => {
     try {
       const appLink = getAppDownloadLink();
       const shareOptions = {
-        message: `Explore the MM2 value calculator! Check values, and make smarter trades. Download now: ${appLink}`,
+        message: `Explore the Adoptme value calculator, check values, and make smarter trades. Download now: ${appLink}`,
         title: 'Share App',
       };
       await Share.open(shareOptions);
@@ -66,7 +66,53 @@ I would like to share the following suggestions:
     Alert.alert('Error', 'Could not prepare the email. Please try again.');
   }
 };
+export const handleReport = async (user) => {
+  try {
+    // ✅ Get App Details
+    const appName = DeviceInfo.getApplicationName();
+    const appVersion = DeviceInfo.getVersion();
+    const platform = Platform.OS; // "ios" or "android"
 
+    // ✅ Get User & RevenueCat ID
+    const userId = user?.id || 'Guest'; // Default to Guest if not logged in
+    const revenueCatInfo = await Purchases.getCustomerInfo();
+    const revenueCatUserId = revenueCatInfo?.originalAppUserId || 'Anonymous';
+
+    // ✅ Construct Email Body
+    const email = 'how2techxyz@gmail.com';
+    const subject = `Report About Abusive Content (${appName})`;
+    const body = `Hi team,
+
+I would like to report ...
+
+---
+
+📌 App Name: ${appName}  
+📌 App Version: ${appVersion}  
+📌 User ID: ${userId}  
+📌 RC ID: ${revenueCatUserId}  
+📌 Platform: ${platform}  
+
+---`;
+
+    const mailtoUrl = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    // ✅ Open email client
+    Linking.openURL(mailtoUrl).catch(() =>
+      Alert.alert('Error', 'Unable to open the email client. Please try again later.')
+    );
+  } catch (error) {
+    console.error('❌ Error opening feedback email:', error);
+    Alert.alert('Error', 'Could not prepare the email. Please try again.');
+  }
+};
+
+export const handleBloxFruit = () => {
+  const websiteUrl = config.otherapplink;
+  Linking.openURL(websiteUrl).catch(() =>
+    Alert.alert('Error', 'Unable to open the website. Please try again later.')
+  );
+};
 
   export const handleRateApp = () => {
     const storeLink =
@@ -75,6 +121,12 @@ I would like to share the following suggestions:
         : config.andriodShareLink;
     Linking.openURL(storeLink).catch(() =>
       Alert.alert('Error', 'Unable to open the app store. Please try again later.')
+    );
+  };
+  export const handleadoptme  = () => {
+    const websiteUrl = config.otherapplink2;
+    Linking.openURL(websiteUrl).catch(() =>
+      Alert.alert('Error', 'Unable to open the website. Please try again later.')
     );
   };
 
@@ -92,45 +144,51 @@ I would like to share the following suggestions:
     );
   };
 
-  export const handleadoptme = () => {
-    const websiteUrl = config.otherapplink;
-    console.log(websiteUrl)
+  export const handleOpenPrivacy = () => {
+    const websiteUrl = 'https://adoptmevalues.app/privacy-policy/';
     Linking.openURL(websiteUrl).catch(() =>
       Alert.alert('Error', 'Unable to open the website. Please try again later.')
     );
   };
 
-  export const handleBloxFruit = () => {
-    const websiteUrl = config.otherapplink2;
+  export const handleOpenChild = () => {
+    const websiteUrl = 'https://adoptmevalues.app/child-safety-standards-policy/';
     Linking.openURL(websiteUrl).catch(() =>
       Alert.alert('Error', 'Unable to open the website. Please try again later.')
     );
   };
 
   export const imageOptions = [
-    'https://mm2values.app/wp-content/uploads/2025/profile/anatomy.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/axe.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/blood-knife.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/bow.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/crime-scene-2.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/crime-scene-3.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/crime-scene.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/detective.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/gun.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/knife.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/murder.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/murderer.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/Rainbow_Knife.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/self-murder.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/soldier.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/stone-axe.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/target.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/weapon-2.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/weapon-3.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/weapon.png',
-    'https://mm2values.app/wp-content/uploads/2025/profile/weapons.png'
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/101.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/102.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/103.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/104.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/105.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/106.png',
+
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/107.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/108.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/109.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/110.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/111.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/woman.png',
+    
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/eagle.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/patch.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate1.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate2.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate3.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate-flag.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate-hat.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate-hat1.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate-ship.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate-ship2.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate-skull.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/pirate.png',
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/steering-wheel.png',
   ];
-  
+ 
 
   export const handleRefresh = async (reload) => {
     // setRefreshing(true);

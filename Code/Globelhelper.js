@@ -1,149 +1,200 @@
-import messaging from '@react-native-firebase/messaging';
+// firebaseHelpers.js
+
 import { Platform } from 'react-native';
+
+// ✅ Modular Cloud Messaging API
+import {
+  getMessaging,
+  requestPermission,
+  getAPNSToken,
+  getToken,
+  AuthorizationStatus,
+} from '@react-native-firebase/messaging';
+
+// ✅ Modular Realtime Database API
+import {
+  getDatabase,
+  ref,
+  get,
+  set,
+} from '@react-native-firebase/database';
+
 import { generateOnePieceUsername } from './Helper/RendomNamegen';
-import { getDatabase, ref, get, set } from '@react-native-firebase/database';
 
-export const firebaseConfig = {
-    apiKey: "AIzaSyDUXkQcecnhrNmeagvtRsKmDBmwz4AsRC0",
-    authDomain: "fruiteblocks.firebaseapp.com",
-    databaseURL: "https://fruiteblocks-default-rtdb.firebaseio.com",
-    projectId: "fruiteblocks",
-    storageBucket: "fruiteblocks.appspot.com",
-    messagingSenderId: "409137828081",
-    appId: Platform.select({
-      ios: "1:409137828081:ios:89f062c9951cd664f39950",
-      android: "1:409137828081:android:2b2e10b900614979f39950",
-    }),
-    measurementId: "G-C3T24PS3SF",
-  };
-  
+// ✅ Modular Database usage
+export const saveTokenToDatabase = async (token, currentUserId) => {
+  if (!currentUserId || !token) {
+    // console.warn('⚠️ Invalid inputs: Cannot save FCM token.');
+    return;
+  }
 
-  export const saveTokenToDatabase = async (token, currentUserId) => {
-    if (!currentUserId || !token) {
-        console.warn('⚠️ Invalid inputs: Cannot save FCM token.');
-        return;
+  // ✅ Validate user ID - must be non-empty string without invalid Firebase path characters
+  const userIdStr = String(currentUserId).trim();
+  if (!userIdStr || /[.#$\[\]]/.test(userIdStr)) {
+    console.warn('⚠️ Invalid user ID format. Cannot save FCM token.');
+    return;
+  }
+
+  try {
+    const db = getDatabase();
+
+    const tokenRef = ref(db, `users/${userIdStr}/fcmToken`);
+    const invalidTokenRef = ref(db, `users/${userIdStr}/isTokenInvalid`);
+
+    // optional timeout guard
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error('🔥 Firebase timeout while fetching token')),
+        5000,
+      ),
+    );
+
+    // `once('value')` → modular `get(reference)`
+    const tokenSnapshot = await Promise.race([
+      get(tokenRef),
+      timeoutPromise,
+    ]);
+
+    const currentToken = tokenSnapshot.exists()
+      ? tokenSnapshot.val()
+      : null;
+
+    // same token already stored → nothing to do
+    if (currentToken === token) {
+      return;
     }
 
-    try {
-        const db = getDatabase();
-        const tokenRef = ref(db, `users/${currentUserId}/fcmToken`);
-        const invalidTokenRef = ref(db, `users/${currentUserId}/isTokenInvalid`);
-
-        // ✅ Set a timeout to prevent blocking the main thread
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("🔥 Firebase timeout while fetching token")), 5000)
-        );
-
-        const tokenSnapshot = await Promise.race([get(tokenRef), timeoutPromise]);
-
-        const currentToken = tokenSnapshot.exists() ? tokenSnapshot.val() : null;
-
-        if (currentToken === token) {
-            return; // ✅ No update needed
-        }
-
-        await Promise.all([
-            set(tokenRef, token),
-            set(invalidTokenRef, false),
-        ]);
-
-    } catch (error) {
-        console.error(`🔥 Error saving FCM token: ${error.message || error}`);
-    }
+    // `.set()` → modular `set(ref, value)`
+    await Promise.all([
+      set(tokenRef, token),
+      set(invalidTokenRef, false),
+    ]);
+  } catch (error) {
+    // console.warn('🔥 Error saving FCM token:', error?.message || error);
+  }
 };
 
-  
+export const registerForNotifications = async (
+  currentUserId,
+  retryCount = 0,
+  maxRetries = 3,
+) => {
+  // ✅ Validate user ID - must be non-empty string without invalid Firebase path characters
+  const userIdStr = currentUserId ? String(currentUserId).trim() : '';
+  if (!userIdStr || /[.#$\[\]]/.test(userIdStr)) {
+    // console.warn('⚠️ Invalid user ID format. Cannot register for notifications.');
+    return;
+  }
 
+  try {
+    // ✅ Modular Messaging instance
+    const messagingInstance = getMessaging();
 
-  
-  export const registerForNotifications = async (currentUserId, retryCount = 0) => {
-      if (!currentUserId) {
-          console.warn('⚠️ User ID is null. Cannot register for notifications.');
-          return;
-      }
-  
-      try {
-          const authStatus = await messaging().requestPermission();
-  
-          const isAuthorized = 
-              authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-              authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-  
-          if (!isAuthorized) {
-              console.warn('🚫 Notification permissions not granted.');
-              return;
-          }
-  
-          let fcmToken = null;
-  
-          if (Platform.OS === 'ios') {
-            // console.log('🍏 Fetching APNS Token...');
-            const apnsToken = await messaging().getAPNSToken();
-            // console.log('📲 APNS Token:', apnsToken);
-        
-            if (!apnsToken) {
-                console.error('❌ APNS token is not available. Ensure APNS is configured correctly.');
-                return;
-            }
-        
-            // 🔐 Set the APNS token manually (important for reliability)
-            await messaging().setAPNSToken(apnsToken);
+    // ✅ requestPermission(messagingInstance)
+    const authStatus = await requestPermission(messagingInstance);
+
+    const isAuthorized =
+      authStatus === AuthorizationStatus.AUTHORIZED ||
+      authStatus === AuthorizationStatus.PROVISIONAL;
+
+    if (!isAuthorized) {
+      // console.warn('🚫 Notification permissions not granted.');
+      return;
+    }
+
+    // iOS: make sure APNs token exists first
+    if (Platform.OS === 'ios') {
+      // ✅ modular getAPNSToken(messagingInstance)
+      const apnsToken = await getAPNSToken(messagingInstance);
+
+      if (!apnsToken) {
+        // console.warn('⚠️ APNS token not available yet.');
+        if (retryCount < maxRetries) {
+          setTimeout(
+            () =>
+              registerForNotifications(
+                currentUserId,
+                retryCount + 1,
+                maxRetries,
+              ),
+            1500,
+          );
         }
-  
-        //   console.log('📡 Fetching FCM Token...');
-          fcmToken = await messaging().getToken();
-        //   console.log(fcmToken)
-  
-          if (!fcmToken) {
-              console.error('❌ Failed to fetch FCM token. Token is null or undefined.');
-              return;
-          }
-  
-          // console.log('💾 Saving token to database...');
-          await saveTokenToDatabase(fcmToken, currentUserId);
-          // console.log('✅ FCM token registered successfully.');
-          
-      } catch (error) {
-          console.error(`🔥 Error registering for notifications: ${error.message || error}`);
+        return;
       }
-  };
-  
-  
+    }
 
+    // ✅ modular getToken(messagingInstance)
+    const fcmToken = await getToken(messagingInstance);
+    // console.log('📡 FCM token:', fcmToken);
 
-  export const createNewUser = (userId, loggedInUser = {}, robloxUsername) => ({
-      id: userId,
-      selectedFruits: [],
-      isReminderEnabled: false,
-      isSelectedReminderEnabled: false,
-      displayName: robloxUsername || loggedInUser.displayName || generateOnePieceUsername() || 'Anonymous',
-      avatar: loggedInUser.photoURL || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
-      rewardPoints: 0, 
-      isBlock:false,
-      fcmToken:null,
-      lastactivity:null,
-      online:false,
-      isPro:false
+    if (!fcmToken) {
+      // console.warn('❌ Failed to fetch FCM token (null/undefined).');
+      if (retryCount < maxRetries) {
+        setTimeout(
+          () =>
+            registerForNotifications(
+              userIdStr,
+              retryCount + 1,
+              maxRetries,
+            ),
+          1500,
+        );
+      }
+      return;
+    }
 
-  });
-  
+    await saveTokenToDatabase(fcmToken, userIdStr);
+  } catch (error) {
+    console.warn(
+      '🔥 Error registering for notifications:',
+      error?.message || error,
+    );
+    if (retryCount < maxRetries) {
+      setTimeout(
+        () =>
+          registerForNotifications(
+            currentUserId,
+            retryCount + 1,
+            maxRetries,
+          ),
+        1500,
+      );
+    }
+  }
+};
 
+// 🧍 New user shape in Realtime DB
+export const createNewUser = (
+  userId,
+  loggedInUser = {},
+  robloxUsername,
+) => ({
+  id: userId,
+  displayName:
+    robloxUsername ||
+    loggedInUser.displayName ||
+    generateOnePieceUsername() ||
+    'Anonymous',
+  avatar:
+    loggedInUser.photoURL ||
+    'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
+  isBlock: false,
+  fcmToken: null,
+  lastactivity: null,
+  online: false,
+  isPro: false,
+});
 
 export const resetUserState = (setUser) => {
-    setUser({
-        id: null,
-        selectedFruits: [],
-        isReminderEnabled: false,
-        isSelectedReminderEnabled: false,
-        displayName: '',
-        avatar: null,
-        rewardPoints: 0, 
-        isBlock:false,
-        fcmToken:null,
-        lastactivity:null,
-        online:false,
-        isPro:false
-
-
-    });
-  };
+  setUser({
+    id: null,
+    displayName: '',
+    avatar: null,
+    isBlock: false,
+    fcmToken: null,
+    lastactivity: null,
+    online: false,
+    isPro: false,
+  });
+};

@@ -20,6 +20,9 @@ export const getStyles = (isDarkMode) =>
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 15,
+        // borderBottomWidth:1,
+        // borderBottomColor:'grey',
+        paddingVertical:5,
       },
       profileImage: {
         width: 60,
@@ -90,7 +93,7 @@ export const getStyles = (isDarkMode) =>
       },
       drawer: {
         backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
-        padding: 20,
+        padding: 16,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         shadowColor: '#000',
@@ -122,17 +125,28 @@ export const getStyles = (isDarkMode) =>
       saveButton: {
         backgroundColor: config.colors.primary,
         paddingVertical: 15,
-        borderRadius: 20,
-        marginTop: 20,
+        borderRadius: 10,
+        marginTop: 10,
       },
       saveButtonText: {
         color: '#fff',
         textAlign: 'center',
       },
+      saveButtonProfile: {
+        borderWidth:2,
+        borderColor: config.colors.primary,
+        paddingVertical: 15,
+        borderRadius: 20,
+        marginTop: 20,
+      },
+      saveButtonTextProfile: {
+        // color: '#fff',
+        textAlign: 'center',
+      },
       drawerSubtitle:{
         color: isDarkMode ? '#fff' : '#000',
         fontFamily:'Lato-Bold',
-        marginBottom:10
+        marginBottom:5
       },
       drawerSubtitleUser:{
         color: isDarkMode ? '#fff' : '#000',
@@ -181,7 +195,7 @@ export const getStyles = (isDarkMode) =>
       },
       box: {
         paddingVertical: 7,
-        paddingHorizontal: 10,
+        paddingHorizontal: 6,
         // backgroundColor: '#ccc',
         alignItems: 'center',
         justifyContent: 'center',
@@ -195,12 +209,12 @@ export const getStyles = (isDarkMode) =>
       selectedBox: {
         backgroundColor: config.colors.hasBlockGreen, // Highlight selected box
       },
-      text:{
-        fontFamily:'Lato-Regular',
-        fontSize:10,
-        color:'white'
+      // text:{
+      //   fontFamily:'Lato-Regular',
+      //   fontSize:12,
+      //   color: isDarkMode ? '#fff' : '#000',
 
-      },
+      // },
       selectedText:{
         color:'white',
         fontFamily:'Lato-Regular',
@@ -244,15 +258,199 @@ export const getStyles = (isDarkMode) =>
       option_menu:{
         padding:10
       },
-      // text: {
-      //   fontSize: 12,
-      //   // color: 'black', // Regular text color
-      //   paddingHorizontal:10
-      // },
+      text: {
+        fontFamily:'Lato-Regular',
+        fontSize:12,
+        color: isDarkMode ? '#fff' : '#000',
+        paddingHorizontal:5
+      },
+      textlink: {
+        fontFamily:'Lato-Regular',
+        fontSize:12,
+        color: isDarkMode ? '#fff' : '#000',
+        paddingHorizontal:5,
+      },
       emailText: {
         fontSize: 12,
-        color: 'lightblue', // Blue color to make it look like a link
-        // textDecorationLine: 'underline', // Underline to signify it as a link
+        color: isDarkMode ? 'lightblue' : 'blue', // Blue color to make it look like a link
+        textDecorationLine: 'underline', // Underline to signify it as a link
+        lineHeight:12
+
+      },
+      petsSection: {
+        marginTop: 12,
+        // flexDirection: 'row',
+        justifyContent: 'space-between',
+        gap: 10,
+        // flex: 1,
+
+      },
+      
+      petsColumn: {
+        // flex: 1,
+        paddingHorizontal:10,
+        paddingVertical:10
+      },
+      
+      petsHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 4,
+        
+      },
+      
+      petsTitle: {
+        fontSize: 14,
+        fontFamily: 'Lato-Bold',
+        color: isDarkMode ? '#e5e7eb' : '#111827',
+      },
+      
+      petsActionText: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#4A90E2',
+      },
+      
+      petsEmptyText: {
+        fontSize: 11,
+        color: isDarkMode ? '#9CA3AF' : '#6B7280',
+      },
+      
+      petsAvatarRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 4,
+        marginTop: 2,
+      },
+      
+      petBubble: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: isDarkMode ? '#4B5563' : '#E5E7EB',
+      },
+      
+      petImageSmall: {
+        width: '100%',
+        height: '100%',
+      },
+      
+      moreBubble: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: isDarkMode ? '#374151' : '#E5E7EB',
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      
+      moreBubbleText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: isDarkMode ? '#F9FAFB' : '#111827',
+      },
+      imageOptionWrapper: {
+        marginRight: 8,
+        padding: 2,
+        borderRadius: 999,
+      },
+      imageOptionSelected: {
+        borderWidth: 2,
+        borderColor: '#4CAF50',
+      },
+      imageOption: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+      },
+      reviewsSection: {
+        marginTop: 12,
+        paddingHorizontal: 10,
+        paddingVertical: 10,
+      },
+      reviewsHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+      },
+      reviewsTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: isDarkMode ? '#F9FAFB' : '#111827',
+      },
+      reviewsList: {
+        maxHeight: 200,
+      },
+      reviewItem: {
+        backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5',
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 10,
+      },
+      reviewHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 8,
+      },
+      reviewHeaderLeft: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+      },
+      reviewUserName: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: isDarkMode ? '#fff' : '#000',
+        marginRight: 8,
+      },
+      reviewRating: {
+        flexDirection: 'row',
+        marginRight: 8,
+      },
+      editedBadge: {
+        fontSize: 10,
+        color: isDarkMode ? '#9CA3AF' : '#6B7280',
+        fontStyle: 'italic',
+      },
+      editButton: {
+        padding: 4,
+      },
+      reviewText: {
+        fontSize: 13,
+        color: isDarkMode ? '#E5E7EB' : '#374151',
+        marginBottom: 6,
+        lineHeight: 18,
+      },
+      reviewDate: {
+        fontSize: 11,
+        color: isDarkMode ? '#9CA3AF' : '#6B7280',
+      },
+      reviewsEmptyText: {
+        fontSize: 11,
+        color: isDarkMode ? '#9CA3AF' : '#6B7280',
+        textAlign: 'center',
+        marginVertical: 20,
+      },
+      loadMoreButton: {
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 8,
+        backgroundColor: config.colors.primary,
+        alignItems: 'center',
+        marginTop: 10,
+        marginBottom: 10,
+      },
+      loadMoreText: {
+        fontSize: 14,
+        fontFamily: 'Lato-Bold',
+        color: '#fff',
       },
     });
   

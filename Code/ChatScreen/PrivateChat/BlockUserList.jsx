@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,8 @@ const BlockedUsersScreen = () => {
 
 
   const isDarkMode = theme === 'dark';
-  const styles = getStyles(isDarkMode);
+  // ✅ Memoize styles
+  const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
 
   const [blockedUsers, setBlockedUsers] = useState([]);
 
@@ -49,22 +50,27 @@ const BlockedUsersScreen = () => {
           return;
         }
 
+        // ✅ OPTIMIZED: Fetch only displayName and avatar instead of full user objects
         const userDetailsPromises = bannedUserIds.map(async (id) => {
           if (!id) return null;
 
           try {
-            const userRef = ref(appdatabase, `users/${id}`);
-            const userSnapshot = await get(userRef);
+            // ✅ Fetch only the fields we need (parallel requests to specific child paths)
+            const [displayNameSnap, avatarSnap] = await Promise.all([
+              get(ref(appdatabase, `users/${id}/displayName`)).catch(() => null),
+              get(ref(appdatabase, `users/${id}/avatar`)).catch(() => null),
+            ]);
 
-            if (!userSnapshot?.exists()) return null;
-
-            const userData = userSnapshot.val();
-            if (!userData) return null;
+            // ✅ Check if user exists (if no displayName and no avatar, user likely doesn't exist)
+            if (!displayNameSnap?.exists() && !avatarSnap?.exists()) {
+              return null;
+            }
 
             return {
               id,
-              displayName: userData.displayName?.trim() || 'Anonymous',
-              avatar: userData.avatar?.trim() || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
+              displayName: displayNameSnap?.exists() ? (displayNameSnap.val()?.trim() || 'Anonymous') : 'Anonymous',
+              avatar: avatarSnap?.exists() ? (avatarSnap.val()?.trim() || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png') 
+                     : 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
             };
           } catch (error) {
             console.error(`❌ Error fetching user ${id}:`, error);
@@ -92,41 +98,63 @@ const BlockedUsersScreen = () => {
       isMounted = false;
     };
   }, [user?.id, localState?.bannedUsers, appdatabase]);
-// console.log(blockedUsers)
-  const handleUnblockUser = async (selectedUserId) => {
+  // ✅ Memoize handleUnblockUser
+  const handleUnblockUser = useCallback(async (selectedUserId) => {
+    // ✅ Safety check
+    if (!selectedUserId) {
+      console.error('❌ Invalid user ID for unblock');
+      return;
+    }
+
     try {
-      const updatedBannedUsers = (localState.bannedUsers || []).filter(id => id !== selectedUserId);
+      const currentBanned = Array.isArray(localState?.bannedUsers) ? localState.bannedUsers : [];
+      const updatedBannedUsers = currentBanned.filter(id => id !== selectedUserId);
 
       // ✅ Update Local Storage
-      await updateLocalState('bannedUsers', updatedBannedUsers);
+      if (updateLocalState && typeof updateLocalState === 'function') {
+        await updateLocalState('bannedUsers', updatedBannedUsers);
+      }
 
       // ✅ Update UI immediately
-      setBlockedUsers(prevBlockedUsers =>
-        prevBlockedUsers.filter((blockedUser) => blockedUser.id !== selectedUserId)
-      );
+      setBlockedUsers(prevBlockedUsers => {
+        if (!Array.isArray(prevBlockedUsers)) return [];
+        return prevBlockedUsers.filter((blockedUser) => blockedUser?.id !== selectedUserId);
+      });
 
       // ✅ Show Alert
       showSuccessMessage(t("home.alert.success"), t("chat.user_unblocked"));
     } catch (error) {
       console.error('❌ Error unblocking user:', error);
     }
-  };
+  }, [localState?.bannedUsers, updateLocalState, t]);
 
-  const renderBlockedUser = ({ item }) => (
-    <View style={styles.userContainer}>
-      <Image source={{ uri: item.avatar }} style={styles.avatar} />
-      <View style={styles.textContainer}>
-        <Text style={styles.userName}>{item.displayName}</Text>
-        <TouchableOpacity
-          style={styles.unblockButton}
-          onPress={() => handleUnblockUser(item.id)}
-        >
-          <Icon name="person-remove-outline" size={20} color={isDarkMode ? 'white' : 'black'} />
-          <Text style={styles.unblockText}>{t("chat.unblock")}</Text>
-        </TouchableOpacity>
+  // ✅ Memoize renderBlockedUser
+  const renderBlockedUser = useCallback(({ item }) => {
+    // ✅ Safety checks
+    if (!item || typeof item !== 'object') return null;
+
+    const avatar = item.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
+    const displayName = item.displayName || 'Anonymous';
+    const userId = item.id;
+
+    if (!userId) return null;
+
+    return (
+      <View style={styles.userContainer}>
+        <Image source={{ uri: avatar }} style={styles.avatar} />
+        <View style={styles.textContainer}>
+          <Text style={styles.userName}>{displayName}</Text>
+          <TouchableOpacity
+            style={styles.unblockButton}
+            onPress={() => handleUnblockUser(userId)}
+          >
+            <Icon name="person-remove-outline" size={20} color={isDarkMode ? 'white' : 'black'} />
+            <Text style={styles.unblockText}>{t("chat.unblock")}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  );
+    );
+  }, [styles, isDarkMode, handleUnblockUser, t]);
 
   return (
     <View style={styles.container}>
@@ -137,9 +165,12 @@ const BlockedUsersScreen = () => {
       ) : (
         <FlatList
           data={blockedUsers}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => item?.id || `blocked-${index}`}
           renderItem={renderBlockedUser}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={10}
         />
       )}
     </View>

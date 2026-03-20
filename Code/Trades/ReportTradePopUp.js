@@ -151,13 +151,13 @@ const getStyles = (isDarkMode) =>
   StyleSheet.create({
     overlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.5)",
+      backgroundColor: config.colors.overlayDark,
       justifyContent: "center",
       alignItems: "center",
     },
     popup: {
       width: "90%",
-      backgroundColor: isDarkMode ? "#121212" : "#f2f2f7",
+      backgroundColor: isDarkMode ? config.colors.surfaceDark : config.colors.surfaceLight,
       borderRadius: 10,
       padding: 20,
       elevation: 5,
@@ -166,11 +166,11 @@ const getStyles = (isDarkMode) =>
       fontSize: 18,
       fontFamily: "Lato-Bold",
       marginBottom: 10,
-      color: isDarkMode ? "white" : "black",
+      color: isDarkMode ? config.colors.textDark : config.colors.textLight,
     },
     messageText: {
       fontSize: 14,
-      color: isDarkMode ? "white" : "black",
+      color: isDarkMode ? config.colors.textDark : config.colors.textLight,
       marginBottom: 15,
     },
     optionsContainer: {
@@ -180,7 +180,7 @@ const getStyles = (isDarkMode) =>
     },
     option: {
       paddingHorizontal: 3,
-      backgroundColor: "#ddd",
+      backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : config.colors.dividerLight,
       borderRadius: 10,
       marginRight: 10,
       marginBottom: 10,
@@ -191,15 +191,17 @@ const getStyles = (isDarkMode) =>
     },
     optionText: {
       fontSize: 14,
-      color: isDarkMode ? "#888" : "#444",
+      color: isDarkMode ? config.colors.textTertiaryDark : config.colors.textSecondaryLight,
       paddingHorizontal: 5,
     },
     selectedOptionText: {
-      color: "white",
+      color: config.colors.white,
     },
     input: {
       borderWidth: 1,
-      borderColor: "#ddd",
+      borderColor: isDarkMode ? config.colors.borderDark : config.colors.borderLight,
+      backgroundColor: isDarkMode ? config.colors.surfaceDark : config.colors.surfaceLight,
+      color: isDarkMode ? config.colors.textDark : config.colors.textLight,
       borderRadius: 5,
       padding: 5,
       marginTop: 10,
@@ -216,7 +218,7 @@ const getStyles = (isDarkMode) =>
       borderRadius: 5,
     },
     buttonText: {
-      color: "white",
+      color: config.colors.white,
       fontSize: 16,
     },
   });

@@ -1,4 +1,4 @@
-import { getDatabase, ref, update, get, set, onDisconnect } from '@react-native-firebase/database';
+import { getDatabase, ref, update, get, set, onDisconnect, query, orderByChild, equalTo, limitToLast } from '@react-native-firebase/database';
 import { Alert } from 'react-native';
 
 // Initialize the database reference
@@ -15,67 +15,109 @@ export const formatDate = (dateString) => {
 
 // Ban User
 export const banUser = async (userId) => {
+  // ✅ Safety check
+  if (!userId) {
+    Alert.alert('Error', 'Invalid user ID.');
+    return false;
+  }
+
   try {
-    await handleDeleteLast300Messages(userId)
-    const database = getDatabase(); // Ensure database instance is created
-    const userToUpdateRef = ref(database, `users/${userId}`); // Reference to the specific user in the "users" node
-    await update(userToUpdateRef, { isBlock: true }); // Update the user's `isBlock` property
-    Alert.alert('Success', 'User has been banned.');
+    const deleteResult = await handleDeleteLast300Messages(userId, false);
+    const database = getDatabase();
+    const userToUpdateRef = ref(database, `users/${userId}`);
+    await update(userToUpdateRef, { isBlock: true });
+    
+    const msgCount = deleteResult?.count || 0;
+    Alert.alert('Success', `User banned.${msgCount > 0 ? ` ${msgCount} messages deleted.` : ''}`);
+    return true;
   } catch (error) {
     console.error('Error banning user:', error);
     Alert.alert('Error', 'Failed to ban the user.');
+    return false;
   }
 };
 
 // Unban User
 export const unbanUser = async (userId) => {
+  // ✅ Safety check
+  if (!userId) {
+    Alert.alert('Error', 'Invalid user ID.');
+    return false;
+  }
+
   try {
-    const database = getDatabase(); // Ensure the database instance is initialized
-    const userToUpdateRef = ref(database, `users/${userId}`); // Reference to the specific user in the "users" node
-
-    // Update the user's `isBlock` property to `false`
+    const database = getDatabase();
+    const userToUpdateRef = ref(database, `users/${userId}`);
     await update(userToUpdateRef, { isBlock: false });
-
     Alert.alert('Success', 'User has been unbanned.');
+    return true;
   } catch (error) {
     console.error('Error unbanning user:', error);
     Alert.alert('Error', 'Failed to unban the user.');
+    return false;
   }
 };
 
 // Remove Admin
 export const removeAdmin = async (userId) => {
+  // ✅ Safety check
+  if (!userId) {
+    Alert.alert('Error', 'Invalid user ID.');
+    return false;
+  }
+
   try {
-    const userToUpdateRef = ref(database, `users/${userId}`); // Reference to the specific user
+    const db = getDatabase();
+    const userToUpdateRef = ref(db, `users/${userId}`);
     await update(userToUpdateRef, { admin: false });
-    Alert.alert('Success', 'Admin privileges removed from the user.');
+    Alert.alert('Success', 'Admin privileges removed.');
+    return true;
   } catch (error) {
     console.error('Error removing admin:', error);
     Alert.alert('Error', 'Failed to remove admin privileges.');
+    return false;
   }
 };
+
 // Make Admin
 export const makeAdmin = async (userId) => {
+  // ✅ Safety check
+  if (!userId) {
+    Alert.alert('Error', 'Invalid user ID.');
+    return false;
+  }
+
   try {
-    // console.log(userId)
-    const userToUpdateRef = ref(database, `users/${userId}`); // Reference to the specific user
+    const db = getDatabase();
+    const userToUpdateRef = ref(db, `users/${userId}`);
     await update(userToUpdateRef, { admin: true });
-    Alert.alert('Success', 'User has been made an admin.');
+    Alert.alert('Success', 'User is now an admin.');
+    return true;
   } catch (error) {
     console.error('Error making admin:', error);
-    Alert.alert('Error', 'Failed to make the user an admin.');
+    Alert.alert('Error', 'Failed to make user an admin.');
+    return false;
   }
 };
 
 // Make Owner
 export const makeOwner = async (userId) => {
+  // ✅ Safety check
+  if (!userId) {
+    Alert.alert('Error', 'Invalid user ID.');
+    return false;
+  }
+
   try {
-    const userToUpdateRef = ref(usersRef, userId); // Reference to the specific user
+    const db = getDatabase();
+    const userToUpdateRef = ref(db, `users/${userId}`);
     await update(userToUpdateRef, { owner: true });
-    Alert.alert('Success', 'User has been made an owner.');
+    Alert.alert('Success', 'User is now an owner.');
+    return true;
   } catch (error) {
     console.error('Error making owner:', error);
-    Alert.alert('Error', 'Failed to make the user an owner.');
+    Alert.alert('Error', 'Failed to make user an owner.');
+    return false;
   }
 };
 export const rulesen = [
@@ -278,8 +320,9 @@ export const isUserOnline = async (userId) => {
   if (!userId) return false; // ✅ Return early if userId is invalid
 
   try {
-    const userRef = ref(getDatabase(), `users/${userId}/online`);
-    const snapshot = await get(userRef);
+    // ✅ Read from presence node instead of users/{uid}/online
+    const presenceRef = ref(getDatabase(), `presence/${userId}`);
+    const snapshot = await get(presenceRef);
     
     return snapshot.val() ?? false; // ✅ Return online status OR false (cleaner)
   } catch (error) {
@@ -289,11 +332,17 @@ export const isUserOnline = async (userId) => {
 };
 
 export const setActiveChat = async (userId, chatId) => {
-  const database = getDatabase();
-  const activeChatRef = ref(database, `/activeChats/${userId}`);
-  const unreadRef = ref(database, `/private_chat_new/${chatId}/unread/${userId}`);
+  // ✅ Safety checks
+  if (!userId || !chatId) {
+    console.error('❌ Invalid userId or chatId for setActiveChat');
+    return;
+  }
 
   try {
+    const database = getDatabase();
+    const activeChatRef = ref(database, `/activeChats/${userId}`);
+    const unreadRef = ref(database, `/private_messages/${chatId}/unread/${userId}`);
+
     await set(activeChatRef, chatId);
     await set(unreadRef, 0);
     await onDisconnect(activeChatRef).remove();
@@ -307,52 +356,231 @@ export const setActiveChat = async (userId, chatId) => {
 
 
 export const clearActiveChat = async (userId) => {
-  const database = getDatabase();
-  const activeChatRef = ref(database, `/activeChats/${userId}`);
+  // ✅ Safety check
+  if (!userId) {
+    console.error('❌ Invalid userId for clearActiveChat');
+    return;
+  }
 
   try {
+    const database = getDatabase();
+    const activeChatRef = ref(database, `/activeChats/${userId}`);
+
     await set(activeChatRef, null);
   } catch (error) {
     console.error(`❌ Failed to clear active chat for user ${userId}:`, error);
   }
 };
 
+// ========== Group Chat Helper Functions ==========
 
+/**
+ * Set active group chat (for efficient batch checking)
+ * @param {String} userId - User ID
+ * @param {String} groupId - Group ID
+ */
+export const setActiveGroupChat = async (userId, groupId) => {
+  if (!userId || !groupId) {
+    console.error('❌ Invalid userId or groupId for setActiveGroupChat');
+    return;
+  }
 
-export const handleDeleteLast300Messages = async (senderId) => {
   try {
-    console.log('🟡 Starting delete for:', senderId);
+    const database = getDatabase();
+    const activeGroupRef = ref(database, `activeGroupChats/${groupId}/${userId}`);
+    await set(activeGroupRef, true);
+    await onDisconnect(activeGroupRef).remove(); // Auto-clear on disconnect
+  } catch (error) {
+    console.error('❌ Failed to set active group chat:', error);
+  }
+};
 
+/**
+ * Clear active group chat
+ * @param {String} userId - User ID
+ * @param {String} groupId - Group ID
+ */
+export const clearActiveGroupChat = async (userId, groupId) => {
+  if (!userId || !groupId) {
+    console.error('❌ Invalid userId or groupId for clearActiveGroupChat');
+    return;
+  }
+
+  try {
+    const database = getDatabase();
+    const activeGroupRef = ref(database, `activeGroupChats/${groupId}/${userId}`);
+    await set(activeGroupRef, null);
+  } catch (error) {
+    console.error('❌ Failed to clear active group chat:', error);
+  }
+};
+
+/**
+ * Check if user is in active group (for notifications)
+ * @param {String} groupId - Group ID
+ * @param {String} userId - User ID
+ * @returns {Promise<boolean>}
+ */
+export const isUserInActiveGroup = async (groupId, userId) => {
+  if (!groupId || !userId) return false;
+
+  try {
+    const database = getDatabase();
+    const activeGroupRef = ref(database, `activeGroupChats/${groupId}/${userId}`);
+    const snapshot = await get(activeGroupRef);
+    return snapshot.exists() && snapshot.val() === true;
+  } catch (error) {
+    console.error('❌ Error checking active group:', error);
+    return false;
+  }
+};
+
+export const handleDeleteLast300Messages = async (senderId, showAlert = false) => {
+  // ✅ Safety check
+  if (!senderId) {
+    console.error('❌ Invalid senderId for handleDeleteLast300Messages');
+    return { success: false, count: 0 };
+  }
+
+  try {
+    const db = getDatabase();
     const chatQuery = query(
-      ref(database, 'chat_new'),
+      ref(db, 'chat_new'),
       orderByChild('senderId'),
-      equalTo(senderId)
+      equalTo(senderId),
+      limitToLast(80)
     );
 
     const snapshot = await get(chatQuery);
 
     if (!snapshot.exists()) {
-      Alert.alert('⚠️ No messages found for this user.');
-      return;
+      if (showAlert) {
+        Alert.alert('Info', 'No messages found to delete.');
+      }
+      return { success: true, count: 0 };
     }
 
     const allMessages = snapshot.val();
-    console.log('📦 Total messages fetched:', Object.keys(allMessages).length);
+    if (!allMessages || typeof allMessages !== 'object') {
+      return { success: true, count: 0 };
+    }
 
     const sorted = Object.entries(allMessages)
-      .sort((a, b) => b[1].timestamp - a[1].timestamp)
-      .slice(0, 300);
+      .sort((a, b) => {
+        const timestampA = a[1]?.timestamp || 0;
+        const timestampB = b[1]?.timestamp || 0;
+        return timestampB - timestampA;
+      })
+      .slice(0, 60);
 
     const updates = {};
     sorted.forEach(([key]) => {
-      updates[`chat_new/${key}`] = null;
+      if (key) {
+        updates[`chat_new/${key}`] = null;
+      }
     });
 
-    await update(ref(database), updates);
-
-    Alert.alert('✅ Success', `Deleted ${sorted.length} messages for this user.`);
+    const deletedCount = Object.keys(updates).length;
+    if (deletedCount > 0) {
+      await update(ref(db), updates);
+      if (showAlert) {
+        Alert.alert('Success', `${deletedCount} messages deleted.`);
+      }
+    }
+    
+    return { success: true, count: deletedCount };
   } catch (error) {
     console.error('🔥 Failed to delete messages:', error);
-    Alert.alert('❌ Error', 'Could not delete messages.');
+    if (showAlert) {
+      Alert.alert('Error', 'Failed to delete messages.');
+    }
+    return { success: false, count: 0 };
+  }
+};
+
+
+export const banUserwithEmail = async (email, isAdmin = false, senderId = null) => {
+  // ✅ Safety check
+  if (!email || typeof email !== 'string' || email.trim().length === 0) {
+    console.error('❌ Invalid email for banUserwithEmail');
+    if (isAdmin) Alert.alert('Error', 'Invalid email address.');
+    return false;
+  }
+
+  const encodeEmail = (em) => em.replace(/\./g, '(dot)');
+
+  try {
+    const db = getDatabase();
+    const banRef = ref(db, `banned_users_by_email/${encodeEmail(email)}`);
+    const snap = await get(banRef);
+
+    let strikeCount = 1;
+    let bannedUntil = Date.now() + 3 * 60 * 60 * 1000; // 3 hours
+    let banDuration = '3 hours';
+
+    if (snap.exists()) {
+      const data = snap.val();
+      if (data && typeof data === 'object') {
+        strikeCount = isAdmin ? (data.strikeCount || 0) + 1 : (data.strikeCount || 1);
+
+        if (strikeCount === 2) {
+          bannedUntil = Date.now() + 3 * 24 * 60 * 60 * 1000; // 3 days
+          banDuration = '3 days';
+        } else if (strikeCount >= 3) {
+          bannedUntil = "permanent";
+          banDuration = 'permanent';
+        }
+      }
+    }
+
+    await set(banRef, {
+      strikeCount,
+      bannedUntil,
+      reason: `Strike ${strikeCount}`
+    });
+
+    // Delete messages if senderId provided
+    let deletedCount = 0;
+    if (senderId) {
+      const deleteResult = await handleDeleteLast300Messages(senderId, false);
+      deletedCount = deleteResult?.count || 0;
+    }
+
+    // ✅ Always show alert to admin who performed the action
+    if (isAdmin) {
+      Alert.alert(
+        'User Banned', 
+        `Strike ${strikeCount} applied (${banDuration}).${deletedCount > 0 ? `\n${deletedCount} messages deleted.` : ''}`
+      );
+    }
+    
+    return true;
+  } catch (err) {
+    console.error('Ban error:', err);
+    if (isAdmin) Alert.alert('Error', 'Could not ban user.');
+    return false;
+  }
+};
+
+export const unbanUserWithEmail = async (email, showAlert = true) => {
+  // ✅ Safety check
+  if (!email || typeof email !== 'string' || email.trim().length === 0) {
+    console.error('❌ Invalid email for unbanUserWithEmail');
+    if (showAlert) Alert.alert('Error', 'Invalid email address.');
+    return false;
+  }
+
+  const encodeEmail = (em) => em.replace(/\./g, '(dot)');
+  try {
+    const db = getDatabase();
+    const banRef = ref(db, `banned_users_by_email/${encodeEmail(email)}`);
+    await set(banRef, null);
+
+    if (showAlert) Alert.alert('User Unbanned', 'Ban has been lifted.');
+    return true;
+  } catch (err) {
+    console.error('Unban error:', err);
+    if (showAlert) Alert.alert('Error', 'Could not unban user.');
+    return false;
   }
 };

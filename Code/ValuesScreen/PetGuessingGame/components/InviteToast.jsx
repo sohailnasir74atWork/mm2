@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../../../GlobelStats';
+import config from '../../../Helper/Environment';
 
 const InviteToast = ({ visible, fromUserName, fromUserAvatar, onPress, onDismiss }) => {
   const { theme } = useGlobalState();
@@ -93,7 +94,7 @@ const InviteToast = ({ visible, fromUserName, fromUserAvatar, onPress, onDismiss
         style={[
           styles.toast,
           { 
-            backgroundColor: isDarkMode ? '#1a1a1a' : '#fff',
+            backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff',
             borderLeftColor: '#8B5CF6',
           },
         ]}

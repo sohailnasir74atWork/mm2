@@ -1,11 +1,12 @@
 // SubscriptionScreen.js
 import React, { useEffect, useRef } from 'react';
+import Purchases from 'react-native-purchases';
 import { handleOpenPaywall } from './PayWall';
 import { useLocalState } from '../LocalGlobelStats';
 
 const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly }) => {
   const hasOpenedRef = useRef(false);
-  const { refreshCustomerInfo } = useLocalState();
+  const { updateLocalState } = useLocalState();
 
   useEffect(() => {
     if (!visible) {
@@ -21,7 +22,13 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
     (async () => {
       try {
         await handleOpenPaywall(track, showoffer, !!oneWallOnly);
-        await refreshCustomerInfo();
+        // Refresh pro status after paywall closes
+        const customerInfo = await Purchases.getCustomerInfo();
+        const entitlements = customerInfo.entitlements.active;
+        const proKey = Object.keys(entitlements).find(
+          (key) => key.toLowerCase() === 'pro'
+        );
+        updateLocalState('isPro', !!(proKey && entitlements[proKey]));
       } finally {
         if (!cancelled && typeof onClose === 'function') {
           onClose();

@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../../GlobelStats';
+import config from '../../Helper/Environment';
 import { useLocalState } from '../../LocalGlobelStats';
 import { useHaptic } from '../../Helper/HepticFeedBack';
 import { showSuccessMessage, showErrorMessage } from '../../Helper/MessageHelper';
@@ -42,6 +43,7 @@ import {
 
 const PetGuessingGameScreen = () => {
   const { appdatabase, firestoreDB, theme, user, setIsInActiveGame } = useGlobalState();
+  const { t } = require('react-i18next').useTranslation();
   const { localState, updateLocalState } = useLocalState();
   const { triggerHapticFeedback } = useHaptic();
   const isDarkMode = theme === 'dark';
@@ -517,7 +519,7 @@ const PetGuessingGameScreen = () => {
 
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
 
-  const containerBgColor = isDarkMode ? '#121212' : '#f2f2f7';
+  const containerBgColor = isDarkMode ? config.colors.backgroundDark : '#f2f2f7';
 
   return (
     <>
@@ -535,9 +537,9 @@ const PetGuessingGameScreen = () => {
           >
         {/* Header */}
        {!currentRoomId && <View style={styles.header}>
-          <Text style={styles.title}>🎡 Pet Wheel Spin</Text>
+          <Text style={styles.title}>{t('game.pet_wheel_spin')}</Text>
           <Text style={styles.subtitle}>
-            Spin the wheel and collect pet values! 3 rounds, highest score wins!
+            {t('game.wheel_subtitle')}
           </Text>
         </View>}
 
@@ -555,14 +557,14 @@ const PetGuessingGameScreen = () => {
                 <>
                   <Icon name="add-circle-outline" size={24} color="#fff" />
                   <Text style={styles.buttonText}>
-                    {user?.id ? 'Create Game' : 'Login to Play'}
+                    {user?.id ? t('game.create_game') : t('game.login_to_play')}
                   </Text>
                 </>
               )}
             </TouchableOpacity>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>🎮 How to Play</Text>
+              <Text style={styles.cardTitle}>{t('game.how_to_play')}</Text>
               {/* Roulette illustration */}
               <View style={styles.rouletteImageWrapper}>
                 <Image
@@ -572,25 +574,17 @@ const PetGuessingGameScreen = () => {
                 />
               </View>
               <Text style={styles.cardText}>
-                • Create a room (8 random pets are selected){'\n'}
-                • Invite 1 friend to join{'\n'}
-                • Take turns spinning the wheel{'\n'}
-                • The pet's value = your points{'\n'}
-                • 3 rounds each, highest total wins!{'\n'}
-                {'\n'}
+                {t('game.how_to_play_desc')}
               </Text>
               <Text style={[styles.cardText, { fontFamily: 'Lato-Bold', color: isDarkMode ? '#10B981' : '#059669', marginTop: 8 }]}>
-                🏆 Win the game and earn 100 points!
+                {t('game.win_to_earn')}
               </Text>
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>🏆 Game Rules</Text>
+              <Text style={styles.cardTitle}>{t('game.game_rules')}</Text>
               <Text style={styles.cardText}>
-                • 2 players only{'\n'}
-                • Each player spins once per round{'\n'}
-                • Pet value is added to your score{'\n'}
-                • After 3 rounds, highest score wins!
+                {t('game.game_rules_desc')}
               </Text>
             </View>
           </View>
@@ -646,19 +640,19 @@ const PetGuessingGameScreen = () => {
                 {roomData.currentPlayers < 2 ? (
                   <>
                     <Text style={styles.waitingText}>
-                      ⏳ Waiting for 1 more player...
+                      {t('game.waiting_player')}
                     </Text>
                     <Text style={styles.waitingSubtext}>
-                      Players: {roomData.currentPlayers}/2
+                      {t('game.players')}{roomData.currentPlayers}/2
                     </Text>
                   </>
                 ) : roomData.hostId === user?.id ? (
                   <>
                     <Text style={styles.waitingText}>
-                      ✅ Ready to start!
+                      {t('game.ready_to_start')}
                     </Text>
                     <Text style={styles.waitingSubtext}>
-                      Players: {roomData.currentPlayers}/2
+                      {t('game.players')}{roomData.currentPlayers}/2
                     </Text>
                     <TouchableOpacity
                       style={styles.startGameButton}
@@ -671,7 +665,7 @@ const PetGuessingGameScreen = () => {
                         <>
                           <Icon name="play-circle" size={24} color="#fff" />
                           <Text style={styles.startGameButtonText}>
-                            Start
+                            {t('game.start')}
                           </Text>
                         </>
                       )}
@@ -680,10 +674,10 @@ const PetGuessingGameScreen = () => {
                 ) : (
                   <>
                     <Text style={styles.waitingText}>
-                      ⏳ Waiting for host to start...
+                      {t('game.waiting_host')}
                     </Text>
                     <Text style={styles.waitingSubtext}>
-                      Players: {roomData.currentPlayers}/2
+                      {t('game.players')}{roomData.currentPlayers}/2
                       </Text>
                   </>
                 )}
@@ -694,7 +688,7 @@ const PetGuessingGameScreen = () => {
             {roomData.status === 'waiting' && pendingInvites.length > 0 && (
               <View style={styles.pendingInvitesContainer}>
                 <Text style={styles.pendingInvitesTitle}>
-                  Pending Invitations ({pendingInvites.length})
+                  {t('game.pending_invitations')} ({pendingInvites.length})
                 </Text>
                 {pendingInvites.map((invite, index) => {
                   const now = Date.now();
@@ -733,7 +727,7 @@ const PetGuessingGameScreen = () => {
                           />
                         </View>
                         <Text style={styles.progressBarText}>
-                          {secondsRemaining > 0 ? `${secondsRemaining}s remaining` : 'Expired'}
+                          {secondsRemaining > 0 ? `${secondsRemaining}s ${t('game.remaining')}` : t('game.expired')}
                         </Text>
                       </View>
                     </View>
@@ -756,7 +750,7 @@ const PetGuessingGameScreen = () => {
 
             {roomData.status === 'finished' && (
               <View style={styles.finishedCard}>
-                <Text style={styles.finishedTitle}>🏆 Game Over!</Text>
+                <Text style={styles.finishedTitle}>{t('game.game_over')}</Text>
                     <GameResults
                       roomData={roomData}
                       currentUser={{
@@ -769,7 +763,7 @@ const PetGuessingGameScreen = () => {
                   onPress={handleLeaveRoom}
                 >
                   <Icon name="refresh-outline" size={20} color="#fff" />
-                  <Text style={styles.buttonText}>Play Again</Text>
+                  <Text style={styles.buttonText}>{t('game.play_again')}</Text>
                 </TouchableOpacity>
                     </View>
                   )}
@@ -777,7 +771,7 @@ const PetGuessingGameScreen = () => {
         ) : (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#8B5CF6" />
-            <Text style={styles.loadingText}>Loading room...</Text>
+            <Text style={styles.loadingText}>{t('game.loading_room')}</Text>
           </View>
         )}
       </ScrollView>
@@ -818,7 +812,7 @@ const getStyles = (isDarkMode) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDarkMode ? '#121212' : '#f2f2f7',
+      backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f2f2f7',
     },
     scrollContent: {
       padding: 8,
@@ -859,7 +853,7 @@ const getStyles = (isDarkMode) =>
       marginLeft: 8,
     },
     card: {
-      backgroundColor: isDarkMode ? '#1e1e1e' : '#fff',
+      backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff',
       borderRadius: 12,
       padding: 16,
       marginBottom: 12,
@@ -911,7 +905,7 @@ const getStyles = (isDarkMode) =>
       backgroundColor: '#10B981',
     },
     waitingCard: {
-      backgroundColor: isDarkMode ? '#1e1e1e' : '#fff',
+      backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff',
       borderRadius: 12,
       padding: 24,
       alignItems: 'center',
@@ -949,7 +943,7 @@ const getStyles = (isDarkMode) =>
       marginLeft: 8,
     },
     finishedCard: {
-      backgroundColor: isDarkMode ? '#1e1e1e' : '#fff',
+      backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff',
       borderRadius: 12,
       padding: 24,
       alignItems: 'center',
@@ -976,7 +970,7 @@ const getStyles = (isDarkMode) =>
       color: isDarkMode ? '#9ca3af' : '#6b7280',
     },
     pendingInvitesContainer: {
-      backgroundColor: isDarkMode ? '#1e1e1e' : '#fff',
+      backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff',
       borderRadius: 12,
       padding: 16,
       marginTop: 12,
@@ -1007,7 +1001,7 @@ const getStyles = (isDarkMode) =>
       height: 40,
       borderRadius: 20,
       marginRight: 12,
-      backgroundColor: isDarkMode ? '#333' : '#e5e7eb',
+      backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#e5e7eb',
     },
     pendingInviteInfo: {
       flex: 1,
@@ -1020,7 +1014,7 @@ const getStyles = (isDarkMode) =>
     },
     progressBarContainer: {
       height: 6,
-      backgroundColor: isDarkMode ? '#333' : '#e5e7eb',
+      backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#e5e7eb',
       borderRadius: 3,
       overflow: 'hidden',
       marginBottom: 4,

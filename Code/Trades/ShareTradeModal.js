@@ -272,7 +272,7 @@ const ShareTradeModal = ({ visible, onClose, hasItems, wantsItems, hasTotal, wan
                         </TouchableOpacity>
                     </View>
 
-                    <ViewShot ref={viewRef} options={{ format: 'png', quality: 0.8 }} style={{ backgroundColor: isDarkMode ? '#121212' : '#f2f2f7' , padding: 8,}}>
+                    <ViewShot ref={viewRef} options={{ format: 'png', quality: 0.8 }} style={{ backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f2f2f7' , padding: 8,}}>
                         {showSummary && showLeftGrid && showRightGrid && (
                             <View style={styles.summaryContainer}>
                                 <View style={styles.summaryInner}>
@@ -367,7 +367,7 @@ const getStyles = (isDarkMode) => StyleSheet.create({
         
     },
     modalContent: {
-        backgroundColor: isDarkMode ? '#121212' : '#f2f2f7',
+        backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f2f2f7',
         borderRadius: 12,
         width: '98%',
         // maxHeight: '90%',
@@ -392,7 +392,7 @@ const getStyles = (isDarkMode) => StyleSheet.create({
         marginBottom: 8,
     },
     summaryInner: {
-        backgroundColor: isDarkMode ? '#5c4c49' : 'rgba(255, 255, 255, 0.9)',
+        backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : 'rgba(255, 255, 255, 0.9)',
         borderRadius: 12,
         padding: 12,
         shadowColor: 'rgba(255, 255, 255, 0.9)',
@@ -498,7 +498,7 @@ const getStyles = (isDarkMode) => StyleSheet.create({
     gridContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        backgroundColor: isDarkMode ? '#5c4c49' : '#f3d0c7',
+        backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#f3d0c7',
         borderRadius: 4,
         overflow: 'hidden',
         borderWidth: 1,
@@ -514,7 +514,7 @@ const getStyles = (isDarkMode) => StyleSheet.create({
     },
     gridItem: {
         flex: 1,
-        backgroundColor: isDarkMode ? '#5c4c49' : '#f3d0c7',
+        backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#f3d0c7',
         justifyContent: 'center',
         alignItems: 'center',
         padding: '10%',
@@ -554,7 +554,7 @@ const getStyles = (isDarkMode) => StyleSheet.create({
         color: isDarkMode ? '#f2f2f7' : '#121212',
         marginTop: 8,
         padding: 8,
-        backgroundColor: isDarkMode ? '#333' : '#f5f5f5',
+        backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#f5f5f5',
         borderRadius: 8,
     },
     toggleContainer: {
@@ -563,7 +563,7 @@ const getStyles = (isDarkMode) => StyleSheet.create({
         flexWrap: 'wrap',
         justifyContent: 'center',
         gap: 8,
-        backgroundColor: isDarkMode ? '#2A2A2A' : '#f0f0f0',
+        backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#f0f0f0',
         borderRadius: 12,
         padding: 8,
 
@@ -571,7 +571,7 @@ const getStyles = (isDarkMode) => StyleSheet.create({
     toggleButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: isDarkMode ? '#333' : '#fff',
+        backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#fff',
         paddingVertical: 4,
         paddingHorizontal: 12,
         borderRadius: 20,
@@ -581,7 +581,7 @@ const getStyles = (isDarkMode) => StyleSheet.create({
         backgroundColor: config.colors.hasBlockGreen,
     },
     toggleButtonDisabled: {
-        backgroundColor: isDarkMode ? '#333' : '#f0f0f0',
+        backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#f0f0f0',
     },
     toggleButtonText: {
         fontSize: 10,

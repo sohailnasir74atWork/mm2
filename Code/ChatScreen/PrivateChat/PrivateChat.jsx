@@ -14,14 +14,17 @@ import PrivateMessageInput from './PrivateMessageInput';
 import PrivateMessageList from './PrivateMessageList';
 import { useGlobalState } from '../../GlobelStats';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { clearActiveChat, isUserOnline, setActiveChat } from '../utils';
+import { clearActiveChat, setActiveChat, useOtherLastRead, updateLastRead, useOnlineStatus } from '../utils';
 import { useLocalState } from '../../LocalGlobelStats';
 import  { get, increment, ref, update } from '@react-native-firebase/database';
 import { useTranslation } from 'react-i18next';
 import { showSuccessMessage, showErrorMessage } from '../../Helper/MessageHelper';
-import BannerAdComponent from '../../Ads/bannerAds';
+
 import config from '../../Helper/Environment';
 import ConditionalKeyboardWrapper from '../../Helper/keyboardAvoidingContainer';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import BannerAdComponent from '../../Ads/bannerAds';
+
 import PetModal from './PetsModel';
 import {
   doc,
@@ -37,7 +40,7 @@ import ProfileBottomDrawer from '../GroupChat/BottomDrawer';
 const INITIAL_PAGE_SIZE = 10; // ✅ Initial load: 10 messages
 const PAGE_SIZE = 10; // ✅ Pagination: load 10 messages per batch
 
-const PrivateChatScreen = ({route, bannedUsers, isDrawerVisible, setIsDrawerVisible }) => {
+const PrivateChatScreen = ({route, bannedUsers, isDrawerVisible, setIsDrawerVisible, noTabBar }) => {
   const { selectedUser, selectedTheme, item } = route.params || {};
 
   const { user, theme, appdatabase, updateLocalStateAndDatabase, firestoreDB } = useGlobalState();
@@ -63,7 +66,12 @@ const [petModalVisible, setPetModalVisible] = useState(false);
 const [selectedFruits, setSelectedFruits] = useState([]); 
 const [reviewText, setReviewText] = useState('');   // 👈 new
 const [startRating,setStartRating] = useState(false)
-const [isOnline, setIsOnline] = useState(false);
+const isOnline = useOnlineStatus(selectedUserId);
+const insets = useSafeAreaInsets();
+const bannerBottomPos = noTabBar ? Math.max(insets.bottom, 8) + 12 : 0; // with the docked tab bar, in-tab screen bottom == tab bar top; full-screen chat (noTabBar) still clears the home indicator
+
+  // ✅ Read receipts: listen to other user's lastRead timestamp
+  const otherLastRead = useOtherLastRead(chatKey, selectedUserId);
 
   const closeProfileDrawer = () => {
     setIsDrawerVisible(false);
@@ -76,11 +84,6 @@ const [isOnline, setIsOnline] = useState(false);
       setTrade(item);
     }
   }, [item]);
-  useEffect(() => {
-    if (selectedUserId) {
-      isUserOnline(selectedUserId).then(setIsOnline).catch(() => setIsOnline(false));
-    }
-  }, [selectedUserId]);
 
   useEffect(() => {
     if (!Array.isArray(messages) || messages.length === 0) return;
@@ -105,7 +108,7 @@ const [isOnline, setIsOnline] = useState(false);
     
     getDoc(reviewRef)
       .then(snapshot => {
-        if (snapshot.exists && snapshot.data()?.rating) {
+        if (snapshot.exists() && snapshot.data()?.rating) {
           setHasRated(true);
         } else {
           setHasRated(false);
@@ -136,36 +139,6 @@ const [isOnline, setIsOnline] = useState(false);
     [myUserId, selectedUserId]
   );
 
-  // ✅ Memoize getUserPoints
-  const getUserPoints = useCallback(async (userId) => {
-    if (!userId || !appdatabase) return 0;
-    try {
-      const snapshot = await get(ref(appdatabase, `/users/${userId}/rewardPoints`));
-      return snapshot.exists() ? Number(snapshot.val()) || 0 : 0;
-    } catch (error) {
-      console.error('Error getting user points:', error);
-      return 0;
-    }
-  }, [appdatabase]);
-
-  // ✅ Memoize updateUserPoints
-  const updateUserPoints = useCallback(async (userId, pointsToAdd) => {
-    if (!userId || !appdatabase) return;
-    if (typeof pointsToAdd !== 'number' || isNaN(pointsToAdd)) {
-      console.error('Invalid pointsToAdd value');
-      return;
-    }
-    try {
-      const latestPoints = await getUserPoints(userId);
-      const newPoints = Number(latestPoints) + Number(pointsToAdd);
-      await update(ref(appdatabase, `/users/${userId}`), { rewardPoints: newPoints });
-      if (updateLocalStateAndDatabase && typeof updateLocalStateAndDatabase === 'function') {
-        updateLocalStateAndDatabase('rewardPoints', newPoints);
-      }
-    } catch (error) {
-      console.error('Error updating user points:', error);
-    }
-  }, [getUserPoints, appdatabase, updateLocalStateAndDatabase]);
   // const navigation = useNavigation();
   useFocusEffect(
     useCallback(() => {
@@ -184,13 +157,13 @@ const [isOnline, setIsOnline] = useState(false);
   // ✅ Memoize handleRating - FIRESTORE ONLY (no RTDB)
   const handleRating = useCallback(async () => {
     if (!rating || rating < 1 || rating > 5) {
-      showErrorMessage("Error", "Please select a rating first.");
+      showErrorMessage(t('home.alert.error'), t('private_chat.select_rating'));
       return;
     }
 
     // ✅ Safety checks
     if (!selectedUserId || !myUserId || !firestoreDB) {
-      showErrorMessage("Error", "Missing required data. Please try again.");
+      showErrorMessage(t('home.alert.error'), t('private_chat.missing_data'));
       return;
     }
   
@@ -201,12 +174,12 @@ const [isOnline, setIsOnline] = useState(false);
       const reviewDocId = `${selectedUserId}_${myUserId}`; // toUser_fromUser
       const reviewRef = doc(firestoreDB, "reviews", reviewDocId);
       const existingReviewSnap = await getDoc(reviewRef);
-      const oldRating = existingReviewSnap.exists ? existingReviewSnap.data()?.rating : undefined;
+      const oldRating = existingReviewSnap.exists() ? existingReviewSnap.data()?.rating : undefined;
       
       // ✅ FIRESTORE ONLY: Read current summary from user_ratings_summary
       const summaryRef = doc(firestoreDB, 'user_ratings_summary', selectedUserId);
       const summarySnap = await getDoc(summaryRef);
-      const summaryData = summarySnap.exists ? summarySnap.data() : null;
+      const summaryData = summarySnap.exists() ? summarySnap.data() : null;
       const oldAverage = summaryData?.averageRating || 0;
       const oldCount = summaryData?.count || 0;
   
@@ -236,7 +209,7 @@ const [isOnline, setIsOnline] = useState(false);
       // ✅ FIRESTORE ONLY: Save/update rating in reviews collection (even without text review)
       // This ensures we track who rated whom, even if they didn't write a review
       const now = serverTimestamp();
-      const isUpdate = existingReviewSnap.exists;
+      const isUpdate = existingReviewSnap.exists();
       
       await setDoc(
         reviewRef,
@@ -275,28 +248,25 @@ const [isOnline, setIsOnline] = useState(false);
 
 // 🎉 feedback based on whether we actually saved a text review
 showSuccessMessage(
-  "Success",
+  t('home.alert.success'),
   reviewWasSaved
     ? reviewWasUpdated
-      ? "Your review was updated."
-      : "Thanks for your review!"
-    : "Thanks for your rating!"
+      ? t('private_chat.review_updated')
+      : t('private_chat.review_thanks')
+    : t('private_chat.rating_thanks')
 );
 
       setShowRatingModal(false);
       setHasRated(true);
       setReviewText('');
-      if (user?.id) {
-        await updateUserPoints(user.id, 100);
-      }
       setStartRating(false);
   
     } catch (error) {
       console.error("Rating error:", error);
-      showErrorMessage("Error", "Error submitting rating. Try again!");
+      showErrorMessage(t('home.alert.error'), t('private_chat.rating_error'));
       setStartRating(false);
     }
-  }, [rating, selectedUserId, myUserId, firestoreDB, reviewText, user?.id, user?.displayName, updateUserPoints]);
+  }, [rating, selectedUserId, myUserId, firestoreDB, reviewText, user?.id, user?.displayName]);
   
   
 
@@ -512,7 +482,7 @@ showSuccessMessage(
   
     // ✅ Validate fruits count - maximum 18 fruits allowed
     if (hasFruits && fruits.length > 18) {
-      showErrorMessage(t("home.alert.error"), "You can only send up to 18 pets in a message.");
+      showErrorMessage(t("home.alert.error"), t('private_chat.max_pets_error'));
       return;
     }
   
@@ -524,7 +494,7 @@ showSuccessMessage(
   
     // ✅ Safety checks
     if (!myUserId || !selectedUserId || !appdatabase) {
-      showErrorMessage(t("home.alert.error"), "Missing required data. Please try again.");
+      showErrorMessage(t("home.alert.error"), t('private_chat.missing_data'));
       return;
     }
 
@@ -567,9 +537,9 @@ showSuccessMessage(
   
     // What to show as last message in chat list
     const imageCount = Array.isArray(image) ? image.length : (image ? 1 : 0);
-    const lastMessagePreview =
-      trimmedText ||
-      (hasImage ? (imageCount > 1 ? `📷 ${imageCount} Photos` : '📷 Photo') : hasFruits ? `🐾 ${fruits.length} pet(s)` : '');
+    const photosCountStr = imageCount > 1 ? t('private_chat.multiple_photos', { count: imageCount }) : t('private_chat.single_photo');
+    const petsCountStr = hasFruits ? (fruits.length === 1 ? t('private_chat.pets_count_singular', { count: fruits.length }) : t('private_chat.pets_count_plural', { count: fruits.length })) : '';
+    const lastMessagePreview = trimmedText || (hasImage ? photosCountStr : hasFruits ? petsCountStr : '');
   
     try {
       // Save the message
@@ -583,7 +553,7 @@ showSuccessMessage(
       await senderChatRef.update({
         chatId,
         receiverId: selectedUserId,
-        receiverName: selectedUser?.sender || "Anonymous",
+        receiverName: selectedUser?.sender || t('private_chat.anonymous'),
         receiverAvatar: selectedUser?.avatar || "https://example.com/default-avatar.jpg",
         lastMessage: lastMessagePreview,
         timestamp,
@@ -594,7 +564,7 @@ showSuccessMessage(
       await receiverChatRef.update({
         chatId,
         receiverId: myUserId,
-        receiverName: user?.displayName || "Anonymous",
+        receiverName: user?.displayName || t('private_chat.anonymous'),
         receiverAvatar: user?.avatar || "https://example.com/default-avatar.jpg",
         lastMessage: lastMessagePreview,
         timestamp,
@@ -604,7 +574,7 @@ showSuccessMessage(
       setReplyTo(null);
     } catch (error) {
       console.error("Error sending message:", error);
-      Alert.alert("Error", "Could not send your message. Please try again.");
+      Alert.alert(t('home.alert.error'), t('private_chat.send_failed'));
     }
   }, [myUserId, selectedUserId, appdatabase, selectedUser, user, t]);
   
@@ -621,6 +591,11 @@ showSuccessMessage(
 
       setActiveChat(user.id, chatKey);
 
+      // ✅ Update lastRead timestamp for read receipts
+      if (localState?.showReadReceipts ?? true) {
+        updateLastRead(chatKey, user.id);
+      }
+
       return () => {
         clearActiveChat(user.id);
       };
@@ -635,11 +610,10 @@ showSuccessMessage(
     setRefreshing(false);
   }, [loadMessages]);
 
-  useEffect(() => {
-    if (user?.id && chatKey) {
-      setActiveChat(user.id, chatKey);
-    }
-  }, [user?.id, chatKey]);
+  // (removed a second setActiveChat effect here — the focus effect above
+  // already calls it. setActiveChat performs 2 writes plus an onDisconnect
+  // registration, so this duplicate doubled that on every chat open. Its
+  // teardown also double-called clearActiveChat.)
 
 
 
@@ -660,6 +634,11 @@ useEffect(() => {
     const newMessage = { id: snapshot.key, ...data };
     if (!newMessage.timestamp) {
       newMessage.timestamp = Date.now();
+    }
+
+    // ✅ Update lastRead when receiving a new message while in chat
+    if (newMessage.senderId !== myUserId && myUserId && (localState?.showReadReceipts ?? true)) {
+      updateLastRead(chatKey, myUserId);
     }
 
     setMessages(prev => {
@@ -693,7 +672,7 @@ useEffect(() => {
 
         <View style={[styles.container,]}>
 
-          <ConditionalKeyboardWrapper style={{ flex: 1 }} privatechatscreen={true}>
+          <ConditionalKeyboardWrapper style={{ flex: 1 }} privatechatscreen={true} noTabBar={noTabBar}>
             {/* <View style={{ flex: 1 }}> */}
               {trade && (
                 <View>
@@ -810,10 +789,9 @@ useEffect(() => {
     canRate={canRate}
     hasRated={hasRated}
     setShowRatingModal={setShowRatingModal}
+    otherLastRead={(localState?.showReadReceipts ?? true) ? otherLastRead : null}
   />
 )}
-
-      {!localState.isPro && <BannerAdComponent/>}
 
               <PrivateMessageInput
                 onSend={sendMessage}
@@ -828,6 +806,7 @@ useEffect(() => {
                 setPetModalVisible={setPetModalVisible}
                 selectedFruits={selectedFruits}
                 setSelectedFruits={setSelectedFruits}
+                isProUser={localState.isPro}
               />
                <PetModal
                fromChat={true}
@@ -842,6 +821,14 @@ useEffect(() => {
     />
             {/* </View>  */}
             </ConditionalKeyboardWrapper>
+
+          {/* Spacer: reserves space for floating nav bar + ad so content isn't hidden behind them */}
+          {noTabBar ? (
+            <View style={{ height: Math.max(insets.bottom, 8) }} />
+          ) : (
+            <View style={{ height: !localState.isPro ? bannerBottomPos + 60 : Math.max(insets.bottom, 8) + 68 }} />
+          )}
+
         </View>
       </GestureHandlerRootView>
       {showRatingModal && (
@@ -881,7 +868,7 @@ useEffect(() => {
 
       {/* Title */}
       <Text style={{ fontSize: 16, marginBottom: 10, textAlign: 'center', fontWeight:'600' }}>
-        Rate this Trader
+        {t('private_chat.rate_trader')}
       </Text>
 
       {/* Stars */}
@@ -908,8 +895,8 @@ useEffect(() => {
     textAlignVertical: 'top',
     fontSize: 14,
   }}
-  placeholder="Write an optional review..."
-  placeholderTextColor="#999"
+  placeholder={t('private_chat.write_review')}
+  placeholderTextColor={isDarkMode ? '#999' : '#888'}
   multiline
   value={reviewText}
   onChangeText={setReviewText}
@@ -928,27 +915,17 @@ useEffect(() => {
         onPress={handleRating}
       >
         <Text style={{ color: 'white', fontSize: 14, textAlign: 'center' }}>
-       { !startRating ?'Submit Rating' : 'Submitting'}
+       { !startRating ? t('private_chat.submit_rating') : t('private_chat.submitting')}
         </Text>
       </TouchableOpacity>
     </View>
   </View>
 )}
-
-
-      {/* {!localState.isPro && <View style={{ alignSelf: 'center' }}>
-        {isAdVisible && (
-          <BannerAd
-            unitId={bannerAdUnitId}
-            size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
-            onAdLoaded={() => setIsAdVisible(true)}
-            onAdFailedToLoad={() => setIsAdVisible(false)}
-            requestOptions={{
-              requestNonPersonalizedAdsOnly: true,
-            }}
-          />
-        )}
-      </View>} */}
+      {!localState.isPro && !noTabBar && (
+        <View style={{ position: 'absolute', bottom: bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
+          <BannerAdComponent />
+        </View>
+      )}
       <ProfileBottomDrawer
           isVisible={isDrawerVisible}
           toggleModal={closeProfileDrawer}  

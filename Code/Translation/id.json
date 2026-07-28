@@ -74,7 +74,10 @@
         "save_changes": "Simpan Perubahan",
         "watch_ad": "Tonton iklan untuk mendapatkan hadiah!",
         "watch_ad_message": "Dapatkan poin dengan menonton iklan. Poin ini dapat digunakan untuk berpartisipasi dalam kontes aplikasi dan membuka fitur khusus.",
-        "earn_reward": "Dapatkan Hadiah"
+        "earn_reward": "Dapatkan Hadiah",
+        "edit_cooldown_title": "Ganti nama terkunci",
+        "edit_cooldown_active": "Ganti nama terkunci",
+        "edit_cooldown_message": "Kamu hanya bisa mengganti nama sekali setiap {{days}} hari. Coba lagi dalam {{daysRemaining}} hari. (Foto dan bio bisa diubah kapan saja)"
     },
     "home": {
         "you": "Anda",
@@ -201,7 +204,12 @@
         "feature_error": "Kesalahan Menampilkan Perdagangan",
         "feature_error_message": "Gagal menampilkan perdagangan. Silakan coba lagi.",
         "purchase_success": "Pembelian Berhasil",
-        "purchase_success_message": "Pengguna sekarang memiliki fitur Pro!"
+        "purchase_success_message": "Pengguna sekarang memiliki fitur Pro!",
+        "my_trades": "My Trades",
+        "search_in_me": "Me",
+        "search_in_you": "You",
+        "clear": "Clear",
+        "search_error_title": "Search Error"
     },
     "signin": {
         "title_signin": "Masuk",
@@ -238,7 +246,11 @@
         "alert_welcome_back": "Selamat datang kembali!",
         "alert_account_created": "Akun Anda berhasil dibuat!",
         "alert_error": "Kesalahan",
-        "alert_try_again": "Terjadi kesalahan yang tidak terduga. Silakan coba lagi nanti."
+        "alert_try_again": "Terjadi kesalahan yang tidak terduga. Silakan coba lagi nanti.",
+        "error_google_unavailable_title": "Masuk dengan Google tidak tersedia",
+        "error_google_unavailable": "Google Play Services tidak tersedia di perangkat ini. Masuk dengan email — ketuk \"Masuk dengan Email\" di bawah.",
+        "error_network_title": "Masalah koneksi",
+        "error_network": "Kami tidak dapat menghubungi server. Periksa koneksimu dan coba lagi. Jika layanan Google dibatasi di jaringanmu, gunakan masuk lewat email atau koneksi lain."
     },
     "tabs": {
         "calculator": "Kalkulator",
@@ -324,5 +336,13 @@
         "messageTooLong": "Pesan tidak boleh melebihi 100 kata.",
         "sendingTooQuickly": "Anda mengirim pesan terlalu cepat. Harap tunggu sebentar.",
         "proUsersOnlyLinks": "Hanya pengguna Pro yang dapat mengirimkan link."
+    },
+    "profile": {
+        "recent_trades": "Trade Terbaru",
+        "no_trades_yet": "Belum ada trade.",
+        "load_more_trades": "Muat lebih banyak trade",
+        "recent_posts": "Postingan Terbaru",
+        "no_posts_yet": "Belum ada postingan.",
+        "load_more_posts": "Muat lebih banyak postingan"
     }
 }

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { View, TextInput, TouchableOpacity, Text, Modal, StyleSheet, Image, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getStyles } from './../Style';
 import Icon from 'react-native-vector-icons/Ionicons';
 import config from '../../Helper/Environment';
@@ -71,6 +72,7 @@ const MessageInput = ({
   const { localState } = useLocalState();
   const { theme } = useGlobalState();
   const isDark = theme === 'dark';
+  const insets = useSafeAreaInsets();
   const [showEmojiPopup, setShowEmojiPopup] = useState(false);
 
   // ✅ Memoize computed values
@@ -124,10 +126,13 @@ const MessageInput = ({
       const newCount = messageCount + 1;
       setMessageCount(newCount);
 
-      if (!localState?.isPro && newCount % 5 === 0) {
+      if (!localState?.isPro && newCount % 7 === 0) {
         // Show ad only if user is NOT pro
         InterstitialAdManager.showAd(adCallback);
       } else {
+        // One message before the ad message: warm the interstitial so the
+        // trigger actually has something to show (lazy-load pipeline).
+        if (!localState?.isPro && newCount % 7 === 6) InterstitialAdManager.prepare();
         setIsSending(false);
       }
     } catch (error) {
@@ -149,7 +154,7 @@ const MessageInput = ({
 
   return (
     <View style={{ backgroundColor: isDark ? config.colors.backgroundDark : config.colors.backgroundLight }}>
-      <View style={[styles.inputWrapper, {backgroundColor: isDark ? config.colors.backgroundDark : config.colors.backgroundLight}]}>
+      <View style={[styles.inputWrapper, { backgroundColor: isDark ? config.colors.backgroundDark : config.colors.backgroundLight }]}>
         {/* Reply context UI */}
         {replyTo && (
           <View style={styles.replyContainer}>

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../../../GlobelStats';
+import config from '../../../Helper/Environment';
 import { acceptGameInvite, declineGameInvite, listenToUserInvites } from '../utils/gameInviteSystem';
 import { showSuccessMessage, showErrorMessage } from '../../../Helper/MessageHelper';
 
@@ -209,7 +210,7 @@ const InviteNotification = ({ currentUser, onAccept, isInActiveGame = false }) =
       <View
         style={[
           styles.notification,
-          { backgroundColor: isDarkMode ? '#1a1a1a' : '#fff' },
+          { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff' },
         ]}
       >
         <Image

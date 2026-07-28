@@ -1,69 +1,69 @@
-import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
-import React from 'react';
-import { Text, View, StyleSheet } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
-import config from '../Helper/Environment';
-import { useTranslation } from 'react-i18next';
+/**
+ * tradeHelpers.js — saved (bookmarked) trades
+ *
+ * A saved trade is a lightweight pointer in RTDB at savedTrades/<uid>/<tradeId>.
+ * The trade body itself stays in Firestore (trades_new) — we only store enough
+ * to render a placeholder and to know the trade is saved. Reading the Saved tab
+ * fans the ids back out to Firestore; trades the owner deleted are skipped.
+ *
+ * Capped at MAX_SAVED so the node stays small and the fan-out stays cheap.
+ */
+import { ref, set, remove, get, serverTimestamp as rtdbTimestamp } from '@react-native-firebase/database';
 
-export const FilterMenu = ({ selectedFilters, setSelectedFilters, analytics, platform }) => {
-  const { t } = useTranslation();
+export const MAX_SAVED = 10;
 
-  // Toggle any filter (myTrades, win, lose, fair)
-  const toggleFilter = (filterKey) => {
-    setSelectedFilters((prevFilters) =>
-      prevFilters.includes(filterKey)
-        ? prevFilters.filter((f) => f !== filterKey)      // remove filter
-        : [...prevFilters, filterKey]                     // add filter
-    );
-  };
-
-  // Filter options: My Trades and Status filters
-  const filterOptions = [
-    { key: "myTrades", label: t("trade.filter_my_trades") },
-    { key: "win", label: "Win" },
-    { key: "lose", label: "Lose" },
-    { key: "fair", label: "Fair" },
-  ];
-
-  return (
-    <View style={styles.container}>
-      <Menu>
-        <MenuTrigger>
-          <Icon name="filter" size={24} color={styles.icon.color} />
-        </MenuTrigger>
-        <MenuOptions customStyles={{ optionsContainer: styles.menuOptions }}>
-          {filterOptions.map(({ key, label }) => (
-            <MenuOption key={key} onSelect={() => toggleFilter(key)} closeOnSelect={false}>
-              <View style={styles.menuRow}>
-                <Text style={[styles.menuOptionText, selectedFilters.includes(key) && styles.selectedText]}>
-                  {label}
-                </Text>
-                {selectedFilters.includes(key) && (
-                  <Icon name="checkmark" size={16} color={config.colors.hasBlockGreen} />
-                )}
-              </View>
-            </MenuOption>
-          ))}
-        </MenuOptions>
-      </Menu>
-    </View>
-  );
+const countSaved = async (appdatabase, myUid) => {
+  try {
+    const snap = await get(ref(appdatabase, `savedTrades/${myUid}`));
+    if (!snap.exists()) return 0;
+    return Object.keys(snap.val() || {}).length;
+  } catch {
+    return 0;
+  }
 };
 
-const styles = StyleSheet.create({
-  container: { alignItems: 'flex-end', margin: 10 },
-  icon: { color: 'grey' },
-  menuOptions: {
-    paddingHorizontal: 10,
-    backgroundColor: 'white',
-    borderRadius: 8,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  menuRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  menuOptionText: { fontSize: 16, color: 'black', paddingVertical: 10, fontFamily: 'Lato-Regular' },
-  selectedText: { color: config.colors.hasBlockGreen, fontFamily: 'Lato-Bold' },
-});
+/**
+ * Bookmark a trade. Throws with a user-facing message when the cap is hit —
+ * callers surface e.message directly in the error toast.
+ *
+ * @param {number} [knownCount] how many trades the caller already knows are
+ *   saved. The feed holds this in state, so passing it skips a redundant read
+ *   of the whole savedTrades node on every save.
+ */
+export const saveTrade = async (appdatabase, myUid, trade, knownCount) => {
+  const tradeId = trade?.id;
+  if (!appdatabase || !myUid || !tradeId) throw new Error('Could not save this trade.');
+
+  const count = Number.isInteger(knownCount)
+    ? knownCount
+    : await countSaved(appdatabase, myUid);
+  if (count >= MAX_SAVED) {
+    throw new Error(`You can only save ${MAX_SAVED} trades at a time. Remove some first.`);
+  }
+
+  await set(ref(appdatabase, `savedTrades/${myUid}/${tradeId}`), {
+    type: 'saved',
+    traderId: trade.userId || '',
+    traderName: trade.traderName || 'Unknown',
+    traderRobloxUsername: trade.robloxUsername || '',
+    savedAt: rtdbTimestamp(),
+  });
+};
+
+export const unsaveTrade = async (appdatabase, myUid, tradeId) => {
+  if (!appdatabase || !myUid || !tradeId) return;
+  await remove(ref(appdatabase, `savedTrades/${myUid}/${tradeId}`));
+};
+
+/**
+ * @returns {Promise<Object>} { [tradeId]: { type, traderId, traderName, ... } }
+ */
+export const fetchSavedTradeRefs = async (appdatabase, myUid) => {
+  try {
+    const snap = await get(ref(appdatabase, `savedTrades/${myUid}`));
+    return snap.exists() ? (snap.val() || {}) : {};
+  } catch (e) {
+    console.warn('[tradeHelpers] Failed to fetch saved trades:', e?.message);
+    return {};
+  }
+};

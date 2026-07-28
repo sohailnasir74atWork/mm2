@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { KeyboardAvoidingView, Keyboard, Platform, Animated, Easing } from 'react-native';
 
-const ConditionalKeyboardWrapper = ({ children, style, chatscreen = false, privatechatscreen = false }) => {
+const ConditionalKeyboardWrapper = ({ children, style, chatscreen = false, privatechatscreen = false, noTabBar = false }) => {
   const keyboardHeight = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -39,23 +39,24 @@ const ConditionalKeyboardWrapper = ({ children, style, chatscreen = false, priva
   // This ensures the input sits right on top of the keyboard without extra space
   if (chatscreen || privatechatscreen) {
     if (Platform.OS === 'ios') {
+      const iosOffset = noTabBar ? 95 : 120;
       return (
         <KeyboardAvoidingView
           behavior="padding"
           style={style}
-          keyboardVerticalOffset={100}
+          keyboardVerticalOffset={iosOffset}
         >
           {children}
         </KeyboardAvoidingView>
       );
     }
-    
+
     return (
       <KeyboardAvoidingView
         behavior="padding"
         style={style}
         enabled={true}
-        keyboardVerticalOffset={115}
+        keyboardVerticalOffset={noTabBar ? 90 : 115}
       >
         {children}
       </KeyboardAvoidingView>

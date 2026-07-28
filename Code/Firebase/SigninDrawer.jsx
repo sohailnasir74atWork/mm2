@@ -198,6 +198,13 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
       else if (error?.code === 'auth/wrong-password') errorMessage = t('signin.error_wrong_password');
       else if (error?.code === 'auth/email-already-in-use') errorMessage = t('signin.error_email_in_use');
       else if (error?.code === 'auth/weak-password') errorMessage = t('signin.error_weak_password');
+      // The network case was unmapped, so a blocked/throttled connection looked
+      // identical to a wrong password.
+      else if (error?.code === 'auth/network-request-failed') {
+        errorMessage = t('signin.error_network', {
+          defaultValue: 'We couldn\'t reach the sign-in server. Check your connection and try again. If Google services are restricted on your network, try email sign-in or a different connection.',
+        });
+      }
 
       Alert.alert(t('signin.error_signin_message'), errorMessage);
     } finally {
@@ -223,10 +230,44 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
       mixpanel.track(`Login with google from ${screen}`);
       await requestPermission();
     } catch (error) {
-      showErrorMessage(
-        t('home.alert.error'),
-        error?.message || t('signin.error_signin_message')
-      );
+      // Every Google failure used to render the same "unexpected error", which
+      // told users nothing. The two common real causes are (a) no/outdated
+      // Google Play Services — widespread on devices in regions where Google
+      // services are restricted — and (b) the request never reaching Google.
+      // Both are recoverable by signing in with email instead, so say so.
+      const code = error?.code;
+      const msg = String(error?.message || '');
+
+      if (code === '12501' || code === 12501 || /cancel/i.test(msg)) {
+        return; // user backed out — not an error worth a toast
+      }
+
+      const noPlayServices =
+        code === '2' || code === 2 || /play\s*services/i.test(msg);
+      const networkish =
+        /network|timeout|unreachable|failed to connect|ETIMEDOUT|ENOTFOUND/i.test(msg) ||
+        code === 'auth/network-request-failed';
+
+      if (noPlayServices) {
+        showErrorMessage(
+          t('signin.error_google_unavailable_title', { defaultValue: 'Google sign-in unavailable' }),
+          t('signin.error_google_unavailable', {
+            defaultValue: 'Google Play Services isn\'t available on this device. Please sign in with email instead — tap "Sign in with Email" below.',
+          })
+        );
+      } else if (networkish) {
+        showErrorMessage(
+          t('signin.error_network_title', { defaultValue: 'Connection problem' }),
+          t('signin.error_network', {
+            defaultValue: 'We couldn\'t reach the sign-in server. Check your connection and try again. If Google services are restricted on your network, try email sign-in or a different connection.',
+          })
+        );
+      } else {
+        showErrorMessage(
+          t('signin.error_google_signin', { defaultValue: 'Google Sign-In Error' }),
+          error?.message || t('signin.error_signin_message')
+        );
+      }
     } finally {
       setIsLoading(false);
     }

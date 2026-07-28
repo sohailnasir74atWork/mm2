@@ -4,7 +4,7 @@ import { createMMKV } from 'react-native-mmkv';
 import Purchases from 'react-native-purchases';
 import config from './Helper/Environment';
 import { useTranslation } from 'react-i18next';
-import { InteractionManager } from 'react-native';
+
 import { mixpanel } from './AppHelper/MixPenel';
 import { showErrorMessage, showSuccessMessage } from './Helper/MessageHelper';
 
@@ -40,10 +40,12 @@ export const LocalStateProvider = ({ children }) => {
     ggData: safeParseJSON('ggData', {}),
     codes: safeParseJSON('codes', {}),
     normalStock: safeParseJSON('normalStock', []),
+    // My Stuff mirror (source of truth = Firestore reviews/{uid}) — read by
+    // the calculator INVENTORY tab and the chat item picker so all three
+    // surfaces share ONE list.
+    ownedPets: safeParseJSON('ownedPets', []),
+    wishlistPets: safeParseJSON('wishlistPets', []),
     bannedUsers: safeParseJSON('bannedUsers', []),
-    mirageStock: safeParseJSON('mirageStock', []),
-    prenormalStock: safeParseJSON('prenormalStock', []),
-    premirageStock: safeParseJSON('premirageStock', []),
     isAppReady: storage.getBoolean('isAppReady') ?? false,
     lastActivity: storage.getString('lastActivity') || null,
     showOnBoardingScreen: storage.getBoolean('showOnBoardingScreen') ?? true,
@@ -86,7 +88,7 @@ export const LocalStateProvider = ({ children }) => {
     if (localState.data) {
       storage.set('data', JSON.stringify(localState.data)); // Force store
     }
-  }, [localState.data, localState.ggData]);
+  }, [localState.data]);
 
   // console.log(localState.isPro)
   // ✅ Memoize updateLocalState to prevent recreation on every render
@@ -172,16 +174,22 @@ export const LocalStateProvider = ({ children }) => {
     }
   };
   useEffect(() => {
-    const task = InteractionManager.runAfterInteractions(() => {
+    const timeoutId = setTimeout(() => {
       initRevenueCat();
-    });
-    return () => task.cancel();
+    }, 0);
+    return () => clearTimeout(timeoutId);
   }, []);
 
   // console.log(isPro)
   // Fetch available subscriptions
   const fetchOfferings = async () => {
     try {
+      // ✅ Guard: skip if billing is unavailable (e.g. emulator)
+      const canPay = await Purchases.canMakePayments().catch(() => false);
+      if (!canPay) {
+        console.warn('⚠️ Billing unavailable — skipping fetchOfferings');
+        return;
+      }
       const offerings = await Purchases.getOfferings();
       if (offerings.current?.availablePackages?.length > 0) {
         setPackages(offerings.current.availablePackages);
@@ -226,6 +234,8 @@ export const LocalStateProvider = ({ children }) => {
   // Check if the user has an active subscription
   const checkEntitlements = async () => {
     try {
+      const canPay = await Purchases.canMakePayments().catch(() => false);
+      if (!canPay) return;
       const customerInfo = await Purchases.getCustomerInfo();
       const entitlements = customerInfo.entitlements.active;
       const proKey = Object.keys(entitlements).find(
@@ -289,7 +299,7 @@ export const LocalStateProvider = ({ children }) => {
 
  
   // Clear a specific key
-  const clearKey = (key) => {
+  const clearKey = useCallback((key) => {
     setLocalState((prevState) => {
       const newState = { ...prevState };
       delete newState[key];
@@ -297,13 +307,13 @@ export const LocalStateProvider = ({ children }) => {
     });
 
     storage.delete(key);
-  };
+  }, []);
 
   // Clear all local state and MMKV storage
-  const clearAll = () => {
+  const clearAll = useCallback(() => {
     setLocalState({});
     storage.clearAll();
-  };
+  }, []);
 
   const getRemainingTranslationTries = useCallback(() => {
     const today = new Date().toDateString();
@@ -327,7 +337,7 @@ export const LocalStateProvider = ({ children }) => {
       incrementTranslationCount,
       getRemainingTranslationTries, toggleAd
     }),
-    [localState, customerId, packages, mySubscriptions]
+    [localState, customerId, packages, mySubscriptions, updateLocalState, canTranslate, incrementTranslationCount, getRemainingTranslationTries, toggleAd, clearKey, clearAll]
   );
 
   return (

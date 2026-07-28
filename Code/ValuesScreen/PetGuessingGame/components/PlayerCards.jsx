@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../../../GlobelStats';
+import config from '../../../Helper/Environment';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 60) / 2;
@@ -15,6 +16,7 @@ const CARD_WIDTH = (width - 60) / 2;
 const PlayerCards = ({ roomData, currentUserId }) => {
   const { theme } = useGlobalState();
   const isDarkMode = theme === 'dark';
+  const { t } = require('react-i18next').useTranslation();
 
   const players = useMemo(() => {
     if (!roomData?.players) return [];
@@ -38,7 +40,7 @@ const PlayerCards = ({ roomData, currentUserId }) => {
       
       return {
         id: playerId,
-        displayName: playerData.displayName || 'Anonymous',
+        displayName: playerData.displayName || t('game.anonymous'),
         avatar: playerData.avatar || null,
         score: scores[playerId] || 0,
         isHost: playerId === roomData.hostId,
@@ -87,9 +89,9 @@ const PlayerCards = ({ roomData, currentUserId }) => {
   return (
     <View style={styles.container}>
       {/* Round indicator */}
-      <View style={[styles.roundIndicator, { backgroundColor: isDarkMode ? '#2a2a2a' : '#f3f4f6' }]}>
+      <View style={[styles.roundIndicator, { backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#f3f4f6' }]}>
         <Text style={[styles.roundText, { color: isDarkMode ? '#fff' : '#000' }]}>
-          Round {currentRound} of {totalRounds}
+          {t('game.round_x_of_y', { round: currentRound, total: totalRounds })}
         </Text>
       </View>
 
@@ -105,7 +107,7 @@ const PlayerCards = ({ roomData, currentUserId }) => {
               key={player.id}
               style={[
                 styles.card,
-                { backgroundColor: isDarkMode ? '#1e1e1e' : '#fff' },
+                { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff' },
                 isCurrentTurn && styles.cardActive,
                 isWinner && styles.cardWinner,
               ]}
@@ -114,13 +116,13 @@ const PlayerCards = ({ roomData, currentUserId }) => {
               {isCurrentTurn && (
                 <View style={styles.turnBadge}>
                   <Icon name="arrow-forward-circle" size={10} color="#fff" />
-                  <Text style={styles.turnBadgeText}>Turn</Text>
+                  <Text style={styles.turnBadgeText}>{t('game.turn')}</Text>
                 </View>
               )}
               {isWinner && (
                 <View style={[styles.turnBadge, styles.winnerBadge]}>
                   <Icon name="trophy" size={10} color="#fff" />
-                  <Text style={styles.turnBadgeText}>Winner!</Text>
+                  <Text style={styles.turnBadgeText}>{t('game.winner')}</Text>
                 </View>
               )}
 
@@ -146,7 +148,7 @@ const PlayerCards = ({ roomData, currentUserId }) => {
                   style={[styles.playerName, { color: isDarkMode ? '#fff' : '#000' }]}
                   numberOfLines={1}
                 >
-                  {player.displayName || 'Anonymous'}
+                  {player.displayName || t('game.anonymous')}
                 </Text>
 
                 {/* Score */}

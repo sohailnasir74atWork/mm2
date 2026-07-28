@@ -9,12 +9,14 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../../../GlobelStats';
+import config from '../../../Helper/Environment';
 import { ref, get, onValue } from '@react-native-firebase/database';
 import { doc, getDoc } from '@react-native-firebase/firestore';
 
 const GameResults = ({ roomData, currentUser }) => {
   const { theme, appdatabase, firestoreDB } = useGlobalState();
   const isDarkMode = theme === 'dark';
+  const { t } = require('react-i18next').useTranslation();
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [userPoints, setUserPoints] = useState(null);
   const [userWins, setUserWins] = useState(null);
@@ -38,7 +40,7 @@ const GameResults = ({ roomData, currentUser }) => {
         if (firestoreDB) {
           const statsRef = doc(firestoreDB, 'game_stats', currentUser.id);
           const statsSnap = await getDoc(statsRef);
-          if (statsSnap.exists) {
+          if (statsSnap.exists()) {
             const stats = statsSnap.data() || {};
             setUserWins(stats.petGameWins || 0);
           }
@@ -76,7 +78,7 @@ const GameResults = ({ roomData, currentUser }) => {
         const playerData = players[playerId] || {};
         return {
           id: playerId,
-          name: playerData.displayName || 'Anonymous',
+          name: playerData.displayName || t('game.anonymous'),
           avatar: playerData.avatar,
           score: scores[playerId] || 0,
           isCurrentUser: playerId === currentUser?.id,
@@ -101,10 +103,10 @@ const GameResults = ({ roomData, currentUser }) => {
     <View style={styles.container}>
       {/* Timeout Message */}
       {timeoutReason && (
-        <View style={[styles.timeoutSection, { backgroundColor: isDarkMode ? '#1e1e1e' : '#fef2f2' }]}>
+        <View style={[styles.timeoutSection, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fef2f2' }]}>
           <Text style={styles.timeoutEmoji}>⏱️</Text>
           <Text style={[styles.timeoutText, { color: isDarkMode ? '#fff' : '#000' }]}>
-            Game Ended
+            {t('game.game_ended')}
           </Text>
           <Text style={[styles.timeoutReason, { color: isDarkMode ? '#9ca3af' : '#6b7280' }]}>
             {timeoutReason}
@@ -117,10 +119,10 @@ const GameResults = ({ roomData, currentUser }) => {
         <View style={styles.winnerSection}>
           <Text style={styles.winnerEmoji}>🏆</Text>
           <Text style={[styles.winnerText, { color: isDarkMode ? '#fff' : '#000' }]}>
-            {winner.isCurrentUser ? 'You Win!' : `${winner.name} Wins!`}
+            {winner.isCurrentUser ? t('game.you_win') : t('game.player_wins', { player: winner.name })}
           </Text>
           <Text style={styles.winnerScore}>
-            {Number(winner.score).toLocaleString()} points
+            {Number(winner.score).toLocaleString()} {t('game.points')}
           </Text>
         </View>
       )}
@@ -148,7 +150,7 @@ const GameResults = ({ roomData, currentUser }) => {
                     backgroundColor: isWinner
                       ? isDarkMode ? '#3a2a10' : '#fef3c7'
                       : player.isCurrentUser
-                        ? isDarkMode ? '#2a2a2a' : '#f3f4f6'
+                        ? isDarkMode ? config.colors.surfaceElevatedDark : '#f3f4f6'
                         : 'transparent',
                   },
                   isWinner && styles.winnerItem,
@@ -187,7 +189,7 @@ const GameResults = ({ roomData, currentUser }) => {
           >
             <Icon name="time-outline" size={18} color="#8B5CF6" />
             <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
-              Spin History
+              {t('game.spin_history')}
             </Text>
             <Icon
               name={isHistoryExpanded ? 'chevron-up-outline' : 'chevron-down-outline'}
@@ -207,7 +209,7 @@ const GameResults = ({ roomData, currentUser }) => {
                     <View style={styles.historyRound}>
                       {/* Always use high-contrast white text on purple pill so R1/R2 stand out */}
                       <Text style={styles.historyRoundText}>
-                        R{spin.round}
+                        {t('game.round_short', { round: spin.round })}
                       </Text>
                     </View>
                     <Text 

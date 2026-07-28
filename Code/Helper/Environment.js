@@ -14,15 +14,18 @@ const config = {
   andriodIntestial: isNoman ? 'ca-app-pub-5740215782746766/7725100246' : 'ca-app-pub-3701208411582706/2820664136',
   andriodRewarded: isNoman ? 'ca-app-pub-5740215782746766/5267066676' : 'ca-app-pub-3701208411582706/5175818984',
   andriodOpenApp: isNoman ? 'ca-app-pub-5740215782746766/6799047293' : 'ca-app-pub-3701208411582706/2295931822',
-  andriodNative: isNoman ? 'ca-app-pub-5740215782746766/2941106105' : 'ca-app-pub-3701208411582706/5457520430',
+  andriodNative: isNoman ? 'ca-app-pub-5740215782746766/3337019477' : 'ca-app-pub-3701208411582706/5457520430',
   IOsIntestial: isNoman ? 'ca-app-pub-5740215782746766/4282766419' : '',
   IOsBanner: isNoman ? 'ca-app-pub-5740215782746766/1975349035' : '',
   IOsRewarded: isNoman ? 'ca-app-pub-5740215782746766/8470806324' : '',
   IOsOpenApp: isNoman ? 'ca-app-pub-5740215782746766/9662267365' : '',
-  IOsNative: isNoman ? '' : '',
-  gameInterstitialAndroid: 'ca-app-pub-5740215782746766/7231966561',
+  IOsNative: isNoman ? 'ca-app-pub-5740215782746766/9167930659' : '',
+  // No separate "game" interstitial units exist in this AdMob app, so the
+  // IntAd A/B slot B points at the real interstitial unit (valid unit, no
+  // no-fill). Create a 2nd interstitial unit per platform later for true A/B.
+  gameInterstitialAndroid: 'ca-app-pub-5740215782746766/7725100246',
 
-  gameInterstitialIOS: 'ca-app-pub-5740215782746766/5126152752',
+  gameInterstitialIOS: 'ca-app-pub-5740215782746766/4282766419',
   apiKey: isNoman ? rev_cat_id : 'goog_DwvubjYPPPfqdtdrSvjSbrmAXFU',
 
   supportEmail: isNoman ? 'thesolanalabs@gmail.com' : 'mindfusionio.help@gmail.com',
@@ -47,53 +50,53 @@ const config = {
       hasBlockGreen: '#6A5ACD', // Use primary for consistency
       wantBlockRed: '#6A5ACD', // Use primary for consistency
       
-      // Background colors
-      backgroundLight: '#F8F9FA', // Soft off-white for light mode
-      backgroundDark: '#121212', // True black for dark mode
-      surfaceLight: '#FFFFFF', // Pure white for cards in light mode
-      surfaceDark: '#1E1E1E', // Dark gray for cards in dark mode
-      surfaceElevatedLight: '#FFFFFF', // Elevated surfaces light
-      surfaceElevatedDark: '#2A2A2A', // Elevated surfaces dark
+      // Background colors — 🌊 Deep Ocean blue theme
+      backgroundLight: '#F8F9FA',
+      backgroundDark: '#040d1a',       // Deep ocean midnight blue
+      surfaceLight: '#FFFFFF',
+      surfaceDark: '#071629',          // Dark navy card surface
+      surfaceElevatedLight: '#FFFFFF',
+      surfaceElevatedDark: '#0d2137',  // Elevated deep blue surface
       
       // Text colors
-      textLight: '#000000', // Black text for light mode
-      textDark: '#FFFFFF', // White text for dark mode
-      textSecondaryLight: '#666666', // Gray text for light mode
-      textSecondaryDark: '#B0B0B0', // Light gray text for dark mode
-      textTertiaryLight: '#999999', // Lighter gray for light mode
-      textTertiaryDark: '#808080', // Medium gray for dark mode
+      textLight: '#000000',
+      textDark: '#e0f2fe',             // Soft sky-white
+      textSecondaryLight: '#666666',
+      textSecondaryDark: '#7cb9e8',    // Sky blue secondary text
+      textTertiaryLight: '#999999',
+      textTertiaryDark: '#3b82f6',     // Muted blue for tertiary
       
       // Border and divider colors
-      borderLight: '#E0E0E0', // Light border for light mode
-      borderDark: '#333333', // Dark border for dark mode
-      dividerLight: '#E5E5E5', // Divider for light mode
-      dividerDark: '#2A2A2A', // Divider for dark mode
+      borderLight: '#E0E0E0',
+      borderDark: '#0d2d54',           // Deep navy border
+      dividerLight: '#E5E5E5',
+      dividerDark: '#0d2137',          // Subtle navy divider
       
       // Status colors
-      success: '#34C759', // Green for success states
-      successLight: '#30D158', // Lighter green
-      successDark: '#28A745', // Darker green
-      error: '#FF3B30', // Red for errors
-      errorLight: '#FF453A', // Lighter red
-      errorDark: '#D32F2F', // Darker red
-      warning: '#FF9500', // Orange for warnings
-      warningLight: '#FF9F0A', // Lighter orange
-      warningDark: '#F57C00', // Darker orange
-      info: '#007AFF', // Blue for info
-      infoLight: '#0A84FF', // Lighter blue
-      infoDark: '#0051D5', // Darker blue
+      success: '#34C759',
+      successLight: '#30D158',
+      successDark: '#28A745',
+      error: '#FF3B30',
+      errorLight: '#FF453A',
+      errorDark: '#D32F2F',
+      warning: '#FF9500',
+      warningLight: '#FF9F0A',
+      warningDark: '#F57C00',
+      info: '#007AFF',
+      infoLight: '#0A84FF',
+      infoDark: '#0051D5',
       
       // Interactive colors
-      linkLight: '#007AFF', // Link color for light mode
-      linkDark: '#5AC8FA', // Link color for dark mode
-      placeholderLight: '#C7C7CC', // Placeholder text light
-      placeholderDark: '#6D6D70', // Placeholder text dark
+      linkLight: '#007AFF',
+      linkDark: '#60a5fa',             // Bright blue links
+      placeholderLight: '#C7C7CC',
+      placeholderDark: '#5a7a9a',      // Muted blue-gray placeholder (visible on dark bg)
       
       // Overlay and shadow
-      overlayLight: 'rgba(0, 0, 0, 0.4)', // Overlay for light mode
-      overlayDark: 'rgba(0, 0, 0, 0.6)', // Overlay for dark mode
-      shadowLight: 'rgba(0, 0, 0, 0.1)', // Shadow for light mode
-      shadowDark: 'rgba(0, 0, 0, 0.3)', // Shadow for dark mode
+      overlayLight: 'rgba(0, 0, 0, 0.4)',
+      overlayDark: 'rgba(0, 5, 20, 0.75)',  // Bluish overlay
+      shadowLight: 'rgba(0, 0, 0, 0.1)',
+      shadowDark: 'rgba(0, 0, 0, 0.5)',
       
       // Legacy support
       white: '#FFFFFF',

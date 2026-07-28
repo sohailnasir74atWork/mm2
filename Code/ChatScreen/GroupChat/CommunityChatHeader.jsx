@@ -5,7 +5,7 @@ import { useGlobalState } from '../../GlobelStats';
 import { useNavigation } from '@react-navigation/native';
 import config from '../../Helper/Environment';
 import { useTranslation } from 'react-i18next';
-import { Menu, MenuOption, MenuOptions, MenuTrigger } from 'react-native-popup-menu';
+
 import { useHaptic } from '../../Helper/HepticFeedBack';
 // ✅ MM2: Removed PetGuessingGameScreen and game invite imports - MM2 doesn't use gaming features
 import { collection, query, where, onSnapshot } from '@react-native-firebase/firestore';
@@ -17,7 +17,7 @@ const CommunityChatHeader = ({
   setGroupUnreadCount,
   triggerHapticFeedback,
   onOnlineUsersPress,
-  onLeaderboardPress,
+
 }) => {
   const { user, firestoreDB, theme } = useGlobalState();
   const navigation = useNavigation();
@@ -154,68 +154,22 @@ const CommunityChatHeader = ({
               </View>
             )}
           </TouchableOpacity>
-
-          {/* Leaderboard Button */}
-          <TouchableOpacity
-            onPress={() => {
-              if (onLeaderboardPress) {
-                onLeaderboardPress();
-              }
-              triggerHapticFeedback('impactLight');
-            }}
-            style={{ position: 'relative', padding: 8, marginRight: 4 }}
-          >
-            <Icon
-              name="trophy-outline"
-              size={24}
-              color={config.colors.primary}
-            />
-          </TouchableOpacity>
         </>
       )}
       {user?.id && (
-        <Menu>
-          <MenuTrigger>
-            <View style={{ padding: 8 }}>
-              <Icon name="ellipsis-vertical-outline" size={24} color={config.colors.primary} />
-            </View>
-          </MenuTrigger>
-          <MenuOptions
-            customStyles={{
-              optionsContainer: {
-                marginTop: 8,
-                borderRadius: 8,
-                width: 220,
-                padding: 5,
-                backgroundColor: config.colors.background || '#fff',
-              },
-            }}
-          >
-            <MenuOption onSelect={() => {
-              if (onOnlineUsersPress) {
-                onOnlineUsersPress();
-              }
+        <>
+
+          {/* Blocked Users */}
+          <TouchableOpacity
+            onPress={() => {
+              navigation?.navigate('BlockedUsers');
               triggerHapticFeedback('impactLight');
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', padding: 10 }}>
-                <Icon name="people-outline" size={20} color={config.colors.primary} style={{ marginRight: 10 }} />
-                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                  <Text style={{ fontSize: 16, color: config.colors.text || '#000' }}>
-                    Online Users
-                  </Text>
-                </View>
-              </View>
-            </MenuOption>
-            <MenuOption onSelect={() => navigation?.navigate('BlockedUsers')}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', padding: 10 }}>
-                <Icon name="ban-outline" size={20} color={config.colors.primary} style={{ marginRight: 10 }} />
-                <Text style={{ fontSize: 16, color: config.colors.text || '#000' }}>
-                  {t("chat.blocked_users")}
-                </Text>
-              </View>
-            </MenuOption>
-          </MenuOptions>
-        </Menu>
+            }}
+            style={{ padding: 8 }}
+          >
+            <Icon name="ban-outline" size={24} color={config.colors.primary} />
+          </TouchableOpacity>
+        </>
       )}
 
       {/* ✅ MM2: Removed Pet Guessing Game Modal - MM2 doesn't use gaming features */}

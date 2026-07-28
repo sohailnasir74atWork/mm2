@@ -6,11 +6,13 @@ import {
 import { showMessage } from 'react-native-flash-message';
 import firestore from '@react-native-firebase/firestore';
 import { useLocalState } from '../../LocalGlobelStats';
+import { useTranslation } from 'react-i18next';
 
 const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
   const [reportText, setReportText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const {updateLocalState, localState} = useLocalState()
+  const { t } = useTranslation();
 // console.log(localState.bannedUsers)
 
   // const handleBanToggle = async () => {
@@ -59,11 +61,11 @@ const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
   const handleSubmit = async () => {
     if (submitting) return;
     if (!item || !item.id) {
-      showMessage({ message: 'Invalid post.', type: 'danger' });
+      showMessage({ message: t('feed.invalid_post'), type: 'danger' });
       return;
     }
     if (!reportText.trim()) {
-      showMessage({ message: 'Please enter a reason.', type: 'warning' });
+      showMessage({ message: t('feed.enter_reason'), type: 'warning' });
       return;
     }
 
@@ -74,7 +76,7 @@ const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
       // 1) Atomically check 'report' and update/delete
       const txResult = await firestore().runTransaction(async (tx) => {
         const snap = await tx.get(postRef);
-        if (!snap.exists) {
+        if (!snap.exists()) {
           return { status: 'missing' };
         }
   
@@ -106,7 +108,7 @@ const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
       });
   
       if (txResult.status === 'missing') {
-        showMessage({ message: 'Post not found.', type: 'danger' });
+        showMessage({ message: t('feed.post_not_found'), type: 'danger' });
         return;
       }
   
@@ -124,7 +126,7 @@ const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
       onClose();
     } catch (e) {
       console.error('Report submit error:', e);
-      showMessage({ message: 'Could not submit report. Please try again.', type: 'danger' });
+      showMessage({ message: t('feed.report_failed'), type: 'danger' });
     } finally {
       setSubmitting(false);
     }
@@ -139,7 +141,7 @@ const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
             <TextInput
               style={styles.input}
               placeholder="Why are you reporting this post?"
-              placeholderTextColor="#888"
+              placeholderTextColor="#999"
               value={reportText}
               onChangeText={setReportText}
               editable={!submitting}

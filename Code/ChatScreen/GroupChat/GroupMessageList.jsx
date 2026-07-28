@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useState, useCallback } from 'react';
+import React, { memo, useMemo, useState, useCallback, useEffect } from 'react';
 import {
   FlatList,
   View,
@@ -22,6 +22,9 @@ import { fruitStyles } from '../PrivateChat/PrivateMessageList';
 import Icon from 'react-native-vector-icons/Ionicons';
 import config from '../../Helper/Environment';
 import { parseMessageText } from '../ChatHelper';
+import { getSafeTextColor, RainbowText, isMultiColorText, getMultiColorPalette } from '../../Helper/contrastHelper';
+import { resolveProfile, warmProfileCache, getCachedProfile } from '../../Helper/profileCache';
+import FramedAvatar from './FramedAvatar';
 
 const GroupMessageList = ({
   messages,
@@ -39,7 +42,7 @@ const GroupMessageList = ({
   highlightedMessageId, // ID of highlighted message
   flatListRef, // Ref for FlatList
 }) => {
-  const { theme } = useGlobalState();
+  const { theme, appdatabase } = useGlobalState();
   const isDarkMode = theme === 'dark';
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
   const { t } = useTranslation();
@@ -50,7 +53,7 @@ const GroupMessageList = ({
 
   const fruitColors = useMemo(
     () => ({
-      wrapperBg: isDarkMode ? '#0f172a55' : '#e5e7eb55',
+      wrapperBg: isDarkMode ? `${config.colors.surfaceDark}55` : '#e5e7eb55',
       name: isDarkMode ? '#f9fafb' : '#111827',
       value: isDarkMode ? '#e5e7eb' : '#4b5563',
       divider: isDarkMode ? '#ffffff22' : '#00000011',
@@ -105,6 +108,23 @@ const GroupMessageList = ({
     return [...messages].sort((a, b) => (b?.timestamp || 0) - (a?.timestamp || 0));
   }, [messages]);
 
+  // Warm the profile cache for the UNIQUE senders in view so avatar frames +
+  // chat text colors render (group messages are slim — no cosmetics in the
+  // payload). Unique senders + uncached-only keep it cheap; bumping the
+  // version re-renders the memoised rows via extraData once profiles land.
+  const [profileCacheVersion, setProfileCacheVersion] = useState(0);
+  useEffect(() => {
+    if (!appdatabase) return;
+    const senders = [...new Set(filteredMessages.map(m => m?.senderId).filter(Boolean))]
+      .filter(id => !getCachedProfile(id));
+    if (senders.length === 0) return;
+    let cancelled = false;
+    warmProfileCache(appdatabase, senders)
+      .then(() => { if (!cancelled) setProfileCacheVersion(v => v + 1); })
+      .catch(() => { });
+    return () => { cancelled = true; };
+  }, [filteredMessages, appdatabase]);
+
   const renderMessage = useCallback(
     ({ item }) => {
       if (!item || typeof item !== 'object') return null;
@@ -115,6 +135,8 @@ const GroupMessageList = ({
         item.avatar ||
         groupData?.members?.[item.senderId]?.avatar ||
         'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
+      // Sender cosmetics (frame + chat text color) from the profile cache.
+      const profile = resolveProfile(item);
 
       const fruits = Array.isArray(item.fruits) ? item.fruits : [];
       const hasFruits = fruits.length > 0;
@@ -156,12 +178,12 @@ const GroupMessageList = ({
               activeOpacity={0.7}
               style={{ alignItems: 'center', justifyContent: 'center' }}
             >
-              <Image
-                source={{
-                  uri: senderAvatar ||
-                    'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
-                }}
-                style={styles.profileImage}
+              <FramedAvatar
+                avatarUri={senderAvatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png'}
+                frame={profile.profileFrame || null}
+                isDarkMode={isDarkMode}
+                avatarSize={28}
+                forceDetail
               />
             </TouchableOpacity>
           </View>
@@ -173,7 +195,7 @@ const GroupMessageList = ({
               <TouchableOpacity
                 style={[
                   styles.replyContainer,
-                  { backgroundColor: isDarkMode ? '#374151' : '#E5E7EB' },
+                  { backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB' },
                 ]}
                 activeOpacity={0.7}
                 onPress={() => scrollToMessage && scrollToMessage(item.replyTo.id)}
@@ -399,9 +421,17 @@ const GroupMessageList = ({
 
                   {/* Normal text (can be empty if only fruits) - matching main chat */}
                   {!!item.text && (
-                    <Text style={isMyMessage ? styles.myMessageTextOnly : styles.otherMessageTextOnly}>
-                      {parseMessageText(item.text)}
-                    </Text>
+                    isMultiColorText(profile.chatTextColor)
+                      ? <RainbowText
+                          colors={getMultiColorPalette(profile.chatTextColor)}
+                          style={[isMyMessage ? styles.myMessageTextOnly : styles.otherMessageTextOnly]}
+                        >{item.text}</RainbowText>
+                      : <Text style={[
+                          isMyMessage ? styles.myMessageTextOnly : styles.otherMessageTextOnly,
+                          profile.chatTextColor ? { color: getSafeTextColor(profile.chatTextColor, null) } : null,
+                        ]}>
+                          {parseMessageText(item.text)}
+                        </Text>
                   )}
                 </View>
               </MenuTrigger>
@@ -470,7 +500,7 @@ const GroupMessageList = ({
       inverted={true} // ✅ Latest messages at bottom
       style={messageListStyles}
       contentContainerStyle={messageListContentStyles}
-      extraData={highlightedMessageId} // Re-render when highlight changes
+      extraData={`${highlightedMessageId}-${profileCacheVersion}`} // Re-render on highlight or cosmetics cache warm
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#8B5CF6" />
       }

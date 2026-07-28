@@ -15,8 +15,10 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import config from '../../Helper/Environment';
 import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 import { useTranslation } from 'react-i18next';
-import database, { ref, get, update } from '@react-native-firebase/database';
+import database, { ref, update } from '@react-native-firebase/database';
 import { showSuccessMessage, showErrorMessage } from '../../Helper/MessageHelper';
+import FramedAvatar from './FramedAvatar';
+import { getCachedProfile, warmProfileCache } from '../../Helper/profileCache';
 
 // ✅ Constants for pagination (moved outside component to avoid recreation)
 const INITIAL_LOAD = 15; // ✅ Initial chats to display
@@ -30,9 +32,9 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
   const [localChats, setLocalChats] = useState([]);
   const [displayedChatsCount, setDisplayedChatsCount] = useState(INITIAL_LOAD); // ✅ Start with 15 chats
 
-  // ✅ OPTIMIZED: Use get() for initial load + child listeners for updates
-  // This prevents re-downloading entire chat_meta_data on every change
-  // Only downloads changed chats instead of all chats
+  // Child listeners only — no separate initial read. child_added replays the
+  // existing children on attach, so the list arrives without a second full
+  // download of chat_meta_data.
   useFocusEffect(
     useCallback(() => {
       if (!user?.id || !appdatabase) {
@@ -46,63 +48,22 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
       const chatsMap = new Map(); // Track chats locally
       const banned = Array.isArray(bannedUsers) ? bannedUsers : [];
 
-      // ✅ OPTIMIZED: Initial load with get() (one-time read)
-      const loadInitialChats = async () => {
-        try {
-          const snapshot = await get(userChatsRef);
-          if (!snapshot.exists()) {
-            setLocalChats([]);
-            setLocalLoading(false);
-            return;
-          }
-
-          const fetchedData = snapshot.val();
-          if (!fetchedData || typeof fetchedData !== 'object') {
-            setLocalChats([]);
-            setLocalLoading(false);
-            return;
-          }
-
-          Object.entries(fetchedData).forEach(([chatPartnerId, chatData]) => {
-            if (!chatData || typeof chatData !== 'object') return;
-            
-            const isBlocked = banned.includes(chatPartnerId);
-            const rawUnread = chatData?.unreadCount || 0;
-
-            if (isBlocked && rawUnread > 0) {
-              const blockedChatRef = ref(appdatabase, `chat_meta_data/${user.id}/${chatPartnerId}`);
-              update(blockedChatRef, { unreadCount: 0 }).catch((error) => {
-                console.error("Error resetting unread count:", error);
-              });
-            }
-
-            chatsMap.set(chatPartnerId, {
-              chatId: chatData.chatId,
-              otherUserId: chatPartnerId,
-              lastMessage: chatData.lastMessage || 'No messages yet',
-              lastMessageTimestamp: chatData.timestamp || 0,
-              unreadCount: isBlocked ? 0 : rawUnread,
-              otherUserAvatar: chatData.receiverAvatar || 'https://example.com/default-avatar.jpg',
-              otherUserName: chatData.receiverName || 'Anonymous',
-            });
-          });
-
-          updateChatsList();
-          setLocalLoading(false);
-        } catch (error) {
-          console.error("❌ Error loading initial chats:", error);
-          setLocalLoading(false);
-        }
-      };
-
       // ✅ Helper function to update chats list from map
+      let firstBatchApplied = false;
       const updateChatsList = () => {
         const updatedChats = Array.from(chatsMap.values())
           .sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp);
-        
+
         setLocalChats(updatedChats);
-        setDisplayedChatsCount(INITIAL_LOAD);
-        
+        // Only snap back to the first page on the initial batch. This used to
+        // run on EVERY child event, so an incoming message yanked a user who
+        // had scrolled back to 15 rows — and re-fired the profile-warm effect.
+        if (!firstBatchApplied) {
+          firstBatchApplied = true;
+          setDisplayedChatsCount(INITIAL_LOAD);
+        }
+        setLocalLoading(false);
+
         if (setChats && typeof setChats === 'function') {
           setChats(updatedChats);
         }
@@ -128,11 +89,11 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
         chatsMap.set(chatPartnerId, {
           chatId: chatData.chatId,
           otherUserId: chatPartnerId,
-          lastMessage: chatData.lastMessage || 'No messages yet',
+          lastMessage: chatData.lastMessage || t('chat.no_messages_yet'),
           lastMessageTimestamp: chatData.timestamp || 0,
           unreadCount: isBlocked ? 0 : rawUnread,
           otherUserAvatar: chatData.receiverAvatar || 'https://example.com/default-avatar.jpg',
-          otherUserName: chatData.receiverName || 'Anonymous',
+          otherUserName: chatData.receiverName || t('private_chat.anonymous'),
         });
 
         updateChatsList();
@@ -144,8 +105,17 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
         updateChatsList();
       };
 
-      // Load initial data
-      loadInitialChats();
+      // NOTE: no separate initial get() here.
+      // RTDB `child_added` replays every existing child at attach time, so it
+      // already delivers the full initial list. The previous
+      // `loadInitialChats()` + attach pair downloaded the entire
+      // chat_meta_data node TWICE on every focus. `handleChildChange` performs
+      // the same per-chat mapping and blocked-chat reset the initial pass did,
+      // and clears the spinner via updateChatsList.
+      //
+      // An empty inbox never fires child_added, so clear the spinner on a
+      // short fallback rather than leaving it spinning forever.
+      const emptyInboxTimer = setTimeout(() => setLocalLoading(false), 2500);
 
       // Listen to individual chat changes (only downloads changed chats, not all)
       userChatsRef.on('child_added', handleChildChange);
@@ -154,6 +124,7 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
 
       // ✅ Cleanup listeners when screen loses focus
       return () => {
+        clearTimeout(emptyInboxTimer);
         userChatsRef.off('child_added', handleChildChange);
         userChatsRef.off('child_changed', handleChildChange);
         userChatsRef.off('child_removed', handleChildRemoved);
@@ -176,6 +147,21 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
   }, [allChats, bannedUsers]);
 
   // ✅ OPTIMIZED: Only display paginated chats (15 initially, then 10 more on scroll)
+  // Warm cosmetics for the chat partners in view so their frames render.
+  const [profileCacheVersion, setProfileCacheVersion] = useState(0);
+  useEffect(() => {
+    if (!appdatabase) return;
+    const ids = [...new Set(
+      filteredChats.slice(0, displayedChatsCount).map(c => c?.otherUserId).filter(Boolean)
+    )].filter(id => !getCachedProfile(id));
+    if (ids.length === 0) return;
+    let cancelled = false;
+    warmProfileCache(appdatabase, ids)
+      .then(() => { if (!cancelled) setProfileCacheVersion(v => v + 1); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [filteredChats, displayedChatsCount, appdatabase]);
+
   const displayedChats = useMemo(() => {
     return filteredChats.slice(0, displayedChatsCount);
   }, [filteredChats, displayedChatsCount]);
@@ -262,7 +248,7 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
             showSuccessMessage(t("home.alert.success"), t("chat.chat_success_message"));
           } catch (error) {
             console.error('❌ Error deleting chat:', error);
-            Alert.alert('Error', 'Failed to delete chat. Please try again.');
+            Alert.alert(t('home.alert.error'), t('inbox.delete_failed'));
           }
         },
       },
@@ -310,7 +296,7 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
         navigation.navigate('PrivateChat', {
           selectedUser: {
             senderId: otherUserId,
-            sender: otherUserName || 'Anonymous',
+            sender: otherUserName || t('private_chat.anonymous'),
             avatar: otherUserAvatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
           },
         });
@@ -318,7 +304,7 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
   
     } catch (error) {
       console.error("Error opening chat:", error);
-      Alert.alert('Error', 'Failed to open chat. Please try again.');
+      Alert.alert(t('home.alert.error'), t('inbox.open_failed'));
     }
   }, [user?.id, setChats, navigation]);
   
@@ -335,10 +321,10 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
 
     const chatId = item.chatId;
     const otherUserId = item.otherUserId;
-    const otherUserName = item.otherUserName || 'Anonymous';
+    const otherUserName = item.otherUserName || t('private_chat.anonymous');
     const otherUserAvatar = item.otherUserAvatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
     const userAvatar = user?.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
-    const lastMessage = item.lastMessage || 'No messages yet';
+    const lastMessage = item.lastMessage || t('chat.no_messages_yet');
     const unreadCount = item.unreadCount || 0;
     const isOnline = item.isOnline || false;
     const isBanned = item.isBanned || false;
@@ -349,17 +335,17 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
           style={styles.chatItem}
           onPress={() => handleOpenChat(chatId, otherUserId, otherUserName, otherUserAvatar)}
         >
-          <Image 
-            source={{ 
-              uri: otherUserId !== user?.id ? otherUserAvatar : userAvatar 
-            }} 
-            style={styles.avatar} 
+          <FramedAvatar
+            avatarUri={(otherUserId !== user?.id ? otherUserAvatar : userAvatar) || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png'}
+            frame={getCachedProfile(otherUserId)?.profileFrame || null}
+            isDarkMode={isDarkMode}
+            avatarSize={50}
           />
           <View style={styles.textContainer}>
             <Text style={styles.userName}>
               {otherUserName}
               {isOnline && !isBanned && (
-                <Text style={{ color: config.colors.hasBlockGreen }}> - Online</Text>
+                <Text style={{ color: config.colors.hasBlockGreen }}> - {t('inbox.online')}</Text>
               )}
             </Text>
             <Text style={styles.lastMessage} numberOfLines={1}>
@@ -383,7 +369,7 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
               style={{ paddingLeft: 10 }}
             />
           </MenuTrigger>
-          <MenuOptions>
+          <MenuOptions customStyles={{}}>
             <MenuOption onSelect={() => handleDelete(chatId)}>
               <Text style={{ color: 'red', fontSize: 16, padding: 10 }}> {t("chat.delete")}</Text>
             </MenuOption>
@@ -391,7 +377,8 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
         </Menu>
       </View>
     );
-  }, [styles, user, handleOpenChat, handleDelete, t]);
+    // isDarkMode: FramedAvatar needs the theme
+  }, [styles, user, handleOpenChat, handleDelete, t, isDarkMode]);
 
   return (
     <View style={styles.container}>
@@ -416,7 +403,7 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
               <View style={styles.loadMoreContainer}>
                 <ActivityIndicator size="small" color="#1E88E5" />
                 <Text style={styles.loadMoreText}>
-                  Loading more chats... ({displayedChatsCount} of {filteredChats.length})
+                  {t('inbox.loading_more', { current: displayedChatsCount, total: filteredChats.length })}
                 </Text>
               </View>
             ) : null
@@ -432,7 +419,7 @@ const getStyles = (isDarkMode) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDarkMode ? '#121212' : '#f2f2f7',
+      backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f2f2f7',
     },
     itemContainer: {
       flex: 1,

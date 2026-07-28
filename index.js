@@ -1,8 +1,9 @@
 // 🏆 Optimize performance by enabling screens before any imports
-import { enableScreens } from 'react-native-screens';
+import { enableScreens, enableFreeze } from 'react-native-screens';
 enableScreens(); 
+enableFreeze(true);
 
-import React, { useEffect, lazy, Suspense } from 'react';
+import React, { lazy, Suspense } from 'react';
 import { AppRegistry, Text } from 'react-native';
 import AppWrapper from './App';
 import { name as appName } from './app.json';
@@ -13,12 +14,16 @@ import { LanguageProvider } from './Code/Translation/LanguageProvider';
 import messaging from '@react-native-firebase/messaging';
 import FlashMessage from 'react-native-flash-message';
 
-// 🚀 Lazy load Notification Handler for better startup performance
-const NotificationHandler = lazy(() => import('./Code/Firebase/FrontendNotificationHandling'));
+// Removed deleted dynamic imports
 
 // ✅ Background Notification Handler
 messaging().setBackgroundMessageHandler(async remoteMessage => {
 });
+
+// ✅ Foreground display for value-change alerts — background/killed pushes
+// auto-display, but foreground ones are dropped unless shown manually.
+import { initValueAlertForegroundHandler } from './Code/Helper/valueAlerts';
+initValueAlertForegroundHandler();
 class ErrorBoundary extends React.Component {
   state = { hasError: false };
   static getDerivedStateFromError(error) {
@@ -43,7 +48,6 @@ const App = React.memo(() => (
         </ErrorBoundary>
         <FlashMessage position="top" />
         <Suspense fallback={null}>
-          <NotificationHandler />
         </Suspense>
       </GlobalStateProvider>
     </LocalStateProvider>                

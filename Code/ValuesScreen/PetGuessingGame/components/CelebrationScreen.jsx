@@ -10,10 +10,12 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../../../GlobelStats';
+import config from '../../../Helper/Environment';
 
 const CelebrationScreen = ({ winner, onPlayAgain, onClose }) => {
   const { theme } = useGlobalState();
   const isDarkMode = theme === 'dark';
+  const { t } = require('react-i18next').useTranslation();
 
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const confettiAnim = useRef(new Animated.Value(0)).current;
@@ -51,7 +53,7 @@ const CelebrationScreen = ({ winner, onPlayAgain, onClose }) => {
           styles.container,
           {
             transform: [{ scale: scaleAnim }],
-            backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
+            backgroundColor: isDarkMode ? config.colors.surfaceDark : '#ffffff',
           },
         ]}
       >
@@ -73,14 +75,14 @@ const CelebrationScreen = ({ winner, onPlayAgain, onClose }) => {
 
         {/* Winner Card */}
         <View style={styles.winnerCard}>
-          <Text style={styles.congratsText}>🎉 Congratulations! 🎉</Text>
+          <Text style={styles.congratsText}>{t('game.congratulations')}</Text>
           
           <View style={styles.winnerInfo}>
             <Text style={[styles.winnerName, { color: isDarkMode ? '#fff' : '#000' }]}>
               {winner.playerName}
             </Text>
             <Text style={[styles.winnerLabel, { color: isDarkMode ? '#9ca3af' : '#6b7280' }]}>
-              is the winner!
+              {t('game.is_winner')}
             </Text>
           </View>
 
@@ -99,10 +101,10 @@ const CelebrationScreen = ({ winner, onPlayAgain, onClose }) => {
           {/* Pet Trait Reveal */}
           <View style={styles.traitContainer}>
             <Text style={[styles.traitLabel, { color: isDarkMode ? '#9ca3af' : '#6b7280' }]}>
-              Pet Trait:
+              {t('game.pet_trait')}
             </Text>
             <Text style={[styles.traitText, { color: '#8B5CF6' }]}>
-              {getRandomTrait()}
+              {getRandomTrait(t)}
             </Text>
           </View>
         </View>
@@ -118,12 +120,12 @@ const CelebrationScreen = ({ winner, onPlayAgain, onClose }) => {
         >
           <TouchableOpacity style={styles.playAgainButton} onPress={onPlayAgain}>
             <Icon name="refresh" size={20} color="#fff" />
-            <Text style={styles.playAgainText}>Play Again</Text>
+            <Text style={styles.playAgainText}>{t('game.play_again')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
             <Text style={[styles.closeText, { color: isDarkMode ? '#9ca3af' : '#6b7280' }]}>
-              Close
+              {t('game.close')}
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -132,14 +134,14 @@ const CelebrationScreen = ({ winner, onPlayAgain, onClose }) => {
   );
 };
 
-const getRandomTrait = () => {
+const getRandomTrait = (t) => {
   const traits = [
-    '✨ Lucky - Glows on the wheel!',
-    '😊 Shy - Hides until reveal!',
-    '🎲 Chaos - Adds surprise events!',
-    '🌟 Radiant - Always stands out!',
-    '🎯 Focused - Never misses!',
-    '💎 Rare - Special appearance!',
+    t('game.trait_lucky'),
+    t('game.trait_shy'),
+    t('game.trait_chaos'),
+    t('game.trait_radiant'),
+    t('game.trait_focused'),
+    t('game.trait_rare'),
   ];
   return traits[Math.floor(Math.random() * traits.length)];
 };

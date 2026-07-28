@@ -6,7 +6,7 @@ export const getStyles = (isDarkMode) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDarkMode ? '#121212' : '#f2f2f7',
+      backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f2f2f7',
     },
     loader: {
       flex: 1,
@@ -16,25 +16,35 @@ export const getStyles = (isDarkMode) =>
     chatList: {
       flexGrow: 1,
       justifyContent: 'flex-end',
-      // paddingHorizontal: 10,
+      paddingHorizontal: 6,
       paddingVertical: 5,
     },
     mymessageBubble: {
-      // width: '100%',
-      paddingHorizontal: 10,
-      borderRadius: 15,
       flexDirection: "row-reverse",
-      marginBottom: 10,
-      alignItems: 'flex-end'
+      marginBottom: 12,
+      alignItems: 'flex-end',
     },
     othermessageBubble: {
-      // width: '100%',
-      // paddingHorizontal: 10,
-      borderRadius: 15,
       flexDirection: 'row',
-      marginBottom: 5,
+      marginBottom: 12,
       alignItems: 'flex-start',
-
+    },
+    myBubbleContent: {
+      backgroundColor: isDarkMode ? '#0B5E3F' : '#DCF8C6',
+      borderRadius: 18,
+      borderTopRightRadius: 4,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    otherBubbleContent: {
+      backgroundColor: isDarkMode ? config.colors.surfaceDark : '#E5E5EA',
+      borderRadius: 18,
+      borderTopLeftRadius: 4,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    bubbleInner: {
+      flexDirection: 'column',
     },
     myMessage: {
       alignSelf: 'flex-end',
@@ -43,12 +53,12 @@ export const getStyles = (isDarkMode) =>
       alignSelf: 'flex-start',
 
     },
+    // Avatar slot in a chat row. Must NOT constrain width/height or set a
+    // borderRadius: FramedAvatar paints an SVG larger than its avatarSize
+    // (border + gap + room for crowns/wings) and needs overflow visible. The
+    // old fixed 34x32 + borderRadius:16 box clipped every frame's decorations.
     senderName: {
-      width: 34,
-      height: 32,
-      borderRadius: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
+      marginBottom: 2,
       marginHorizontal: 5,
     },
     senderNameText: {
@@ -57,10 +67,8 @@ export const getStyles = (isDarkMode) =>
       color: 'grey',
     },
     messageTextBox: {
-      // flex: 1,
-      maxWidth:'75%',
-
-      // flexDirection:
+      maxWidth: '82%',
+      marginHorizontal: 8,
     },
     messageTextBoxAdmin: {
       flexDirection: 'column',
@@ -68,48 +76,33 @@ export const getStyles = (isDarkMode) =>
 
     },
     myMessageText: {
-      fontSize: 12,
+      fontSize: 13,
       color: isDarkMode ? 'white' : 'black',
-      backgroundColor: isDarkMode ? '#1E88E5' : 'lightgreen',
-      paddingVertical: 5,
-      paddingHorizontal: 10,
-      borderRadius: 10,
       fontFamily: 'Lato-Regular',
-      lineHeight:14,
-
-
+      lineHeight: 18,
     },
     otherMessageText: {
-      fontSize: 12,
+      fontSize: 13,
       color: isDarkMode ? 'white' : 'black',
-      backgroundColor: isDarkMode ? '#34495E' : 'white',
-      paddingHorizontal: 10,
-      // lineHeight: 20,
-      borderRadius: 10,
-      paddingBottom: 5,
       fontFamily: 'Lato-Regular',
-      paddingRight:20,
-      lineHeight:14,
-   
-
-
+      lineHeight: 18,
     },
     myMessageTextOnly: {
-      fontSize: 12,
-      color: isDarkMode ? 'white' : 'black',
+      fontSize: 14,
+      color: isDarkMode ? '#FFFFFF' : '#000000',
       fontFamily: 'Lato-Regular',
-      lineHeight: 14,
+      lineHeight: 18,
       textAlign: 'left',
     },
     otherMessageTextOnly: {
-      fontSize: 12,
-      color: isDarkMode ? 'white' : 'black',
+      fontSize: 14,
+      color: isDarkMode ? '#FFFFFF' : '#000000',
       fontFamily: 'Lato-Regular',
-      lineHeight: 14,
+      lineHeight: 18,
       textAlign: 'left',
     },
     timestamp: {
-      fontSize: 5,
+      fontSize: 10,
       color: isDarkMode ? 'lightgrey' : 'grey',
       textAlign: 'right',
       paddingHorizontal: 5
@@ -245,7 +238,7 @@ export const getStyles = (isDarkMode) =>
       fontSize: 16,
     },
     replyContainer: {
-      backgroundColor: isDarkMode ? '#333' : '#f0f0f0',
+      backgroundColor: isDarkMode ? config.colors.surfaceDark : '#f0f0f0',
       borderLeftWidth: 3,
       borderLeftColor: isDarkMode ? '#1E88E5' : '#007BFF',
       padding: 5,
@@ -325,25 +318,34 @@ export const getStyles = (isDarkMode) =>
 
     },
     menuoptions: {
-      // flexDirection:'row',
-      // justifyContent:'space-evenly',
-      maxWidth: 150,
-      borderRadius: 10,
-      marginLeft:50
-
+      minWidth: 150,
+      maxWidth: 200,
+      borderRadius: 12,
+      backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#FFFFFF',
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 10,
+      elevation: 6,
     },
     menuOption: {
-      paddingHorizontal: 10,
-      paddingVertical: 15,
-      borderBottomWidth: 1,
-      borderColor:'lightgrey',
-      backgroundColor:'white',
-      borderRadius: 10,
-
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth:StyleSheet.hairlineWidth,
+      borderBottomColor: isDarkMode ? '#334155' : '#E5E7EB',
+      backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#FFFFFF',
+      justifyContent: 'center',
     },
     menuOptionText: {
-      fontSize: 16,
-      color: '#000',
+      fontSize: 15,
+      fontFamily: 'Lato-Regular',
+      color: isDarkMode ? '#F8FAFC' : '#111827',
+    },
+    menuOptionTextDanger: {
+      fontSize: 15,
+      fontFamily: 'Lato-Regular',
+      color: isDarkMode ? '#F87171' : '#EF4444',
     },
     reportIcon:{
       position:'absolute',
@@ -496,15 +498,22 @@ nameRow: {
 
 userNameText: {
   color: isDarkMode ? 'lightgrey' : 'grey',
-  fontSize: 9,
+  fontSize: 10,
   lineHeight: 14,
-  paddingTop:2
+  paddingTop: 0,
+  marginBottom: 2,
+},
+userNameTextMy: {
+  color: isDarkMode ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)',
+  fontSize: 10,
+  lineHeight: 14,
+  paddingTop: 0,
+  marginBottom: 2,
 },
 userNameAdmin: {
-  color: isDarkMode ? 'lightgrey' : 'grey',
+  color: 'white',
   fontSize: 9,
   lineHeight: 11,
-  // paddingTop:2
 },
 
 icon: {

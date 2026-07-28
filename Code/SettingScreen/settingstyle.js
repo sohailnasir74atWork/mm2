@@ -5,11 +5,11 @@ export const getStyles = (isDarkMode) =>
     StyleSheet.create({
       container: {
         flex: 1,
-        backgroundColor: isDarkMode ? '#121212' : '#f2f2f7',
+        backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f4f5f7',
         padding: 8,
       },
       cardContainer: {
-        backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
+        backgroundColor: isDarkMode ? config.colors.surfaceDark : '#ffffff',
         borderRadius: 10,
         // paddingVertical: 1,
         paddingHorizontal:5,
@@ -71,14 +71,14 @@ export const getStyles = (isDarkMode) =>
         paddingHorizontal: 15,
         paddingVertical:8,
         borderBottomWidth: 1,
-        borderBottomColor: isDarkMode ? '#333333' : '#cccccc',
+        borderBottomColor: isDarkMode ? '#2a323d' : '#cccccc',
       },
       optionLast: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 15,
         paddingVertical:8,
-        borderBottomColor: isDarkMode ? '#333333' : '#cccccc',
+        borderBottomColor: isDarkMode ? '#2a323d' : '#cccccc',
       },
       optionText: {
         fontSize: 14,
@@ -92,7 +92,7 @@ export const getStyles = (isDarkMode) =>
         backgroundColor: 'rgba(0,0,0,0.5)',
       },
       drawer: {
-        backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
+        backgroundColor: isDarkMode ? config.colors.surfaceDark : '#ffffff',
         padding: 16,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
@@ -108,7 +108,7 @@ export const getStyles = (isDarkMode) =>
       },
      
       input: {
-        backgroundColor: isDarkMode ? '#121212' : '#f2f2f7',
+        backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f4f5f7',
         padding: 10,
         borderRadius: 5,
         marginBottom: 20,
@@ -343,7 +343,7 @@ export const getStyles = (isDarkMode) =>
         width: 28,
         height: 28,
         borderRadius: 14,
-        backgroundColor: isDarkMode ? '#374151' : '#E5E7EB',
+        backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB',
         justifyContent: 'center',
         alignItems: 'center',
       },
@@ -387,7 +387,7 @@ export const getStyles = (isDarkMode) =>
         maxHeight: 200,
       },
       reviewItem: {
-        backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5',
+        backgroundColor: isDarkMode ? config.colors.surfaceDark : '#f5f5f5',
         borderRadius: 8,
         padding: 12,
         marginBottom: 10,
@@ -424,7 +424,7 @@ export const getStyles = (isDarkMode) =>
       },
       reviewText: {
         fontSize: 13,
-        color: isDarkMode ? '#E5E7EB' : '#374151',
+        color: isDarkMode ? '#E5E7EB' : config.colors.surfaceElevatedDark,
         marginBottom: 6,
         lineHeight: 18,
       },

@@ -41,6 +41,7 @@ import { Image as CompressorImage } from 'react-native-compressor';
 import RNFS from 'react-native-fs';
 
 
+
 import {
   collection,
   doc,
@@ -64,6 +65,8 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 dayjs.extend(relativeTime);
 import PetModal from '../ChatScreen/PrivateChat/PetsModel';
 import { launchImageLibrary } from 'react-native-image-picker';
+import FramedAvatar from '../ChatScreen/GroupChat/FramedAvatar';
+import { getMyCosmetics, syncMyCosmetics } from '../Helper/cosmeticsCache';
 // Bunny avatar upload (same zone/keys as your post uploader)
 const BUNNY_STORAGE_HOST = 'storage.bunnycdn.com';
 const BUNNY_STORAGE_ZONE = 'post-gag';
@@ -94,6 +97,12 @@ const formatTradeValue = (value) => {
     return value.toLocaleString();
   }
 };
+
+// How long a user must wait between display-name changes.
+// SINGLE SOURCE OF TRUTH — this was previously declared twice (10 in the
+// component, 30 in handleSaveChanges), so between days 10 and 30 the Save
+// button looked enabled but the handler silently rejected the tap.
+const PROFILE_EDIT_COOLDOWN_DAYS = 10;
 
 // Helper function to group items
 const groupTradeItems = (items) => {
@@ -162,7 +171,6 @@ const EditProfileDrawerContent = ({
   const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
-  const PROFILE_EDIT_COOLDOWN_DAYS = 10;
 
   // ✅ Calculate cooldown status - only checks existing cooldown from last save, not unsaved changes
   const cooldownStatus = useMemo(() => {
@@ -190,15 +198,14 @@ const EditProfileDrawerContent = ({
     };
   }, [user?.lastProfileEditAt]);
 
-  // ✅ Check if user is trying to save name/avatar changes (for save button state)
-  const isTryingToSaveNameOrAvatar = useMemo(() => {
-    const displayNameChanged = newDisplayName.trim() !== (user?.displayName || '').trim();
-    const avatarChanged = (selectedImage || '').trim() !== (user?.avatar || '').trim();
-    return displayNameChanged || avatarChanged;
-  }, [newDisplayName, selectedImage, user?.displayName, user?.avatar]);
+  // Only a NAME change is gated — must match handleSaveChanges exactly, or the
+  // button says "allowed" while the handler says "blocked".
+  const isTryingToChangeName = useMemo(
+    () => newDisplayName.trim() !== (user?.displayName || '').trim(),
+    [newDisplayName, user?.displayName]
+  );
 
-  // ✅ Determine if save button should be disabled (only if in cooldown AND trying to save name/avatar)
-  const shouldDisableSave = cooldownStatus.inCooldown && isTryingToSaveNameOrAvatar;
+  const shouldDisableSave = cooldownStatus.inCooldown && isTryingToChangeName;
 
   useEffect(() => {
     Animated.parallel([
@@ -244,7 +251,7 @@ const EditProfileDrawerContent = ({
       {/* Display Name - Minimal Design */}
       <View style={{ marginBottom: 10 }}>
         <Text style={{ fontSize: 11, fontFamily: 'Lato-Bold', color: isDarkMode ? config.colors.textTertiaryDark : config.colors.textTertiaryLight, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          Display Name
+          {t('settings.display_name')}
         </Text>
         <TextInput
           style={{
@@ -265,7 +272,7 @@ const EditProfileDrawerContent = ({
       {/* Profile Picture - Clean Section */}
       <View style={{ marginBottom: 10 }}>
         <Text style={{ fontSize: 11, fontFamily: 'Lato-Bold', color: isDarkMode ? config.colors.textTertiaryDark : config.colors.textTertiaryLight, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          Profile Picture
+          {t('settings.profile_picture')}
         </Text>
         
         <TouchableOpacity
@@ -293,7 +300,7 @@ const EditProfileDrawerContent = ({
                 style={{ marginRight: 6 }}
               />
               <Text style={{ color: config.colors.primary, fontSize: 13, fontFamily: 'Lato-Bold' }}>
-                Upload Photo
+                {t('settings.upload_photo')}
               </Text>
             </>
           )}
@@ -315,7 +322,7 @@ const EditProfileDrawerContent = ({
               color: isDarkMode ? config.colors.textDark : config.colors.textLight,
               padding: 0,
             }}
-            placeholder="Search items..."
+            placeholder={t('settings.search_items')}
             placeholderTextColor={isDarkMode ? config.colors.placeholderDark : config.colors.placeholderLight}
             value={avatarSearch}
             onChangeText={setAvatarSearch}
@@ -354,7 +361,7 @@ const EditProfileDrawerContent = ({
       <View style={{ marginBottom: 12 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <Text style={{ fontSize: 11, fontFamily: 'Lato-Bold', color: isDarkMode ? config.colors.textTertiaryDark : config.colors.textTertiaryLight, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Bio
+            {t('settings.bio')}
           </Text>
           <Text style={{ 
             fontSize: 10, 
@@ -375,7 +382,7 @@ const EditProfileDrawerContent = ({
             color: isDarkMode ? config.colors.textDark : config.colors.textLight,
             borderWidth: 0,
           }}
-          placeholder="Tell us about yourself..."
+          placeholder={t('settings.tell_us_about_yourself')}
           placeholderTextColor={isDarkMode ? config.colors.placeholderDark : config.colors.placeholderLight}
           value={bio}
           onChangeText={(text) => {
@@ -395,7 +402,7 @@ const EditProfileDrawerContent = ({
       {shouldDisableSave && (
         <View
           style={{
-            backgroundColor: isDarkMode ? '#1a1a1a' : '#fef3c7',
+            backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fef3c7',
             padding: 12,
             borderRadius: 10,
             marginBottom: 12,
@@ -410,7 +417,7 @@ const EditProfileDrawerContent = ({
               fontFamily: 'Lato-Bold', 
               color: isDarkMode ? '#FCD34D' : '#92400E' 
             }}>
-              Edit Cooldown Active
+              {t('settings.edit_cooldown_active')}
             </Text>
           </View>
           <Text style={{ 
@@ -419,9 +426,7 @@ const EditProfileDrawerContent = ({
             color: isDarkMode ? '#FCD34D' : '#92400E',
             lineHeight: 16,
           }}>
-            You can only edit your display name and profile picture once every {PROFILE_EDIT_COOLDOWN_DAYS} days. 
-            Please try again in {cooldownStatus.daysRemaining} day{cooldownStatus.daysRemaining === 1 ? '' : 's'}. 
-            (Bio can be edited anytime)
+            {t('settings.edit_cooldown_message', { days: PROFILE_EDIT_COOLDOWN_DAYS, daysRemaining: cooldownStatus.daysRemaining })}
           </Text>
         </View>
       )}
@@ -430,7 +435,7 @@ const EditProfileDrawerContent = ({
       <TouchableOpacity
         style={{
           backgroundColor: shouldDisableSave
-            ? (isDarkMode ? '#374151' : '#9ca3af')
+            ? (isDarkMode ? config.colors.surfaceElevatedDark : '#9ca3af')
             : config.colors.primary,
           paddingVertical: 13,
           borderRadius: 10,
@@ -444,7 +449,7 @@ const EditProfileDrawerContent = ({
       >
         <Text style={{ color: '#fff', fontSize: 15, fontFamily: 'Lato-Bold' }}>
           {shouldDisableSave
-            ? `Edit Available in ${cooldownStatus.daysRemaining} Day${cooldownStatus.daysRemaining === 1 ? '' : 's'}`
+            ? t('settings.edit_available_in', { daysRemaining: cooldownStatus.daysRemaining })
             : t('settings.save_changes')}
         </Text>
       </TouchableOpacity>
@@ -511,57 +516,11 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
 
 
+
   const { t } = useTranslation();
   const BASE_ADOPTME_URL = 'https://elvebredd.com';
 
 
-  // ✅ Fixed: 't' → 'tab', added Pressable + haptic for smooth switching
-  const SettingsTabs = () => (
-    <View
-      style={{
-        flexDirection: "row",
-        marginTop: 4,
-        marginBottom: 4,
-        backgroundColor: isDarkMode ? "#1b1b1b" : "#f2f2f2",
-        borderRadius: 6,
-        padding: 4,
-      }}
-    >
-      {[
-        { key: "profile", label: "Profile Settings" },
-        { key: "app", label: "App Settings" },
-      ].map((tab) => {
-        const isActive = activeTab === tab.key;
-        return (
-          <Pressable
-            key={tab.key}
-            onPress={() => {
-              triggerHapticFeedback('impactLight');
-              setActiveTab(tab.key);
-            }}
-            android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              borderRadius: 10,
-              alignItems: "center",
-              backgroundColor: isActive ? config.colors.primary : "transparent",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 12,
-                fontFamily: "Lato-Bold",
-                color: isActive ? "#fff" : (isDarkMode ? "#ddd" : "#333"),
-              }}
-            >
-              {tab.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
 
 
   const parsedValuesData = useMemo(() => {
@@ -708,7 +667,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
     if (!localState.isPro) {
       Alert.alert(
         "Pro Feature",
-        "Buy a plan to unlock this feature",
+        t('settings.buy_plan_unlock'),
         [
           { text: t("home.cancel"), style: 'cancel' },
           {
@@ -751,7 +710,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
     if (!localState.isPro) {
       Alert.alert(
         "Pro Feature",
-        "Buy a plan to unlock this feature",
+        t('settings.buy_plan_unlock'),
         [
           { text: t("home.cancel"), style: 'cancel' },
           {
@@ -768,6 +727,11 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
     // ✅ Just update local state - GlobelStats.js will handle RTDB update (presence/{uid})
     // ✅ Cloud Function will sync RTDB changes to Firestore online_users_node/list
     updateLocalState('showOnlineStatus', value);
+  };
+
+  // ✅ Handle read receipts toggle
+  const handleToggleReadReceipts = (value) => {
+    updateLocalState('showReadReceipts', value);
   };
 
   // ✅ Generate verification code for Roblox username
@@ -930,19 +894,24 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const languageOptions = [
     { code: "en", label: t("settings.languages.en"), flag: "🇺🇸" },
-    { code: "fil", label: t("settings.languages.fil"), flag: "🇵🇭" },
-    { code: "vi", label: t("settings.languages.vi"), flag: "🇻🇳" },
-    { code: "pt", label: t("settings.languages.pt"), flag: "🇵🇹" },
-    { code: "id", label: t("settings.languages.id"), flag: "🇮🇩" },
     { code: "es", label: t("settings.languages.es"), flag: "🇪🇸" },
     { code: "fr", label: t("settings.languages.fr"), flag: "🇫🇷" },
     { code: "de", label: t("settings.languages.de"), flag: "🇩🇪" },
-    { code: "ru", label: t("settings.languages.ru"), flag: "🇷🇺" },
     { code: "ar", label: t("settings.languages.ar"), flag: "🇸🇦" }
   ];
 
 
   const isDarkMode = theme === 'dark';
+
+  // Equipped cosmetics — MMKV seed so the frame paints on first render, then
+  // reconciled from the DB.
+  const [myCosmetics, setMyCosmetics] = useState(() => getMyCosmetics());
+  useEffect(() => {
+    setMyCosmetics(getMyCosmetics());
+    if (!user?.id || !appdatabase) return;
+    syncMyCosmetics(appdatabase, user.id).then(c => c && setMyCosmetics(c)).catch(() => {});
+  }, [user?.id, appdatabase]);
+
   const initializedUserIdRef = useRef(null); // ✅ Track which user ID we've initialized for
   
   // ✅ Initialize form values when drawer opens or user ID changes
@@ -955,7 +924,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
       if (initializedUserIdRef.current !== user.id) {
         initializedUserIdRef.current = user.id;
         setNewDisplayName(user?.displayName?.trim() || 'Anonymous');
-        setSelectedImage(user?.avatar?.trim() || 'https://bloxfruitscalc.com/wp-content/uploads/2025/placeholder.png');
+        setSelectedImage(user?.avatar?.trim() || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png');
         // ✅ Load Roblox username if exists
         setRobloxUsername(user?.robloxUsername || '');
         setRobloxUsernameVerified(user?.robloxUsernameVerified || false);
@@ -963,8 +932,8 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
     } else {
       // User logged out - reset everything
       initializedUserIdRef.current = null;
-      setNewDisplayName('Guest User');
-      setSelectedImage('https://bloxfruitscalc.com/wp-content/uploads/2025/placeholder.png');
+      setNewDisplayName(t('settings.guest_user'));
+      setSelectedImage('https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png');
       setRobloxUsername('');
       setRobloxUsernameVerified(false);
     }
@@ -993,7 +962,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
         // ✅ Load bio from Firestore reviews/{userId}
         // ✅ If bio doesn't exist, initialize it with default value in Firestore
-        if (reviewDocSnap.exists) { // ✅ Firestore: exists is a property, not a function
+        if (reviewDocSnap.exists()) { // ✅ Firestore modular API: exists() is a method
           const reviewData = reviewDocSnap.data();
           const loadedBio = (reviewData.bio && typeof reviewData.bio === 'string' && reviewData.bio.trim()) 
             ? reviewData.bio.trim() 
@@ -1025,7 +994,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
         }
 
         // ✅ FIRESTORE ONLY: Load rating summary from user_ratings_summary
-        if (summaryDocSnap.exists) {
+        if (summaryDocSnap.exists()) {
           const summaryData = summaryDocSnap.data();
           setRatingSummary({
             value: Number(summaryData.averageRating || 0),
@@ -1217,7 +1186,6 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const handleSaveChanges = async () => {
     triggerHapticFeedback('impactLight');
     const MAX_NAME_LENGTH = 15;
-    const PROFILE_EDIT_COOLDOWN_DAYS = 30;
 
     if (!user?.id) return;
 
@@ -1229,12 +1197,11 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
       return;
     }
 
-    // ✅ Check if displayName or avatar changed (30-day cooldown only applies to these)
+    // The cooldown guards the DISPLAY NAME only — changing your avatar or bio
+    // is free and must not start (or be blocked by) the name lock.
     const displayNameChanged = newDisplayName.trim() !== (user?.displayName || '').trim();
-    const avatarChanged = (selectedImage || '').trim() !== (user?.avatar || '').trim();
-    
-    // ✅ Only check cooldown if displayName or avatar is being changed (not bio)
-    if ((displayNameChanged || avatarChanged) && user?.lastProfileEditAt) {
+
+    if (displayNameChanged && user?.lastProfileEditAt) {
       const lastEditTimestamp = typeof user.lastProfileEditAt === 'number' 
         ? user.lastProfileEditAt 
         : Date.parse(user.lastProfileEditAt);
@@ -1246,8 +1213,12 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
         if (daysSinceLastEdit < PROFILE_EDIT_COOLDOWN_DAYS) {
           showErrorMessage(
-            'Edit Cooldown',
-            `You can only edit your display name and profile picture once every ${PROFILE_EDIT_COOLDOWN_DAYS} days. Please try again in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}.`
+            t('settings.edit_cooldown_title', { defaultValue: 'Edit Cooldown' }),
+            t('settings.edit_cooldown_message', {
+              days: PROFILE_EDIT_COOLDOWN_DAYS,
+              daysRemaining,
+              defaultValue: `You can change your name once every ${PROFILE_EDIT_COOLDOWN_DAYS} days. Try again in ${daysRemaining} day(s).`,
+            })
           );
           return;
         }
@@ -1319,7 +1290,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const displayName = user?.id
     ? newDisplayName?.trim() || user?.displayName || 'Anonymous'
-    : 'Guest User';
+    : t('settings.guest_user');
 
     // ✅ Render stars for rating
     const renderStars = (value) => {
@@ -1348,7 +1319,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
             marginRight: 6,
             borderRadius: 10,
             overflow: 'hidden',
-            backgroundColor: isDarkMode ? '#0f172a' : '#e5e7eb',
+            backgroundColor: isDarkMode ? config.colors.backgroundDark : '#e5e7eb',
           }}
         >
           <Image
@@ -1745,12 +1716,12 @@ const renderTradeItem = useCallback((trade) => {
     <View
       key={trade.id}
       style={{
-        backgroundColor: isDarkMode ? '#0f172a' : '#ffffff',
+        backgroundColor: isDarkMode ? config.colors.backgroundDark : '#ffffff',
         borderRadius: 12,
         padding: 12,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: isDarkMode ? '#1f2937' : '#e5e7eb',
+        borderColor: isDarkMode ? config.colors.surfaceDark : '#e5e7eb',
         opacity: deletingTradeId === trade.id ? 0.5 : 1,
       }}
     >
@@ -1855,7 +1826,7 @@ const renderTradeItem = useCallback((trade) => {
           style={{
             padding: 6,
             borderRadius: 6,
-            backgroundColor: isDarkMode ? '#1f2937' : '#f3f4f6',
+            backgroundColor: isDarkMode ? config.colors.surfaceDark : '#f3f4f6',
           }}
         >
           {deletingTradeId === trade.id ? (
@@ -1925,7 +1896,7 @@ const renderTradeItem = useCallback((trade) => {
               flexShrink: 0,
               flexGrow: 0,
             }}>
-              <Text style={{ color: 'white', fontWeight: '600', fontSize: 8, textAlign: 'center' }}>Give offer</Text>
+              <Text style={{ color: 'white', fontWeight: '600', fontSize: 8, textAlign: 'center' }}>{t('settings.give_offer')}</Text>
             </View>
           </View>
         )}
@@ -1992,7 +1963,7 @@ const renderTradeItem = useCallback((trade) => {
               flexShrink: 0,
               flexGrow: 0,
             }}>
-              <Text style={{ color: 'white', fontWeight: '600', fontSize: 8, textAlign: 'center' }}>Give offer</Text>
+              <Text style={{ color: 'white', fontWeight: '600', fontSize: 8, textAlign: 'center' }}>{t('settings.give_offer')}</Text>
             </View>
           </View>
         )}
@@ -2073,7 +2044,7 @@ const renderTradeItem = useCallback((trade) => {
           marginTop: 8,
           paddingTop: 8,
           borderTopWidth: 1,
-          borderTopColor: isDarkMode ? '#1f2937' : '#e5e7eb',
+          borderTopColor: isDarkMode ? config.colors.surfaceDark : '#e5e7eb',
         }}>
           {trade.description}
         </Text>
@@ -2246,7 +2217,7 @@ const loadMoreReceivedModalReviews = useCallback(async () => {
         
         // ✅ Get old rating before updating
         const existingReviewSnap = await getDoc(reviewRef);
-        const oldRating = existingReviewSnap.exists ? existingReviewSnap.data()?.rating : null;
+        const oldRating = existingReviewSnap.exists() ? existingReviewSnap.data()?.rating : null;
         const newRating = editReviewRating;
         
         // ✅ Check if rating changed - if so, update summary
@@ -2256,7 +2227,7 @@ const loadMoreReceivedModalReviews = useCallback(async () => {
           // ✅ Update user_ratings_summary when rating changes
           const summaryRef = doc(firestoreDB, 'user_ratings_summary', editingReview.toUserId);
           const summarySnap = await getDoc(summaryRef);
-          const summaryData = summarySnap.exists ? summarySnap.data() : null;
+          const summaryData = summarySnap.exists() ? summarySnap.data() : null;
           const oldAverage = summaryData?.averageRating || 0;
           const oldCount = summaryData?.count || 0;
           
@@ -2467,11 +2438,8 @@ const loadMoreReceivedModalReviews = useCallback(async () => {
 
 
 const handleSelect = (lang) => {
-  if(!localState.isPro){
-    setShowofferWall(true)
-  } else
- { setAppLanguage(lang); 
-  changeLanguage(lang)}
+  setAppLanguage(lang); 
+  changeLanguage(lang);
 }
 
 
@@ -2489,21 +2457,71 @@ const formatPlanName = (plan) => {
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
   return (
     <View style={styles.container}>
-        <SettingsTabs />
+        {/* Settings Tabs */}
+        <View
+          style={{
+            flexDirection: 'row',
+            marginTop: 4,
+            marginBottom: 4,
+            backgroundColor: isDarkMode ? config.colors.surfaceDark : '#ffffff',
+            borderRadius: 10,
+            padding: 4,
+          }}
+        >
+          {[
+            { key: 'profile', label: t('settings.profile_settings') },
+            { key: 'app', label: t('settings.app_settings') },
+          ].map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                activeOpacity={0.8}
+                onPress={() => {
+                  triggerHapticFeedback('impactLight');
+                  setActiveTab(tab.key);
+                }}
+                style={{
+                  flex: 1,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isActive ? '#6A5ACD' : 'transparent',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontFamily: 'Lato-Bold',
+                    color: isActive ? '#ffffff' : (isDarkMode ? '#dddddd' : '#333333'),
+                  }}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
       {/* User Profile Section */}
       {activeTab === "profile" ?   <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.cardContainer}>
         <View style={[styles.optionuserName, styles.option]}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Image
-              source={
-                typeof selectedImage === 'string' && selectedImage.trim()
-                  ? { uri: selectedImage }
-                  : { uri: 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }
-              }
-              style={styles.profileImage}
-            />
+            <View style={{ marginRight: 10 }}>
+              <FramedAvatar
+                avatarUri={
+                  typeof user?.avatar === 'string' && user.avatar.trim()
+                    ? user.avatar
+                    : 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png'
+                }
+                frame={myCosmetics?.profileFrame || null}
+                isDarkMode={isDarkMode}
+                avatarSize={60}
+                forceDetail
+              />
+            </View>
             <TouchableOpacity onPress={user?.id ? () => { } : () => { setOpenSignin(true) }} disabled={user?.id !== null}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
               <Text style={!user?.id ? styles.userNameLogout : styles.userName}>
@@ -2551,17 +2569,7 @@ const formatPlanName = (plan) => {
                 </Text>
               )}
               
-              {!user?.id && <Text style={styles.rewardLogout}>{t('settings.login_description')}</Text>}
-              {user?.id && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                  <Text style={styles.reward}>{t("settings.my_points")}: {user?.rewardPoints || 0}</Text>
-                  {/* {user?.robloxUsername && (
-                    <Text style={[styles.reward, { marginLeft: 8, fontSize: 11, opacity: 0.7 }]}>
-                      • Roblox: {user.robloxUsername}
-                    </Text>
-                  )} */}
-                </View>
-              )}
+
             </TouchableOpacity>
           </View>
           <TouchableOpacity onPress={handleProfileUpdate}>
@@ -2579,7 +2587,7 @@ const formatPlanName = (plan) => {
               marginBottom: 12,
               paddingVertical: 8,
               paddingHorizontal: 12,
-              backgroundColor: isDarkMode ? '#1b1b1b' : '#f2f2f2',
+              backgroundColor: isDarkMode ? config.colors.surfaceDark : '#f2f2f2',
               borderRadius: 8,
             }}
           >
@@ -2610,7 +2618,7 @@ const formatPlanName = (plan) => {
                   color: isDarkMode ? '#9ca3af' : '#6b7280',
                 }}
               >
-                Not rated yet
+                {t('settings.not_rated_yet')}
               </Text>
             )}
 
@@ -2626,7 +2634,7 @@ const formatPlanName = (plan) => {
                   marginLeft: 5,
                 }}
               >
-                Joined {createdAtText}
+                {t('settings.joined')} {createdAtText}
               </Text>
             )}
           </View>
@@ -2638,7 +2646,7 @@ const formatPlanName = (plan) => {
             style={{
               borderRadius: 12,
               padding: 12,
-              backgroundColor: isDarkMode ? '#0f172a' : '#f3f4f6',
+              backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f3f4f6',
               marginBottom: 12,
             }}
           >
@@ -2650,7 +2658,7 @@ const formatPlanName = (plan) => {
                 color: isDarkMode ? '#e5e7eb' : '#111827',
               }}
             >
-              Bio
+              {t('settings.bio')}
             </Text>
             <Text
               style={{
@@ -2673,7 +2681,7 @@ const formatPlanName = (plan) => {
                 onPress={() => handleToggleFlag(!localState.showFlag)}
               >
                 <Icon name="flag-outline" size={18} color={'white'} style={{backgroundColor:'#FF6B6B', padding:5, borderRadius:5}} />
-                <Text style={styles.optionText}>Country Flag</Text>
+                <Text style={styles.optionText}>{t('settings.country_flag')}</Text>
               </TouchableOpacity>
               <Switch
                 value={localState.showFlag ?? true}
@@ -2691,11 +2699,28 @@ const formatPlanName = (plan) => {
               onPress={() => handleToggleOnlineStatus(!localState.showOnlineStatus)}
             >
               <Icon name="radio-button-on-outline" size={18} color={'white'} style={{backgroundColor:'#4CAF50', padding:5, borderRadius:5}} />
-              <Text style={styles.optionText}>Online Status</Text>
+              <Text style={styles.optionText}>{t('settings.online_status')}</Text>
             </TouchableOpacity>
             <Switch
               value={localState.showOnlineStatus ?? true}
               onValueChange={handleToggleOnlineStatus}
+            />
+          </View>
+        </View>)}
+
+        {/* ✅ Read Receipts Toggle */}
+        {user?.id && (<View style={styles.option}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
+            <TouchableOpacity 
+              style={{ flexDirection: 'row', alignItems: 'center' }}
+              onPress={() => handleToggleReadReceipts(!(localState.showReadReceipts ?? true))}
+            >
+              <Icon name="checkmark-done-outline" size={18} color={'white'} style={{backgroundColor:'#3B82F6', padding:5, borderRadius:5}} />
+              <Text style={styles.optionText}>{t('settings.read_receipts')}</Text>
+            </TouchableOpacity>
+            <Switch
+              value={localState.showReadReceipts ?? true}
+              onValueChange={handleToggleReadReceipts}
             />
           </View>
         </View>)}
@@ -2717,7 +2742,7 @@ const formatPlanName = (plan) => {
                     marginRight: 8
                   }} 
                 />
-                <Text style={styles.optionText}>Roblox Username</Text>
+                <Text style={styles.optionText}>{t('settings.roblox_username')}</Text>
                 {robloxUsernameVerified && (
                   <View style={{ 
                     marginLeft: 8, 
@@ -2727,7 +2752,7 @@ const formatPlanName = (plan) => {
                     borderRadius: 4 
                   }}>
                     <Text style={{ color: '#fff', fontSize: 10, fontWeight: '600' }}>
-                      ✓ Verified
+                      ✓ {t('settings.verified')}
                     </Text>
                   </View>
                 )}
@@ -2744,7 +2769,7 @@ const formatPlanName = (plan) => {
                   style={{
                     flex: 1,
                     marginRight: 8,
-                    backgroundColor: isDarkMode ? '#1b1b1b' : '#f2f2f2',
+                    backgroundColor: isDarkMode ? config.colors.surfaceDark : '#f2f2f2',
                     color: isDarkMode ? '#fff' : '#000',
                     paddingVertical: 8,
                     paddingHorizontal: 12,
@@ -2797,84 +2822,24 @@ const formatPlanName = (plan) => {
                   marginTop: 4,
                   marginLeft: 0,
                 }}>
-                  ⚠️ Unverified - Click "Verify" to prove ownership
+                  ⚠️ {t('settings.unverified_warning')}
                 </Text>
               )}
             </View>
           </View>
         )}
-        
-        <View style={styles.petsSection}>
-  {/* Owned Items */}
-  <View style={[styles.petsColumn]}>
-    <View style={styles.petsHeaderRow}>
-      <Text style={styles.petsTitle}>
-       Owned Items
-      </Text>
-      {user?.id && (
-        <TouchableOpacity onPress={()=>handleManagePets('owned')}>
-          {user?.id && <Icon name="create" size={24} color={'#566D5D'} />}
-        </TouchableOpacity>
-      )}
-    </View>
 
-    {ownedPets.length === 0 ? (
-      <Text style={styles.petsEmptyText}>
-       {user?.id ? 'Select the items you own' : 'Login to select owned items'}
-      </Text>
-    ) : (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingRight: 6 }}
-      >
-        <View style={{ flexDirection: 'row' }}>
-        {ownedPets.map((pet, index) => renderPetBubble(pet, index))}
-      </View>
-      </ScrollView>
-    )}
-  </View>
 
-  {/* Wishlist */}
-  <View style={styles.petsColumn}>
-    <View style={styles.petsHeaderRow}>
-      <Text style={styles.petsTitle}>
-        Wishlist
-      </Text>
-      {user?.id && (
-        <TouchableOpacity onPress={()=>handleManagePets('wish')}>
-         {user?.id && <Icon name="create" size={24} color={'#566D5D'} />}
-        </TouchableOpacity>
-      )}
-    </View>
-
-    {wishlistPets.length === 0 ? (
-      <Text style={styles.petsEmptyText}>
-     {user?.id ? 'Add items you want' : 'Login & Add items you want'}
-      </Text>
-    ) : (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingRight: 6 }}
-      >
-        <View style={{ flexDirection: 'row' }}>
-          {wishlistPets.map((pet, index) => renderPetBubble(pet, index))}
-        </View>
-      </ScrollView>
-    )}
-  </View>
-</View>
 
         {/* My Trades Section - Below Reviews */}
         <View style={styles.reviewsSection}>
           <Text style={{ fontSize: 14, fontFamily: 'Lato-Bold', color: isDarkMode ? '#e5e7eb' : '#111827', marginBottom: 12 }}>
-            My Trades
+            {t('settings.my_trades')}
           </Text>
 
           {!user?.id ? (
             <Text style={styles.reviewsEmptyText}>
-              Login to see your trades
+              {t('settings.login_to_see_trades')}
             </Text>
           ) : (
             <TouchableOpacity
@@ -2883,17 +2848,17 @@ const formatPlanName = (plan) => {
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: isDarkMode ? '#0f172a' : '#ffffff',
+                backgroundColor: isDarkMode ? config.colors.backgroundDark : '#ffffff',
                 borderRadius: 10,
                 paddingVertical: 12,
                 paddingHorizontal: 12,
                 borderWidth: 1,
-                borderColor: isDarkMode ? '#1f2937' : '#e5e7eb',
+                borderColor: isDarkMode ? config.colors.surfaceDark : '#e5e7eb',
               }}
             >
               <Icon name="swap-horizontal-outline" size={18} color="#FF9500" style={{ marginRight: 6 }} />
               <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#111827' }}>
-                View My Trades
+                {t('settings.view_my_trades')}
               </Text>
             </TouchableOpacity>
           )}
@@ -2902,12 +2867,12 @@ const formatPlanName = (plan) => {
         {/* Reviews Section - Two Small Modern Buttons */}
         <View style={styles.reviewsSection}>
           <Text style={{ fontSize: 14, fontFamily: 'Lato-Bold', color: isDarkMode ? '#e5e7eb' : '#111827', marginBottom: 12 }}>
-            Reviews
+            {t('settings.reviews')}
           </Text>
 
           {!user?.id ? (
             <Text style={styles.reviewsEmptyText}>
-              Login to see your reviews
+              {t('settings.login_to_see_reviews')}
             </Text>
           ) : (
             <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -2919,17 +2884,17 @@ const formatPlanName = (plan) => {
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: isDarkMode ? '#0f172a' : '#ffffff',
+                  backgroundColor: isDarkMode ? config.colors.backgroundDark : '#ffffff',
                   borderRadius: 10,
                   paddingVertical: 12,
                   paddingHorizontal: 12,
                   borderWidth: 1,
-                  borderColor: isDarkMode ? '#1f2937' : '#e5e7eb',
+                  borderColor: isDarkMode ? config.colors.surfaceDark : '#e5e7eb',
                 }}
               >
                 <Icon name="star" size={18} color="#4A90E2" style={{ marginRight: 6 }} />
                 <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#111827' }}>
-                  I Gave
+                  {t('settings.i_gave')}
                 </Text>
               </TouchableOpacity>
 
@@ -2941,17 +2906,17 @@ const formatPlanName = (plan) => {
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: isDarkMode ? '#0f172a' : '#ffffff',
+                  backgroundColor: isDarkMode ? config.colors.backgroundDark : '#ffffff',
                   borderRadius: 10,
                   paddingVertical: 12,
                   paddingHorizontal: 12,
                   borderWidth: 1,
-                  borderColor: isDarkMode ? '#1f2937' : '#e5e7eb',
+                  borderColor: isDarkMode ? config.colors.surfaceDark : '#e5e7eb',
                 }}
               >
                 <Icon name="heart" size={18} color="#9B59B6" style={{ marginRight: 6 }} />
                 <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#111827' }}>
-                  I Received
+                  {t('settings.i_received')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -3109,6 +3074,9 @@ const formatPlanName = (plan) => {
             </View>
           )}
         </View>
+
+
+
         <Text style={styles.subtitle}>{t('settings.other_settings')}</Text>
 
         <View style={styles.cardContainer}>
@@ -3130,7 +3098,7 @@ const formatPlanName = (plan) => {
             handleReport(user); triggerHapticFeedback('impactLight');
           }}>
             <Icon name="warning" size={18} color={'pink'}  style={{backgroundColor:'#566D5D', padding:5, borderRadius:5}}/>
-            <Text style={styles.optionText}>Report Abusive Content</Text>
+            <Text style={styles.optionText}>{t('settings.report_abusive_content')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.option} onPress={() => { handleRateApp(); triggerHapticFeedback('impactLight'); }
           }>
@@ -3153,13 +3121,13 @@ const formatPlanName = (plan) => {
             handleOpenPrivacy(); triggerHapticFeedback('impactLight');
           }}>
             <Icon name="link-outline" size={18} color={'white'}  style={{backgroundColor:'green', padding:5, borderRadius:5}}/>
-            <Text style={styles.optionText}>Privacy Policy</Text>
+            <Text style={styles.optionText}>{t('settings.privacy_policy')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={user?.id ? styles.option : styles.optionLast} onPress={() => {
             handleOpenChild(); triggerHapticFeedback('impactLight');
           }}>
             <Icon name="link-outline" size={18} color={'white'}  style={{backgroundColor:'blue', padding:5, borderRadius:5}}/>
-            <Text style={styles.optionText}>Child Safety Standards</Text>
+            <Text style={styles.optionText}>{t('settings.child_safety_standards')}</Text>
           </TouchableOpacity>
           {user?.id && <TouchableOpacity style={styles.option} onPress={handleLogout} >
             <Icon name="person-outline" size={18} color={'white'} style={{backgroundColor:'#4B4453', padding:5, borderRadius:5}} />
@@ -3172,7 +3140,7 @@ const formatPlanName = (plan) => {
 
         </View>
         
-        <Text style={styles.subtitle}>Our Other APPS</Text>
+        <Text style={styles.subtitle}>{t('settings.our_other_apps')}</Text>
        
        <View style={styles.cardContainer}>
 
@@ -3201,11 +3169,11 @@ const formatPlanName = (plan) => {
 
 
 </View>
-<Text style={styles.subtitle}>Business Enquiries
+<Text style={styles.subtitle}>{t('settings.business_enquiries')}
 </Text>
 
 <Text style={styles.textlink}>
-   For collaborations, partnerships, or other business-related queries, feel free to contact us at:{' '}
+   {t('settings.business_enquiries_desc')}{' '}
    <TouchableOpacity onPress={() => Linking.openURL('mailto:thesolanalabs@gmail.com')}>
      <Text style={styles.emailText}>thesolanalabs@gmail.com</Text>
    </TouchableOpacity>
@@ -3342,12 +3310,12 @@ const formatPlanName = (plan) => {
                     <View
                       key={review.id}
                       style={{
-                        backgroundColor: isDarkMode ? '#0f172a' : '#ffffff',
+                        backgroundColor: isDarkMode ? config.colors.backgroundDark : '#ffffff',
                         borderRadius: 12,
                         padding: 8,
                         marginBottom: 8,
                         borderWidth: 1,
-                        borderColor: isDarkMode ? '#1f2937' : '#e5e7eb',
+                        borderColor: isDarkMode ? config.colors.surfaceDark : '#e5e7eb',
                       }}
                     >
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
@@ -3479,12 +3447,12 @@ const formatPlanName = (plan) => {
                     <View
                       key={review.id}
                       style={{
-                        backgroundColor: isDarkMode ? '#0f172a' : '#ffffff',
+                        backgroundColor: isDarkMode ? config.colors.backgroundDark : '#ffffff',
                         borderRadius: 12,
                         padding: 8,
                         marginBottom: 8,
                         borderWidth: 1,
-                        borderColor: isDarkMode ? '#1f2937' : '#e5e7eb',
+                        borderColor: isDarkMode ? config.colors.surfaceDark : '#e5e7eb',
                       }}
                     >
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
@@ -3609,7 +3577,7 @@ const formatPlanName = (plan) => {
               <TextInput
                 style={[styles.input, { minHeight: 100, textAlignVertical: 'top' }]}
                 placeholder="Write your review..."
-                placeholderTextColor="#999"
+                placeholderTextColor={isDarkMode ? '#999' : '#888'}
                 value={editReviewText}
                 onChangeText={setEditReviewText}
                 multiline
@@ -3665,7 +3633,7 @@ const formatPlanName = (plan) => {
                       paddingHorizontal: 10,
                       paddingVertical: 6,
                       borderRadius: 6,
-                      backgroundColor: isDeletingAll ? (isDarkMode ? '#374151' : '#9ca3af') : '#EF4444',
+                      backgroundColor: isDeletingAll ? (isDarkMode ? config.colors.surfaceElevatedDark : '#9ca3af') : '#EF4444',
                       opacity: isDeletingAll ? 0.6 : 1,
                     }}
                   >
@@ -3733,6 +3701,8 @@ const formatPlanName = (plan) => {
           </View>
         </View>
       </Modal>
+
+
 
     </View>
   );

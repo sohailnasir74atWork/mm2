@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { Image as CompressorImage } from 'react-native-compressor';
@@ -21,6 +23,8 @@ import { onValue, ref } from '@react-native-firebase/database';
 import { showMessage } from 'react-native-flash-message';
 import RNFS from 'react-native-fs';
 import { validateContent } from '../../Helper/ContentModeration';
+import Icon from 'react-native-vector-icons/Ionicons';
+import { useTranslation } from 'react-i18next';
 
 
 const CLOUD_NAME = 'djtqw0jb5';
@@ -40,10 +44,10 @@ const UploadModal = ({ visible, onClose, onUpload, user }) => {
   const [selectedTags, setSelectedTags] = useState(['Discussion']);
   const {currentUserEmail, appdatabase} = useGlobalState();
   const [strikeInfo, setStrikeInfo] = useState(null)
-  // const [budget, setBudget] = useState('');
   const { theme } = useGlobalState();
   const isDark = theme === 'dark';
   const {localState} = useLocalState()
+  const { t } = useTranslation();
   
   // ✅ Session-based last post time (resets on app close/reopen - simple state, no storage)
   const [lastPostTime, setLastPostTime] = useState(null);
@@ -73,114 +77,82 @@ const UploadModal = ({ visible, onClose, onUpload, user }) => {
     }
   }, [visible]);
 
-  // console.log(currentUserEmail)show
-  
 
 const pickAndCompress = useCallback(async () => {
-  const result = await launchImageLibrary({
-    mediaType: 'photo',
-    selectionLimit: MAX_IMAGES,
-  });
+  try {
+    const result = await launchImageLibrary({
+      mediaType: 'photo',
+      selectionLimit: MAX_IMAGES,
+      quality: 0.8,
+      maxWidth: 1920,
+      maxHeight: 1920,
+    });
 
-  if (result.assets?.length > 0) {
-    const MAX_SIZE_BYTES = 1024 * 1024; // 1 MB
-    const compressed = [];
-    const rejectedCount = [];
+    if (result.didCancel) return;
+    if (result.errorCode) {
+      console.error('❌ ImagePicker error:', result.errorMessage);
+      return;
+    }
 
-    for (const asset of result.assets) {
-      try {
-        // Check file size before compression
-        if (asset?.uri) {
-          const filePath = asset.uri.replace('file://', '');
-          const fileInfo = await RNFS.stat(filePath);
-          const fileSize = fileInfo.size || 0;
+    if (result.assets?.length > 0) {
+      const MAX_SIZE_BYTES = 1024 * 1024; // 1 MB
+      const compressed = [];
+      const rejectedCount = [];
 
-          if (fileSize > MAX_SIZE_BYTES) {
-            rejectedCount.push(asset.fileName || 'image');
-            continue;
-          }
-        }
-
-        // Compress the image
-        const uri = await CompressorImage.compress(asset.uri, {
-          maxWidth: 400,
-          quality: 1,
-        });
-        compressed.push(uri);
-      } catch (error) {
-        console.error('Compression failed:', error);
-        // If compression fails, still try to check if we can use original
-        // But skip if we can't determine size
-        if (asset?.uri) {
-          try {
-            const filePath = asset.uri.replace('file://', '');
-            const fileInfo = await RNFS.stat(filePath);
-            const fileSize = fileInfo.size || 0;
-            if (fileSize <= MAX_SIZE_BYTES) {
-              compressed.push(asset.uri);
-            } else {
-              rejectedCount.push(asset.fileName || 'image');
+      for (const asset of result.assets) {
+        try {
+          // ✅ Always compress to ensure < 1MB and good quality
+          const uri = await CompressorImage.compress(asset.uri, {
+            maxWidth: 1024,
+            quality: 0.7,
+            returnableOutputType: 'uri',
+          });
+          compressed.push(uri);
+        } catch (error) {
+          console.error('Compression failed:', error);
+          if (asset?.uri) {
+            try {
+              const filePath = asset.uri.replace('file://', '');
+              const fileInfo = await RNFS.stat(filePath);
+              const fileSize = fileInfo.size || 0;
+              if (fileSize <= MAX_SIZE_BYTES) {
+                compressed.push(asset.uri);
+              } else {
+                rejectedCount.push(asset.fileName || 'image');
+              }
+            } catch (statError) {
+              console.warn('Could not check file size:', statError);
             }
-          } catch (statError) {
-            console.warn('Could not check file size:', statError);
-            // If we can't check, skip it to be safe
           }
         }
       }
-    }
 
-    // Show alert if any images were rejected
-    if (rejectedCount.length > 0) {
-      Alert.alert(
-        'Image Too Large',
-        `${rejectedCount.length} image(s) exceed 1 MB limit and were not added. Please select smaller images.`
-      );
-    }
+      // Show alert if any images were rejected
+      if (rejectedCount.length > 0) {
+        Alert.alert(
+          t('feed.image_too_large'),
+          t('feed.image_size_error', { count: rejectedCount.length })
+        );
+      }
 
-    // Only update state if we have valid compressed images
-    if (compressed.length > 0) {
-      setImageUris((prev) => {
-        if (prev.length + compressed.length > MAX_IMAGES) {
-          // Replace all if over limit
-          return compressed.slice(0, MAX_IMAGES);
-        }
-        return [...prev, ...compressed];
-      });
+      // Only update state if we have valid compressed images
+      if (compressed.length > 0) {
+        setImageUris((prev) => {
+          if (prev.length + compressed.length > MAX_IMAGES) {
+            return compressed.slice(0, MAX_IMAGES);
+          }
+          return [...prev, ...compressed];
+        });
+      }
     }
+  } catch (error) {
+    console.error('❌ Image picker crash:', error);
+    Alert.alert(t('chat.error', { defaultValue: 'Error' }), t('feed.upload_failed_msg'));
   }
 }, []);
 
   
 
-  // const uploadToCloudinary = useCallback(async () => {
-  //   const urls = [];
-
-  //   for (const uri of imageUris) {
-  //     try {
-  //       const data = new FormData();
-  //       data.append('file', {
-  //         uri,
-  //         type: 'image/jpeg',
-  //         name: 'upload.jpg',
-  //       });
-  //       data.append('upload_preset', UPLOAD_PRESET);
-
-  //       const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
-  //         method: 'POST',
-  //         body: data,
-  //       });
-
-  //       const json = await res.json();
-  //       if (json?.secure_url) {
-  //         urls.push(json.secure_url);
-  //       }
-  //     } catch (e) {
-  //       console.error('Cloudinary upload error:', e);
-  //     }
-  //   }
-
-  //   return urls;
-  // }, [imageUris]);
   const uploadToBunny = useCallback(async () => {
     const urls = [];
     const userId = user?.id ?? 'anon';
@@ -203,13 +175,11 @@ const pickAndCompress = useCallback(async () => {
           headers: {
             'AccessKey': BUNNY_ACCESS_KEY,
             'Content-Type': 'application/octet-stream',
-            // Content-Length is optional; let fetch set it
           },
           body: binary,
         });
   
         const txt = await res.text().catch(() => '');
-        // console.log('[Bunny PUT]', res.status, txt?.slice(0, 200));
   
         if (!res.ok) {
           throw new Error(`Bunny upload failed ${res.status}: ${txt}`);
@@ -233,12 +203,12 @@ const pickAndCompress = useCallback(async () => {
     
     if (!user?.id) return;
     if (!currentUserEmail) {
-      Alert.alert('Missing Email', 'Could not detect your account email. Please re-login.');
+      Alert.alert(t('feed.missing_email'), t('feed.missing_email_msg'));
       return;
     }
   
     if (!desc && imageUris.length === 0) {
-      return Alert.alert('Missing Info', 'Please add a description or at least one image.');
+      return Alert.alert(t('feed.missing_info'), t('feed.missing_info_msg'));
     }
     
     // ✅ Content moderation: Check description for inappropriate content
@@ -246,7 +216,7 @@ const pickAndCompress = useCallback(async () => {
     if (trimmedDesc) {
       const contentValidation = validateContent(trimmedDesc);
       if (!contentValidation.isValid) {
-        Alert.alert('Content Not Allowed', contentValidation.reason || 'Your post contains inappropriate content.');
+        Alert.alert(t('feed.content_not_allowed'), contentValidation.reason || t('feed.content_not_allowed_msg'));
         return;
       }
     }
@@ -256,7 +226,7 @@ const pickAndCompress = useCallback(async () => {
     if (lastPostTime && (now - lastPostTime) < 60000) {
       const secondsLeft = Math.ceil((60000 - (now - lastPostTime)) / 1000);
       showMessage({
-        message: '⏱️ Cooldown Active',
+        message: t('feed.cooldown_active'),
         description: `Please wait ${secondsLeft} second${secondsLeft === 1 ? '' : 's'} before posting again.`,
         type: 'warning',
         duration: 3000,
@@ -266,13 +236,12 @@ const pickAndCompress = useCallback(async () => {
     
     if (strikeInfo) {
       const { strikeCount, bannedUntil } = strikeInfo;
-      // console.log('strick')
       const now = Date.now();
 
       if (bannedUntil === 'permanent') {
         showMessage({
-          message: '⛔ Permanently Banned',
-          description: 'You are permanently banned from sending messages.',
+          message: t('feed.permanently_banned'),
+          description: t('feed.banned_msg'),
           type: 'danger',
         });
         return;
@@ -302,14 +271,12 @@ const pickAndCompress = useCallback(async () => {
     const callbackfunction = async () => {
       try {
         const uploadedUrls = await uploadToBunny();
-        // console.log('[UploadModal] submitting with email:', currentUserEmail);
         await onUpload(desc, uploadedUrls, selectedTags, currentUserEmail);
         
         // ✅ Clear all inputs after successful upload
         setDesc('');
         setImageUris([]);
         setSelectedTags(['Discussion']);
-        // setBudget('');
         
         // ✅ Update last post time (session-based, not persisted - resets on app restart)
         const postTime = Date.now();
@@ -320,12 +287,12 @@ const pickAndCompress = useCallback(async () => {
         
         onClose();
         showMessage({
-          message: 'Success',
-          description: 'Post created successfully',
+          message: t('feed.post_success'),
+          description: t('feed.post_success_msg'),
           type: 'success',
         });
       } catch (err) {
-        Alert.alert('Upload Failed', 'Something went wrong. Try again.', err);
+        Alert.alert(t('feed.upload_failed'), t('feed.upload_failed_msg'), err);
         console.log(err);
         // ✅ Reset loading on error so user can retry
         setLoading(false);
@@ -355,171 +322,257 @@ const pickAndCompress = useCallback(async () => {
   }, [loading, user?.id, desc, imageUris, selectedTags, uploadToBunny, onUpload, onClose, localState.isPro, currentUserEmail, lastPostTime, strikeInfo]);
   
 
-  const themedStyles = getStyles(isDark);
+  const themedStyles = useMemo(() => getStyles(isDark), [isDark]);
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
-            <View style={{ flexDirection: 'row', flex: 1 }}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <View style={themedStyles.fullScreenContainer}>
+        {/* Header - Fixed at top */}
+        <View style={themedStyles.header}>
+          <Text style={themedStyles.headerTitle}>{t('feed.create_post')}</Text>
+          <TouchableOpacity onPress={onClose} style={themedStyles.closeButton}>
+            <Icon name="close" size={24} color={isDark ? '#fff' : '#000'} />
+          </TouchableOpacity>
+        </View>
 
-      <ConditionalKeyboardWrapper>
-      <TouchableOpacity activeOpacity={1} onPress={onClose} style={themedStyles.modalBackground}>
-        <TouchableOpacity
-          activeOpacity={1}
-          style={themedStyles.modalContent}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <TextInput
-            style={themedStyles.input}
-            placeholder="Write a description..."
-            placeholderTextColor={isDark ? '#999' : '#666'}
-            value={desc}
-            onChangeText={setDesc}
-            multiline
-          />
+        <ConditionalKeyboardWrapper style={{ flex: 1 }}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 100 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Description Input */}
+            <Text style={themedStyles.sectionLabel}>{t('feed.description_label')}</Text>
+            <TextInput
+              style={themedStyles.input}
+              placeholder={t('feed.description_placeholder')}
+              placeholderTextColor={isDark ? '#888' : '#aaa'}
+              value={desc}
+              onChangeText={setDesc}
+              multiline
+              textAlignVertical="top"
+            />
 
-          <View style={themedStyles.tagSelector}>
-          {['Scam Alert', 'Looking for Trade', 'Discussion', 'Real or Fake', 'Need Help', 'Misc'].map((tag) => (
-  <TouchableOpacity
-    key={tag}
-    style={[
-      themedStyles.tagButton,
-      selectedTags.includes(tag) && themedStyles.tagButtonSelected,
-    ]}
-    onPress={() => toggleTag(tag)}
-  >
-    <Text
-      style={{
-        color: selectedTags.includes(tag) ? '#fff' : isDark ? '#eee' : '#333',
-        fontSize: 12,
-        fontFamily: 'Lato-Bold',
-      }}
-    >
-      {tag}
-    </Text>
-  </TouchableOpacity>
-))}
+            {/* Tags */}
+            <Text style={themedStyles.sectionLabel}>{t('feed.select_topic')}</Text>
+            <View style={themedStyles.tagSelector}>
+              {['Scam Alert', 'Looking for Trade', 'Discussion', 'Real or Fake', 'Need Help', 'Misc'].map((tag) => (
+                <TouchableOpacity
+                  key={tag}
+                  style={[
+                    themedStyles.tagButton,
+                    selectedTags.includes(tag) && themedStyles.tagButtonSelected,
+                  ]}
+                  onPress={() => toggleTag(tag)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={{
+                      color: selectedTags.includes(tag) ? '#fff' : isDark ? '#ddd' : '#555',
+                      fontSize: 10,
+                      fontWeight: '600',
+                    }}
+                  >
+                    {tag}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
+            {/* Image Picker */}
+            <Text style={themedStyles.sectionLabel}>{t('feed.photos_label')}</Text>
+            <TouchableOpacity
+              style={[themedStyles.imagePicker, imageUris.length > 0 && { justifyContent: 'flex-start', padding: 10 }]}
+              onPress={pickAndCompress}
+              activeOpacity={0.7}
+            >
+              {imageUris.length > 0 ? (
+                <View style={themedStyles.imageGrid}>
+                  {imageUris.map((uri, idx) => (
+                    <View key={idx} style={themedStyles.imagePreviewContainer}>
+                      <Image source={{ uri }} style={themedStyles.previewImage} />
+                      <View style={themedStyles.imageCountBadge}>
+                        <Text style={themedStyles.imageCountText}>{idx + 1}</Text>
+                      </View>
+                    </View>
+                  ))}
+                  {imageUris.length < MAX_IMAGES && (
+                    <View style={themedStyles.addMoreButton}>
+                      <Icon name="add" size={24} color={isDark ? '#555' : '#aaa'} />
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <View style={{ alignItems: 'center' }}>
+                  <Icon name="images-outline" size={32} color={config.colors.primary} style={{ marginBottom: 8 }} />
+                  <Text style={{ color: isDark ? '#aaa' : '#666', fontSize: 13 }}>{t('feed.tap_to_select')}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
+
+          {/* Submit Button - Fixed at bottom */}
+          <View style={themedStyles.footer}>
+            <TouchableOpacity
+              style={[themedStyles.uploadBtn, loading && { opacity: 0.7 }]}
+              onPress={handleSubmit}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={themedStyles.btnText}>{t('feed.post_now')}</Text>
+                  <Icon name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 6 }} />
+                </View>
+              )}
+            </TouchableOpacity>
           </View>
-
-          {/* <TextInput
-            style={themedStyles.input}
-            placeholder="Optional: Budget (e.g. 500 Bucks)"
-            placeholderTextColor={isDark ? '#999' : '#666'}
-            value={budget}
-            onChangeText={setBudget}
-          /> */}
-
-          <TouchableOpacity style={themedStyles.imagePicker} onPress={pickAndCompress}>
-            {imageUris.length > 0 ? (
-              <View style={themedStyles.imageGrid}>
-                {imageUris.map((uri, idx) => (
-                  <Image key={idx} source={{ uri }} style={themedStyles.previewImage} />
-                ))}
-              </View>
-            ) : (
-              <Text style={{ color: isDark ? '#aaa' : '#333' }}>Upload up to 4 images</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity style={themedStyles.uploadBtn} onPress={handleSubmit} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={themedStyles.btnText}>Submit</Text>}
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={onClose} style={themedStyles.cancelBtn}>
-            <Text style={themedStyles.btnText}>Cancel</Text>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </TouchableOpacity>
-      </ConditionalKeyboardWrapper>
+        </ConditionalKeyboardWrapper>
       </View>
-
-      
     </Modal>
   );
 };
 
 const getStyles = (isDark) =>
   StyleSheet.create({
-    modalBackground: {
+    fullScreenContainer: {
       flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-      justifyContent: 'center',
-      alignItems: 'center',
+      backgroundColor: isDark ? config.colors.surfaceDark : '#ffffff',
+      padding: 24,
+      paddingTop: Platform.OS === 'ios' ? 60 : 24,
     },
-    modalContent: {
-      backgroundColor: isDark ? '#222' : '#fff',
-      padding: 20,
-      borderRadius: 10,
-      // width: '90%',
-      marginHorizontal:10
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    headerTitle: {
+      fontSize: 22,
+      fontWeight: '800',
+      color: isDark ? '#fff' : '#000',
+      letterSpacing: 0.5,
+    },
+    closeButton: {
+      padding: 4,
+      backgroundColor: isDark ? config.colors.surfaceElevatedDark : '#f0f0f0',
+      borderRadius: 50,
+    },
+    sectionLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: '#888',
+      marginBottom: 8,
+      marginLeft: 4,
+      letterSpacing: 1,
     },
     input: {
-      borderWidth: 1,
-      borderColor: isDark ? '#555' : '#ccc',
-      padding: 10,
-      borderRadius: 6,
-      marginBottom: 10,
-      color: isDark ? '#eee' : '#000',
-      fontFamily: 'Lato-Regular',
+      backgroundColor: isDark ? config.colors.surfaceElevatedDark : '#f9f9f9',
+      borderRadius: 16,
+      padding: 16,
+      color: isDark ? '#fff' : '#000',
+      fontSize: 15,
+      minHeight: 100,
+      marginBottom: 20,
     },
     tagSelector: {
       flexDirection: 'row',
-      marginBottom: 10,
+      marginBottom: 20,
       flexWrap: 'wrap',
       gap: 8,
     },
     tagButton: {
-      paddingHorizontal: 12,
-      paddingVertical: 4,
-      borderRadius: 20,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 12,
+      backgroundColor: isDark ? config.colors.surfaceElevatedDark : '#f2f2f7',
       borderWidth: 1,
-      borderColor: '#ccc',
-      backgroundColor: isDark ? '#333' : '#f0f0f0',
-      marginRight: 10,
+      borderColor: 'transparent',
     },
     tagButtonSelected: {
       backgroundColor: config.colors.primary,
       borderColor: config.colors.primary,
+      shadowColor: config.colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
     },
     imagePicker: {
+      backgroundColor: isDark ? config.colors.surfaceElevatedDark : '#f9f9f9',
+      borderRadius: 16,
+      height: 120,
       alignItems: 'center',
       justifyContent: 'center',
-      height: 100,
+      marginBottom: 24,
       borderWidth: 1,
-      borderColor: isDark ? '#555' : '#ccc',
-      borderRadius: 6,
-      marginBottom: 10,
-      padding: 10,
+      borderColor: isDark ? '#333' : '#f0f0f0',
+      borderStyle: 'dashed',
     },
     imageGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 6,
+      gap: 10,
+      width: '100%',
+    },
+    imagePreviewContainer: {
+      position: 'relative',
     },
     previewImage: {
-      width: 50,
-      height: 50,
-      borderRadius: 3,
-      marginRight: 3,
-      marginBottom: 3,
+      width: 60,
+      height: 60,
+      borderRadius: 12,
+    },
+    imageCountBadge: {
+      position: 'absolute',
+      right: -4,
+      top: -4,
+      backgroundColor: config.colors.primary,
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1.5,
+      borderColor: '#fff',
+    },
+    imageCountText: {
+      fontSize: 9,
+      fontWeight: 'bold',
+      color: '#fff',
+    },
+    addMoreButton: {
+      width: 60,
+      height: 60,
+      borderRadius: 12,
+      backgroundColor: isDark ? config.colors.surfaceElevatedDark : '#eee',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    footer: {
+      paddingTop: 12,
     },
     uploadBtn: {
       backgroundColor: config.colors.secondary,
-      padding: 12,
+      height: 56,
+      borderRadius: 16,
       alignItems: 'center',
-      borderRadius: 6,
-    },
-    cancelBtn: {
-      marginTop: 10,
-      padding: 10,
-      backgroundColor: '#FF3B30',
-      borderRadius: 6,
-      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      shadowColor: config.colors.secondary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 10,
+      elevation: 5,
     },
     btnText: {
       color: '#fff',
-      fontWeight: '600',
-      fontFamily: 'Lato-Bold',
+      fontSize: 16,
+      fontWeight: '800',
+      letterSpacing: 0.5,
     },
   });
 

@@ -16,12 +16,13 @@ import MessageInput from './MessageInput';
 import { getStyles } from '../Style';
 import { banUser, handleDeleteLast300Messages, isUserOnline, unbanUser } from '../utils';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProfileBottomDrawer from './BottomDrawer';
 import leoProfanity from 'leo-profanity';
 import ConditionalKeyboardWrapper from '../../Helper/keyboardAvoidingContainer';
 import { useHaptic } from '../../Helper/HepticFeedBack';
 import { useLocalState } from '../../LocalGlobelStats';
-import database, { onValue, ref, remove } from '@react-native-firebase/database';
+import database, { onValue, ref, remove, get, push, onChildAdded, query as dbQuery, orderByKey, limitToLast, endAt } from '@react-native-firebase/database';
 import { useTranslation } from 'react-i18next';
 import { mixpanel } from '../../AppHelper/MixPenel';
 import InterstitialAdManager from '../../Ads/IntAd';
@@ -30,6 +31,8 @@ import { logoutUser } from '../../Firebase/UserLogics';
 import { showMessage } from 'react-native-flash-message';
 import config from '../../Helper/Environment';
 import PetModal from '../PrivateChat/PetsModel';
+import { seedCurrentUser } from '../../Helper/profileCache';
+import { syncMyCosmetics } from '../../Helper/cosmeticsCache';
 leoProfanity.add(['hell', 'shit']);
 leoProfanity.loadDictionary('en');
 
@@ -55,6 +58,19 @@ const ChatScreen = ({ selectedTheme, bannedUsers, modalVisibleChatinfo, setChatF
   const { triggerHapticFeedback } = useHaptic();
   const { localState } = useLocalState()
   const { t } = useTranslation();
+
+  // Seed MY OWN profile + refresh my equipped cosmetics.
+  // Public-chat messages are slim (no frame / text colour in the payload), so
+  // the row renderer reads them from the profile cache. warmProfileCache skips
+  // the current user by design, which is why the signed-in user's own frame
+  // and chat text colour never rendered on their own messages.
+  // Deps deliberately narrow — see GroupChatScreen for the same reasoning.
+  useEffect(() => {
+    if (!user?.id) return;
+    seedCurrentUser(user, localState, appdatabase);
+    if (appdatabase) syncMyCosmetics(appdatabase, user.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.avatar, appdatabase]);
   const [pendingMessages, setPendingMessages] = useState([]);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const isFocused = useIsFocused();
@@ -62,13 +78,23 @@ const ChatScreen = ({ selectedTheme, bannedUsers, modalVisibleChatinfo, setChatF
   const [petModalVisible, setPetModalVisible] = useState(false);
 const [selectedFruits, setSelectedFruits] = useState([]); 
 const [device, setDevice] = useState(null)
-
 const [selectedEmoji, setSelectedEmoji] = useState(null);
+const insets = useSafeAreaInsets();
+const bannerBottomPos = 0; // tab bar is docked (in layout flow), so screen bottom == tab bar top; banner sits flush above it
 
   // ✅ Track last sent message to prevent duplicates (session-based, no Firebase cost)
   const lastSentMessageRef = useRef(null);
 
   const flatListRef = useRef();
+
+  // Refs mirror isAtBottom + bannedUsers so the realtime onChildAdded listener
+  // can read the latest values WITHOUT listing them as deps — otherwise the
+  // listener tore down and re-attached (re-reading the last message) on every
+  // scroll toggle and every banned-list change.
+  const isAtBottomRef = useRef(isAtBottom);
+  const bannedUsersRef = useRef(bannedUsers);
+  useEffect(() => { isAtBottomRef.current = isAtBottom; }, [isAtBottom]);
+  useEffect(() => { bannedUsersRef.current = bannedUsers; }, [bannedUsers]);
 
   // console.log(selectedUser)
 
@@ -133,12 +159,8 @@ const startPrivateChat = useCallback(() => {
     }
     mixpanel.track("Inbox Chat");
   };
-  if (!localState?.isPro) {
-    InterstitialAdManager.showAd(callbackfunction);
-  } else {
-    callbackfunction();
-  }
-}, [selectedUser, selectedTheme,  closeProfileDrawer]);
+  callbackfunction();
+}, [selectedUser, selectedTheme, closeProfileDrawer]);
 
   const chatRef = useMemo(() => ref(appdatabase, 'chat_new'), []);
   const pinnedMessagesRef = useMemo(() => ref(appdatabase, 'pin_messages'), []);
@@ -188,10 +210,10 @@ const startPrivateChat = useCallback(() => {
         // ✅ Use INITIAL_PAGE_SIZE for first load, PAGE_SIZE for pagination
         const limitSize = reset ? INITIAL_PAGE_SIZE : PAGE_SIZE;
         const messageQuery = reset
-          ? chatRef.orderByKey().limitToLast(limitSize)
-          : chatRef.orderByKey().endAt(lastLoadedKey).limitToLast(limitSize);
+          ? dbQuery(chatRef, orderByKey(), limitToLast(limitSize))
+          : dbQuery(chatRef, orderByKey(), endAt(lastLoadedKey), limitToLast(limitSize));
 
-        const snapshot = await messageQuery.once('value');
+        const snapshot = await get(messageQuery);
         const data = snapshot.val() || {};
 
         // if (developmentMode) {
@@ -250,7 +272,7 @@ const startPrivateChat = useCallback(() => {
 
     const fetchPinnedMessages = async () => {
       try {
-        const snapshot = await pinnedMessagesRef.once('value');
+        const snapshot = await get(pinnedMessagesRef);
         const pinnedMessagesData = snapshot.val() || {};
   
         // ✅ Safety check and transform data into an array
@@ -273,7 +295,7 @@ const startPrivateChat = useCallback(() => {
     fetchPinnedMessages();  // Fetch pinned messages initially
   
     // Listen to real-time updates on pinned messages
-    const listener = pinnedMessagesRef.on('child_added', (snapshot) => {
+    const unsubPinned = onChildAdded(pinnedMessagesRef, (snapshot) => {
       if (!snapshot || !snapshot.key) return;
       const data = snapshot.val();
       if (!data || typeof data !== 'object') return;
@@ -286,9 +308,7 @@ const startPrivateChat = useCallback(() => {
     });
   
     return () => {
-      if (pinnedMessagesRef) {
-        pinnedMessagesRef.off('child_added', listener);
-      }
+      unsubPinned();
     };
   }, []);
   
@@ -308,7 +328,7 @@ const startPrivateChat = useCallback(() => {
   useEffect(() => {
     if (!isFocused || !chatRef) return;
 
-    const listener = chatRef.limitToLast(1).on('child_added', (snapshot) => {
+    const unsubChat = onChildAdded(dbQuery(chatRef, limitToLast(1)), (snapshot) => {
       if (!snapshot || !snapshot.key) return;
       const data = snapshot.val();
       if (!data || typeof data !== 'object') return;
@@ -317,7 +337,7 @@ const startPrivateChat = useCallback(() => {
       if (!newMessage || !newMessage.id) return;
 
       // ✅ Check if message is from banned user
-      const banned = Array.isArray(bannedUsers) ? bannedUsers : [];
+      const banned = Array.isArray(bannedUsersRef.current) ? bannedUsersRef.current : [];
       if (banned.includes(newMessage.senderId)) return;
 
       setMessages((prev) => {
@@ -325,7 +345,7 @@ const startPrivateChat = useCallback(() => {
         const seenKeys = new Set(prev.map((msg) => msg?.id).filter(Boolean));
         if (seenKeys.has(newMessage.id)) return prev;
 
-        if (isAtBottom) {
+        if (isAtBottomRef.current) {
           // Insert immediately
           // console.log("📥 User is at bottom, adding message now");
           return [newMessage, ...prev];
@@ -343,11 +363,11 @@ const startPrivateChat = useCallback(() => {
     });
 
     return () => {
-      if (chatRef) {
-        chatRef.off('child_added', listener);
-      }
+      unsubChat();
     };
-  }, [chatRef, validateMessage, isAtBottom, isFocused, bannedUsers]);
+    // isAtBottom + bannedUsers read via refs (above) so the listener attaches
+    // once per focus, not on every scroll toggle / banned-list change.
+  }, [chatRef, validateMessage, isFocused]);
 
 
 
@@ -378,7 +398,7 @@ const startPrivateChat = useCallback(() => {
   const handlePinMessage = async (message) => {
     try {
       const pinnedMessage = { ...message, pinnedAt: Date.now() };
-      const newRef = await pinnedMessagesRef.push(pinnedMessage);
+      const newRef = await push(pinnedMessagesRef, pinnedMessage);
   
       // Use the Firebase key for tracking the message
       setPinnedMessages((prev) => [
@@ -395,8 +415,8 @@ const startPrivateChat = useCallback(() => {
 
   const unpinSingleMessage = async (firebaseKey) => {
     try {
-      const messageRef = pinnedMessagesRef.child(firebaseKey);
-      await messageRef.remove();  // Remove from Firebase
+      const messageRef = ref(appdatabase, `pin_messages/${firebaseKey}`);
+      await remove(messageRef);  // Remove from Firebase
   
       // Update local state by filtering out the removed message
       setPinnedMessages((prev) => {
@@ -415,7 +435,7 @@ const startPrivateChat = useCallback(() => {
 
   const clearAllPinnedMessages = async () => {
     try {
-      await pinnedMessagesRef.remove();
+      await remove(pinnedMessagesRef);
       setPinnedMessages([]);
     } catch (error) {
       console.error('Error clearing pinned messages:', error);
@@ -583,7 +603,7 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
       typeof user?.lastGameWinAt === 'number' &&
       now - user.lastGameWinAt <= 24 * 60 * 60 * 1000; // last win within 24h
 
-    await chatRef.push({
+    await push(chatRef, {
       text: trimmedInput || null, // allow fruits-only messages
       timestamp: database.ServerValue.TIMESTAMP,
       sender: user.displayName || 'Anonymous',
@@ -658,7 +678,7 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
                 flatListRef={flatListRef}
                 isDarkMode={theme === 'dark'}
                 onPinMessage={handlePinMessage}
-                onDeleteMessage={(messageId) => chatRef.child(messageId.replace('chat_new-', '')).remove()}
+                onDeleteMessage={(messageId) => remove(ref(appdatabase, `chat_new/${messageId.replace('chat_new-', '')}`))}
                 // isAdmin={isAdmin}
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
@@ -681,7 +701,6 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
               />
             )}
             <View style={{ backgroundColor: theme === 'dark' ? config.colors.backgroundDark : config.colors.backgroundLight }}>
-              {!localState.isPro && <BannerAdComponent />}
               {user.id ? (
                 <MessageInput
                   input={input}
@@ -722,6 +741,9 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
     />
           </ConditionalKeyboardWrapper>
 
+          {/* Spacer: reserves space for floating nav bar + ad so content isn't hidden behind them */}
+          <View style={{ height: !localState.isPro ? bannerBottomPos + 60 : Math.max(insets.bottom, 8) + 68 }} />
+
           <SignInDrawer
             visible={isSigninDrawerVisible}
             onClose={handleLoginSuccess}
@@ -740,21 +762,11 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
           bannedUsers={bannedUsers}
         />
       </GestureHandlerRootView>
-      
-
-      {/* {!localState.isPro && <View style={{ alignSelf: 'center' }}>
-        {isAdVisible && (
-          <BannerAd
-            unitId={bannerAdUnitId}
-            size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
-            onAdLoaded={() => setIsAdVisible(true)}
-            onAdFailedToLoad={() => setIsAdVisible(false)}
-            requestOptions={{
-              requestNonPersonalizedAdsOnly: true,
-            }}
-          />
-        )}
-      </View>} */}
+      {!localState.isPro && (
+        <View style={{ position: 'absolute', bottom: bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
+          <BannerAdComponent />
+        </View>
+      )}
     </>
   );
 };

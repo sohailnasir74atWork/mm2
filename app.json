@@ -5,7 +5,7 @@
     "android_app_id": "ca-app-pub-5740215782746766~6229019896",
     "ios_app_id": "ca-app-pub-5740215782746766~6594069138",
     "delay_app_measurement_init": true,
-    "user_tracking_usage_description": "This identifier will be used to deliver personalized ads to you.",
+    "user_tracking_usage_description": "Trade Checker uses this identifier to show ads relevant to you — for example, ads for other Roblox games instead of unrelated products — and to measure which ads work.",
     "sk_ad_network_items": [
       "cstr6suwn9.skadnetwork",
       "4fzdc2evr5.skadnetwork",

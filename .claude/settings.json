@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew clean *)",
+      "Bash(./gradlew --stop)",
+      "Bash(/opt/homebrew/opt/node@22/bin/node -e \"console.log\\(require.resolve\\('react-native/package.json'\\)\\)\")",
+      "Bash(/Volumes/Sohail/AI_Projects/mm2values/android/gradlew -p /Volumes/Sohail/AI_Projects/mm2values/android clean bundleRelease)",
+      "Bash(python3 - /Users/apple/.claude/projects/-Volumes-Sohail-AI-Projects-mm2values/bcbffa24-8651-4c57-bc81-67fedf6c7368/subagents/workflows/wf_5bd124df-ae4/journal.jsonl)",
+      "Bash(awk '/const styles = |StyleSheet.create/{f=1} f{print NR\": \"$0} f&&/^\\\\}\\\\\\)/{c++; if\\(c>0\\){exit}}' Code/ChatScreen/GroupChat/Trader.jsx)",
+      "Bash(awk '/container:/{print NR\": \"$0; for\\(i=1;i<=6;i++\\){getline; print NR\": \"$0}}' Code/ChatScreen/Style.js)",
+      "Bash(python3 - /private/tmp/claude-501/-Volumes-Sohail-AI-Projects-mm2values/bcbffa24-8651-4c57-bc81-67fedf6c7368/tasks/wezlotp7j.output)",
+      "Bash(node -e ' *)",
+      "Bash(mv app/build/outputs/bundle/release/app-release.aab app/build/outputs/bundle/release/app-release.PREV.aab)",
+      "Bash(rm -f /Volumes/Sohail/AI_Projects/mm2values/android/build-aab.log)",
+      "Bash(./gradlew bundleRelease --no-daemon)",
+      "Bash(echo \"EXIT_CODE=$? at $\\(date\\)\")",
+      "Bash([ -f \"$log\" ])"
+    ]
+  }
+}

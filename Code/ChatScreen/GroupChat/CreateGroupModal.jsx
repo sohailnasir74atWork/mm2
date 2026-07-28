@@ -12,8 +12,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGlobalState } from '../../GlobelStats';
 import { createGroup, updateGroupName, updateGroupDescription, updateGroupAvatar } from '../utils/groupUtils';
 import { showSuccessMessage, showErrorMessage } from '../../Helper/MessageHelper';
@@ -21,6 +23,8 @@ import { useHaptic } from '../../Helper/HepticFeedBack';
 import { useNavigation } from '@react-navigation/native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import RNFS from 'react-native-fs';
+import { useTranslation } from 'react-i18next';
+import config from '../../Helper/Environment';
 
 const BUNNY_STORAGE_HOST = 'storage.bunnycdn.com';
 const BUNNY_STORAGE_ZONE = 'post-gag';
@@ -68,11 +72,13 @@ const MAX_GROUP_MEMBERS = 50;
 
 const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = null, editGroupName = null, editGroupDescription = null, editGroupAvatar = null, isAdmin = false, onGroupUpdated = null }) => {
   const { theme, user, firestoreDB, appdatabase } = useGlobalState();
+  const insets = useSafeAreaInsets();
   const isEditMode = !!editGroupId;
   const { triggerHapticFeedback } = useHaptic();
   const navigation = useNavigation();
   const isDarkMode = theme === 'dark';
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
+  const { t } = useTranslation();
 
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
@@ -201,13 +207,13 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
   // Handle submit (create or update)
   const handleSubmit = async () => {
     if (!user?.id || !firestoreDB || !appdatabase) {
-      showErrorMessage('Error', 'Missing required data');
+      showErrorMessage(t('home.alert.error'), t('create_group.missing_data'));
       return;
     }
 
     // Validate group name (required for both create and edit)
     if (!groupName.trim()) {
-      showErrorMessage('Error', 'Group name is required');
+      showErrorMessage(t('home.alert.error'), t('create_group.name_required'));
       return;
     }
 
@@ -224,19 +230,19 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
   const handleCreateGroup = async () => {
     // Validate description (required for create)
     if (!groupDescription.trim()) {
-      showErrorMessage('Error', 'Group description is required');
+      showErrorMessage(t('home.alert.error'), t('create_group.description_required'));
       return;
     }
 
     // Validate member count
     const totalMembers = 1 + selectedMemberIds.length; // Creator + selected members
     if (totalMembers < 2) {
-      showErrorMessage('Error', 'Select at least 1 member to create a group');
+      showErrorMessage(t('home.alert.error'), t('create_group.min_member'));
       return;
     }
 
     if (totalMembers > MAX_GROUP_MEMBERS) {
-      showErrorMessage('Error', `Maximum ${MAX_GROUP_MEMBERS} members allowed`);
+      showErrorMessage(t('home.alert.error'), t('create_group.max_member', { count: MAX_GROUP_MEMBERS }));
       return;
     }
 
@@ -252,7 +258,7 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
           groupAvatarUrl = await uploadToBunny(groupAvatarUri);
         } catch (error) {
           console.error('Error uploading group avatar:', error);
-          showErrorMessage('Error', 'Failed to upload group icon. Creating group without icon...');
+          showErrorMessage(t('home.alert.error'), t('create_group.create_avatar_upload_failed'));
         } finally {
           setUploadingAvatar(false);
         }
@@ -263,7 +269,7 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
       displayUsers.forEach((u) => {
         if (u.id && selectedMemberIds.includes(u.id)) {
           invitedUsersMap[u.id] = {
-            displayName: u.displayName || 'Anonymous',
+            displayName: u.displayName || t('private_chat.anonymous'),
             avatar: u.avatar || null,
           };
         }
@@ -274,7 +280,7 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
         appdatabase,
         {
           id: user.id,
-          displayName: user.displayName || 'Anonymous',
+          displayName: user.displayName || t('private_chat.anonymous'),
           avatar: user.avatar || null,
         },
         selectedMemberIds,
@@ -285,21 +291,21 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
       );
 
       if (result.success) {
-        showSuccessMessage('Success', 'Group created successfully!');
+        showSuccessMessage(t('home.alert.success'), t('create_group.create_success'));
         onClose();
         // Navigate to group chat
         if (result.groupId && navigation && typeof navigation.navigate === 'function') {
           navigation.navigate('GroupChatDetail', {
             groupId: result.groupId,
-            groupName: groupName.trim() || 'Group',
+            groupName: groupName.trim() || t('groups_screen.group'),
           });
         }
       } else {
-        showErrorMessage('Error', result.error || 'Failed to create group');
+        showErrorMessage(t('home.alert.error'), result.error || t('create_group.create_failed'));
       }
     } catch (error) {
       console.error('Error creating group:', error);
-      showErrorMessage('Error', 'Failed to create group. Please try again.');
+      showErrorMessage(t('home.alert.error'), t('create_group.create_failed_try_again'));
     } finally {
       setCreating(false);
     }
@@ -308,7 +314,7 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
   // Handle update group (edit mode)
   const handleUpdateGroup = async () => {
     if (!editGroupId) {
-      showErrorMessage('Error', 'Group ID is missing');
+      showErrorMessage(t('home.alert.error'), t('create_group.missing_group_id'));
       return;
     }
 
@@ -325,7 +331,7 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
           groupAvatarUrl = await uploadToBunny(groupAvatarUri);
         } catch (error) {
           console.error('Error uploading group avatar:', error);
-          showErrorMessage('Error', 'Failed to upload group icon. Updating group without icon change...');
+          showErrorMessage(t('home.alert.error'), t('create_group.update_avatar_upload_failed'));
         } finally {
           setUploadingAvatar(false);
         }
@@ -345,7 +351,7 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
           isAdmin
         );
         if (!nameResult.success) {
-          showErrorMessage('Error', nameResult.error || 'Failed to update group name');
+          showErrorMessage(t('home.alert.error'), nameResult.error || t('create_group.update_name_failed'));
           setCreating(false);
           return;
         }
@@ -363,7 +369,7 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
           isAdmin
         );
         if (!descResult.success) {
-          showErrorMessage('Error', descResult.error || 'Failed to update group description');
+          showErrorMessage(t('home.alert.error'), descResult.error || t('create_group.update_desc_failed'));
           setCreating(false);
           return;
         }
@@ -380,20 +386,20 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
           isAdmin
         );
         if (!avatarResult.success) {
-          showErrorMessage('Error', avatarResult.error || 'Failed to update group icon');
+          showErrorMessage(t('home.alert.error'), avatarResult.error || t('create_group.update_icon_failed'));
           setCreating(false);
           return;
         }
       }
 
-      showSuccessMessage('Success', 'Group updated successfully!');
+      showSuccessMessage(t('home.alert.success'), t('create_group.update_success'));
       if (onGroupUpdated && typeof onGroupUpdated === 'function') {
         onGroupUpdated();
       }
       onClose();
     } catch (error) {
       console.error('Error updating group:', error);
-      showErrorMessage('Error', 'Failed to update group. Please try again.');
+      showErrorMessage(t('home.alert.error'), t('create_group.update_failed_try_again'));
     } finally {
       setCreating(false);
     }
@@ -410,143 +416,146 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingView}
+        style={[styles.keyboardAvoidingView, { paddingBottom: insets.bottom }]}
       >
         <View style={styles.overlay}>
-          <View style={[styles.container, { backgroundColor: isDarkMode ? '#1a1a1a' : '#fff' }]}>
+          <View style={[styles.container, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff' }]}>
             {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                 <Icon name="close" size={24} color={isDarkMode ? '#fff' : '#000'} />
               </TouchableOpacity>
-              <Text style={styles.headerTitle}>{isEditMode ? 'Edit Group' : 'Create Group'}</Text>
+              <Text style={styles.headerTitle}>{isEditMode ? t('create_group.edit_title') : t('create_group.create_title')}</Text>
               <View style={styles.placeholder} />
             </View>
 
-            {/* Group Icon Selection */}
-            <View style={styles.avatarContainer}>
-              <Text style={styles.label}>Group Icon (Optional)</Text>
-              <TouchableOpacity
-                onPress={handlePickImage}
-                style={styles.avatarButton}
-                disabled={uploadingAvatar}
-              >
-                {groupAvatarUri ? (
-                  <Image source={{ uri: groupAvatarUri }} style={styles.avatarPreview} />
-                ) : (
-                  <View style={[styles.avatarPlaceholder, { backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5' }]}>
-                    <Icon name="camera" size={32} color={isDarkMode ? '#666' : '#999'} />
-                  </View>
-                )}
-                {uploadingAvatar && (
-                  <View style={styles.uploadingOverlay}>
-                    <ActivityIndicator size="small" color="#fff" />
-                  </View>
-                )}
-                {groupAvatarUri && !uploadingAvatar && (
-                  <TouchableOpacity
-                    style={styles.removeAvatarButton}
-                    onPress={() => setGroupAvatarUri(null)}
-                  >
-                    <Icon name="close-circle" size={20} color="#EF4444" />
-                  </TouchableOpacity>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {/* Group Name Input */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Group Name <Text style={{ color: '#EF4444' }}>*</Text></Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5',
-                    color: isDarkMode ? '#fff' : '#000',
-                  },
-                ]}
-                placeholder="Enter group name (required)..."
-                placeholderTextColor={isDarkMode ? '#666' : '#999'}
-                value={groupName}
-                onChangeText={setGroupName}
-                maxLength={50}
-              />
-            </View>
-
-            {/* Group Description Input */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>
-                Description {!isEditMode && <Text style={{ color: '#EF4444' }}>*</Text>}
-                {isEditMode && <Text style={{ fontSize: 12, color: isDarkMode ? '#9CA3AF' : '#6B7280' }}> (max 100 characters)</Text>}
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5',
-                    color: isDarkMode ? '#fff' : '#000',
-                    minHeight: 80,
-                    textAlignVertical: 'top',
-                  },
-                ]}
-                placeholder={isEditMode ? "Enter group description (optional)..." : "Enter group description (required)..."}
-                placeholderTextColor={isDarkMode ? '#666' : '#999'}
-                value={groupDescription}
-                onChangeText={setGroupDescription}
-                multiline
-                maxLength={isEditMode ? 100 : 200}
-              />
-            </View>
-
-            {/* Selected Members Count - Only show in create mode */}
-            {!isEditMode && (
-              <>
-                <View style={styles.memberCountContainer}>
-                  <Text style={styles.memberCountText}>
-                    {selectedMemberIds.length} member{selectedMemberIds.length !== 1 ? 's' : ''} selected
-                    {totalMembers >= MAX_GROUP_MEMBERS && (
-                      <Text style={styles.maxReachedText}> (Max reached)</Text>
-                    )}
-                  </Text>
-                </View>
-
-                {/* Selected Members List */}
-                <FlatList
-                  data={displayUsers.filter((u) => selectedMemberIds.includes(u.id))}
-                  keyExtractor={(item) => item.id}
-                  renderItem={({ item }) => (
-                    <View style={styles.memberItem}>
-                      <Image
-                        source={{
-                          uri:
-                            item.avatar ||
-                            'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
-                        }}
-                        style={styles.memberAvatar}
-                      />
-                      <Text style={styles.memberName} numberOfLines={1}>
-                        {item.displayName || 'Anonymous'}
-                      </Text>
-                      <TouchableOpacity
-                        onPress={() => handleRemoveUser(item.id)}
-                        style={styles.removeButton}
-                      >
-                        <Icon name="close-circle" size={24} color="#EF4444" />
-                      </TouchableOpacity>
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false} keyboardShouldPersistTaps="handled">
+              {/* Group Icon Selection */}
+              <View style={styles.avatarContainer}>
+                <Text style={styles.label}>{t('create_group.group_icon_label')}</Text>
+                <TouchableOpacity
+                  onPress={handlePickImage}
+                  style={styles.avatarButton}
+                  disabled={uploadingAvatar}
+                >
+                  {groupAvatarUri ? (
+                    <Image source={{ uri: groupAvatarUri }} style={styles.avatarPreview} />
+                  ) : (
+                    <View style={[styles.avatarPlaceholder, { backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5' }]}>
+                      <Icon name="camera" size={32} color={isDarkMode ? '#666' : '#999'} />
                     </View>
                   )}
-                  ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                      <Text style={styles.emptyText}>No members selected</Text>
+                  {uploadingAvatar && (
+                    <View style={styles.uploadingOverlay}>
+                      <ActivityIndicator size="small" color="#fff" />
                     </View>
-                  }
-                  style={styles.membersList}
+                  )}
+                  {groupAvatarUri && !uploadingAvatar && (
+                    <TouchableOpacity
+                      style={styles.removeAvatarButton}
+                      onPress={() => setGroupAvatarUri(null)}
+                    >
+                      <Icon name="close-circle" size={20} color="#EF4444" />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Group Name Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>{t('create_group.group_name_label')} <Text style={{ color: '#EF4444' }}>*</Text></Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5',
+                      color: isDarkMode ? '#fff' : '#000',
+                    },
+                  ]}
+                  placeholder={t('create_group.group_name_placeholder')}
+                  placeholderTextColor={isDarkMode ? '#999' : '#888'}
+                  value={groupName}
+                  onChangeText={setGroupName}
+                  maxLength={50}
                 />
-              </>
-            )}
+              </View>
+
+              {/* Group Description Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>
+                  {t('create_group.description_label')} {!isEditMode && <Text style={{ color: '#EF4444' }}>*</Text>}
+                  {isEditMode && <Text style={{ fontSize: 12, color: isDarkMode ? '#9CA3AF' : '#6B7280' }}> {t('create_group.max_char', { max: 100 })}</Text>}
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5',
+                      color: isDarkMode ? '#fff' : '#000',
+                      minHeight: 80,
+                      textAlignVertical: 'top',
+                    },
+                  ]}
+                  placeholder={isEditMode ? t('create_group.desc_placeholder_optional') : t('create_group.desc_placeholder_required')}
+                  placeholderTextColor={isDarkMode ? '#999' : '#888'}
+                  value={groupDescription}
+                  onChangeText={setGroupDescription}
+                  multiline
+                  maxLength={isEditMode ? 100 : 200}
+                />
+              </View>
+
+              {/* Selected Members Count - Only show in create mode */}
+              {!isEditMode && (
+                <>
+                  <View style={styles.memberCountContainer}>
+                    <Text style={styles.memberCountText}>
+                      {selectedMemberIds.length === 1 ? t('create_group.members_selected_singular', { count: selectedMemberIds.length }) : t('create_group.members_selected_plural', { count: selectedMemberIds.length })}
+                      {totalMembers >= MAX_GROUP_MEMBERS && (
+                        <Text style={styles.maxReachedText}> {t('create_group.max_reached')}</Text>
+                      )}
+                    </Text>
+                  </View>
+
+                  {/* Selected Members List */}
+                  <FlatList
+                    data={displayUsers.filter((u) => selectedMemberIds.includes(u.id))}
+                    keyExtractor={(item) => item.id}
+                    scrollEnabled={false}
+                    renderItem={({ item }) => (
+                      <View style={styles.memberItem}>
+                        <Image
+                          source={{
+                            uri:
+                              item.avatar ||
+                              'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
+                          }}
+                          style={styles.memberAvatar}
+                        />
+                        <Text style={styles.memberName} numberOfLines={1}>
+                          {item.displayName || t('private_chat.anonymous')}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => handleRemoveUser(item.id)}
+                          style={styles.removeButton}
+                        >
+                          <Icon name="close-circle" size={24} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                    ListEmptyComponent={
+                      <View style={styles.emptyContainer}>
+                        <Text style={styles.emptyText}>{t('create_group.no_members')}</Text>
+                      </View>
+                    }
+                    style={styles.membersList}
+                  />
+                </>
+              )}
+            </ScrollView>
 
             {/* Create Button */}
-            <View style={styles.footer}>
+            <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
               <TouchableOpacity
                 style={[
                   styles.createButton,
@@ -561,7 +570,7 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
                 ) : (
                   <>
                     <Icon name={isEditMode ? "checkmark" : "people"} size={20} color="#fff" />
-                    <Text style={styles.createButtonText}>{isEditMode ? 'Update Group' : 'Create Group'}</Text>
+                    <Text style={styles.createButtonText}>{isEditMode ? t('create_group.update_button') : t('create_group.create_button')}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -587,7 +596,8 @@ const getStyles = (isDark) =>
     container: {
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
-      padding: 20,
+      paddingTop: 20,
+      paddingHorizontal: 20,
       maxHeight: '90%',
     },
     header: {

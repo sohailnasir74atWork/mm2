@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../../../GlobelStats';
+import config from '../../../Helper/Environment';
 import { useLocalState } from '../../../LocalGlobelStats';
 import { generateChallengeForRound } from '../utils/gameInviteSystem';
 
@@ -17,6 +18,7 @@ const GameChallenge = ({ roomData, currentUser, onAnswer, roomId }) => {
   const { theme, firestoreDB } = useGlobalState();
   const { localState } = useLocalState();
   const isDarkMode = theme === 'dark';
+  const { t } = require('react-i18next').useTranslation();
 
   // Get pet data
   const petData = useMemo(() => {
@@ -115,19 +117,19 @@ const GameChallenge = ({ roomData, currentUser, onAnswer, roomId }) => {
     const challengeTypes = [
       {
         type: 'name',
-        question: `What is the name of this pet?`,
+        question: t('game.question_name'),
         correctAnswer: randomPet.name,
         options: generateNameOptions(randomPet, validPets),
       },
       {
         type: 'rarity',
-        question: `What is the rarity of ${randomPet.name}?`,
+        question: t('game.question_rarity', { name: randomPet.name }),
         correctAnswer: randomPet.rarity || 'Common',
         options: generateRarityOptions(randomPet.rarity),
       },
       {
         type: 'type',
-        question: `What type is ${randomPet.name}?`,
+        question: t('game.question_type', { name: randomPet.name }),
         correctAnswer: randomPet.type || 'Pet',
         options: generateTypeOptions(randomPet.type, validPets),
       },
@@ -217,10 +219,10 @@ const GameChallenge = ({ roomData, currentUser, onAnswer, roomId }) => {
 
   if (!challenge) {
     return (
-      <View style={[styles.container, { backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff' }]}>
+      <View style={[styles.container, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#ffffff' }]}>
         <ActivityIndicator size="large" color="#8B5CF6" />
         <Text style={[styles.loadingText, { color: isDarkMode ? '#9ca3af' : '#6b7280' }]}>
-          Loading challenge...
+          {t('game.loading_challenge')}
         </Text>
       </View>
     );
@@ -229,10 +231,10 @@ const GameChallenge = ({ roomData, currentUser, onAnswer, roomId }) => {
   const isCorrect = selectedAnswer === challenge.correctAnswer;
 
   return (
-    <View style={[styles.container, { backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff' }]}>
+    <View style={[styles.container, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#ffffff' }]}>
       <View style={styles.header}>
         <Text style={[styles.roundText, { color: isDarkMode ? '#9ca3af' : '#6b7280' }]}>
-          Round {challenge.round} of {roomData?.gameData?.totalRounds || 5}
+          {t('game.round_x_of_y', { round: challenge.round, total: roomData?.gameData?.totalRounds || 5 })}
         </Text>
         {hasAnswered && (
           <View style={[styles.resultBadge, isCorrect ? styles.correctBadge : styles.wrongBadge]}>
@@ -242,7 +244,7 @@ const GameChallenge = ({ roomData, currentUser, onAnswer, roomId }) => {
               color="#fff"
             />
             <Text style={styles.resultText}>
-              {isCorrect ? 'Correct!' : 'Wrong'}
+              {isCorrect ? t('game.correct') : t('game.wrong')}
             </Text>
           </View>
         )}
@@ -309,8 +311,8 @@ const GameChallenge = ({ roomData, currentUser, onAnswer, roomId }) => {
         <View style={styles.feedbackContainer}>
           <Text style={[styles.feedbackText, { color: isDarkMode ? '#9ca3af' : '#6b7280' }]}>
             {isCorrect
-              ? '🎉 Great job! You got it right!'
-              : `The correct answer is: ${challenge.correctAnswer}`}
+              ? t('game.feedback_correct')
+              : t('game.feedback_wrong', { answer: challenge.correctAnswer })}
           </Text>
         </View>
       )}

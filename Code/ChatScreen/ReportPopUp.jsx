@@ -38,12 +38,12 @@ const ReportPopup = ({ visible, message, onClose }) => {
   const handleSubmit = () => {
     // ✅ Safety checks
     if (!message || !message.id) {
-      Alert.alert("Error", "Invalid message. Unable to report.");
+      Alert.alert(t("home.alert.error"), t("report_popup.invalid_message"));
       return;
     }
 
     if (!appdatabase) {
-      Alert.alert("Error", "Database not available. Please try again.");
+      Alert.alert(t("home.alert.error"), t("report_popup.no_db"));
       return;
     }
 
@@ -53,7 +53,7 @@ const ReportPopup = ({ visible, message, onClose }) => {
       : messageId;
   
     if (!sanitizedId || sanitizedId.trim().length === 0) {
-      Alert.alert("Error", "Invalid message. Unable to report.");
+      Alert.alert(t("home.alert.error"), t("report_popup.invalid_message"));
       return;
     }
   
@@ -93,7 +93,7 @@ const ReportPopup = ({ visible, message, onClose }) => {
       .catch((error) => {
         console.error("Error reporting message:", error);
         setLoading(false);
-        Alert.alert("Error", "Failed to submit the report. Please try again.");
+        Alert.alert(t("home.alert.error"), t("report_popup.submit_failed"));
       });
   };
 
@@ -106,9 +106,9 @@ const ReportPopup = ({ visible, message, onClose }) => {
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.popup}>
-          <Text style={styles.title}>Report Message</Text>
-          <Text style={styles.messageText}>{`Message: "${message?.text}"`}</Text>
-          <Text style={styles.messageText}>{`Sender: ${message?.sender || "Anonymous"}`}</Text>
+          <Text style={styles.title}>{t("report_popup.title")}</Text>
+          <Text style={styles.messageText}>{`${t("report_popup.message_label")}: "${message?.text}"`}</Text>
+          <Text style={styles.messageText}>{`${t("report_popup.sender_label")}: ${message?.sender || t("private_chat.anonymous")}`}</Text>
 
           {/* Standard Reasons */}
           <View style={styles.optionsContainer}>
@@ -158,8 +158,8 @@ const ReportPopup = ({ visible, message, onClose }) => {
           {showCustomInput && (
             <TextInput
               style={styles.input}
-              placeholder="Enter custom reason"
-              placeholderTextColor="#888"
+              placeholder={t("report_popup.custom_reason_placeholder")}
+              placeholderTextColor={isDarkMode ? '#999' : '#888'}
               value={customReason}
               onChangeText={setCustomReason}
             />
@@ -201,7 +201,7 @@ const getStyles = (isDarkMode) =>
     },
     popup: {
       width: "80%",
-      backgroundColor: isDarkMode ? "#121212" : "#f2f2f7",
+      backgroundColor: isDarkMode ? config.colors.backgroundDark : "#f2f2f7",
       borderRadius: 10,
       padding: 20,
       elevation: 5,

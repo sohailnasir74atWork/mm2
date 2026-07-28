@@ -7,6 +7,8 @@ import { useGlobalState } from '../../GlobelStats';
 import { useTranslation } from 'react-i18next';
 import InterstitialAdManager from '../../Ads/IntAd';
 import { useLocalState } from '../../LocalGlobelStats';
+import { validateContent } from '../../Helper/ContentModeration';
+import { showMessage } from 'react-native-flash-message';
 import { launchImageLibrary } from 'react-native-image-picker';
 import RNFS from 'react-native-fs';
 
@@ -71,7 +73,6 @@ const GroupMessageInput = ({
   const { theme, user } = useGlobalState();
   const isDark = theme === 'dark';
   const { t } = useTranslation();
-
   const styles = useMemo(() => getStyles(isDark), [isDark]);
 
   const uploadToBunny = useCallback(async (imagePath) => {
@@ -186,6 +187,21 @@ const GroupMessageInput = ({
       return;
     }
 
+    // ✅ Content moderation (kid-safety): block profanity / NSFW / spam / links
+    // before anything is sent or the input is cleared. Mirrors the public-chat
+    // and private-chat inputs so every send path enforces the same filter.
+    if (textToSend) {
+      const validation = validateContent(textToSend);
+      if (!validation.isValid) {
+        showMessage({
+          message: validation.reason || 'Inappropriate content detected.',
+          type: 'danger',
+          duration: 3000,
+        });
+        return;
+      }
+    }
+
     setIsSending(true);
     setInput('');
     setImageUris([]);
@@ -195,8 +211,12 @@ const GroupMessageInput = ({
 
     setMessageCount((prevCount) => {
       const newCount = prevCount + 1;
-      if (!localState?.isPro && newCount % 5 === 0) {
+      if (!localState?.isPro && newCount % 7 === 0) {
         InterstitialAdManager.showAd(() => {});
+      } else if (!localState?.isPro && newCount % 7 === 6) {
+        // One message before the ad message: warm the interstitial so the
+        // trigger actually has something to show (lazy-load pipeline).
+        InterstitialAdManager.prepare();
       }
       return newCount;
     });
@@ -223,6 +243,13 @@ const GroupMessageInput = ({
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      // Restore the user's content so a failed send/upload doesn't silently
+      // lose the text, images, or selected pets they had typed.
+      setInput(textToSend);
+      setImageUris(imagesToSend);
+      if (setSelectedFruits && typeof setSelectedFruits === 'function') {
+        setSelectedFruits(fruitsToSend);
+      }
       Alert.alert('Error', 'Failed to send message.');
     } finally {
       setIsSending(false);
@@ -267,12 +294,12 @@ const GroupMessageInput = ({
   };
 
   return (
-    <View style={{ backgroundColor: isDark ? config.colors.backgroundDark : config.colors.backgroundLight }}>
+    <View style={[{ backgroundColor: isDark ? config.colors.backgroundDark : config.colors.backgroundLight }]}>
       <View style={styles.inputWrapper}>
         {/* Reply context UI */}
         {replyTo && (
           <View style={[styles.replyContainer, { 
-          backgroundColor: isDark ? '#374151' : '#E5E7EB',
+          backgroundColor: isDark ? config.colors.surfaceElevatedDark : '#E5E7EB',
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -315,7 +342,7 @@ const GroupMessageInput = ({
         <TextInput
           style={[styles.input, { color: isDark ? '#FFF' : '#000' }]}
           placeholder={t('chat.type_message')}
-          placeholderTextColor="#888"
+          placeholderTextColor={isDark ? '#999' : '#888'}
           value={input}
           onChangeText={setInput}
           multiline

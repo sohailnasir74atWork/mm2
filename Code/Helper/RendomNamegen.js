@@ -58,7 +58,7 @@ const ADOPTME_NAMES = [
   
 
   export const generateOnePieceUsername = () => {
-    const randomName = ONE_PIECE_CHARACTERS[Math.floor(Math.random() * ONE_PIECE_CHARACTERS.length)];
+    const randomName = ADOPTME_NAMES[Math.floor(Math.random() * ADOPTME_NAMES.length)];
     const randomNumber = Math.floor(100 + Math.random() * 900); // Random 4-digit number
     return `${randomName}_${randomNumber}`;
   };

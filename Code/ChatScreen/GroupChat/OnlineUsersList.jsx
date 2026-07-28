@@ -455,11 +455,7 @@ const OnlineUsersList = ({
       mixpanel.track("Online Users Chat");
     };
 
-    if (!localState?.isPro) {
-      InterstitialAdManager.showAd(callbackFunction);
-    } else {
-      callbackFunction();
-    }
+    callbackFunction();
   }, [mode, onClose, navigation, localState?.isPro, handleToggleUserSelection, handleGameInvite]);
 
   // ✅ Get selected users for group creation
@@ -538,7 +534,7 @@ const OnlineUsersList = ({
                   paddingHorizontal: 4,
                   paddingVertical: 1,
                   borderRadius: 3,
-                  backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6',
+                  backgroundColor: isDarkMode ? config.colors.surfaceDark : '#F3F4F6',
                 }}
               >
                 <Icon
@@ -729,7 +725,7 @@ const getStyles = (isDark) =>
       justifyContent: 'flex-end',
     },
     modalContent: {
-      backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+      backgroundColor: isDark ? config.colors.surfaceDark : '#FFFFFF',
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
       maxHeight: 500,
@@ -742,7 +738,7 @@ const getStyles = (isDark) =>
       padding: 12,
       paddingHorizontal: 16,
       borderBottomWidth: 1,
-      borderBottomColor: isDark ? '#374151' : '#E5E7EB',
+      borderBottomColor: isDark ? config.colors.surfaceElevatedDark : '#E5E7EB',
     },
     headerTitle: {
       fontSize: 18,
@@ -812,7 +808,7 @@ const getStyles = (isDark) =>
       padding: 8,
       marginVertical: 3,
       marginHorizontal: 6,
-      backgroundColor: isDark ? '#374151' : '#F9FAFB',
+      backgroundColor: isDark ? config.colors.surfaceElevatedDark : '#F9FAFB',
       borderRadius: 10,
     },
     userItemLeft: {
@@ -834,7 +830,7 @@ const getStyles = (isDark) =>
       borderRadius: 6,
       backgroundColor: '#10B981',
       borderWidth: 2,
-      borderColor: isDark ? '#1F2937' : '#FFFFFF',
+      borderColor: isDark ? config.colors.surfaceDark : '#FFFFFF',
     },
     userInfo: {
       flex: 1,
@@ -895,7 +891,7 @@ const getStyles = (isDark) =>
       padding: 10,
       paddingHorizontal: 16,
       borderTopWidth: 1,
-      borderTopColor: isDark ? '#374151' : '#E5E7EB',
+      borderTopColor: isDark ? config.colors.surfaceElevatedDark : '#E5E7EB',
       alignItems: 'center',
     },
     footerText: {

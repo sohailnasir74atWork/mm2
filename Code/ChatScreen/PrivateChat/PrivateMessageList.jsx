@@ -47,6 +47,7 @@ const PrivateMessageList = ({
   hasRated,
   setShowRatingModal,
   isPaginating,        // 👈 add this
+  otherLastRead, // 👈 Other user's lastRead timestamp for read receipts
 }) => {
   const { theme, isAdmin, api, freeTranslation } = useGlobalState();
   const isDarkMode = theme === 'dark';
@@ -55,7 +56,7 @@ const PrivateMessageList = ({
   
   const fruitColors = useMemo(
     () => ({
-      wrapperBg: isDarkMode ? '#0f172a55' : '#e5e7eb55',
+      wrapperBg: isDarkMode ? `${config.colors.surfaceDark}55` : '#e5e7eb55',
       name:      isDarkMode ? '#f9fafb' : '#111827',
       value:     isDarkMode ? '#e5e7eb' : '#4b5563',
       divider:   isDarkMode ? '#ffffff22' : '#00000011',
@@ -112,7 +113,7 @@ const PrivateMessageList = ({
     if (!message || !message.text) return;
     Clipboard.setString(message.text);
     triggerHapticFeedback('impactLight');
-    showSuccessMessage('Success', 'Message Copied');
+    showSuccessMessage(t('home.alert.success'), t('private_chat.msg_copied'));
   }, [triggerHapticFeedback]);
 
   // ✅ Memoize filteredMessages
@@ -187,14 +188,14 @@ const PrivateMessageList = ({
   // ✅ Memoize handleTranslate
   const handleTranslate = useCallback(async (item) => {
     if (!item || !item.text) {
-      Alert.alert('Error', 'Invalid message to translate.');
+      Alert.alert(t('home.alert.error'), t('private_chat.invalid_translate'));
       return;
     }
 
     const isUnlimited = freeTranslation || localState?.isPro;
   
     if (!isUnlimited && canTranslate && typeof canTranslate === 'function' && !canTranslate()) {
-      Alert.alert('Limit Reached', 'You can only translate 5 messages per day.');
+      Alert.alert(t('private_chat.limit_reached'), t('private_chat.translate_limit'));
       return;
     }
   
@@ -205,70 +206,89 @@ const PrivateMessageList = ({
         incrementTranslationCount();
       }
   
-      const remaining = isUnlimited ? 'Unlimited' : `${getRemainingTranslationTries ? getRemainingTranslationTries() : 0} remaining`;
+      const remainingLabel = isUnlimited 
+        ? t('private_chat.unlimited') 
+        : (getRemainingTranslationTries && getRemainingTranslationTries() === 1 ? t('private_chat.remaining_tries_singular', { count: 1 }) : t('private_chat.remaining_tries_plural', { count: getRemainingTranslationTries ? getRemainingTranslationTries() : 0 }));
+      const upgradeLabel = isUnlimited ? '' : `\n\n🔓 ${t('private_chat.upgrade_pro')}`;
   
       Alert.alert(
-        'Translated Message',
-        `${translated}\n\n🧠 Daily Limit: ${remaining}${isUnlimited
-          ? ''
-          : '\n\n🔓 Want more? Upgrade to Pro for unlimited translations.'
-        }`
+        t('private_chat.translated_title'),
+        `${translated}\n\n🧠 ${t('private_chat.daily_limit')}: ${remainingLabel}${upgradeLabel}`
       );
     } else {
-      Alert.alert('Error', 'Translation failed. Please try again later.');
+      Alert.alert(t('home.alert.error'), t('private_chat.translate_failed'));
     }
   }, [freeTranslation, localState?.isPro, canTranslate, incrementTranslationCount, getRemainingTranslationTries, translateText, deviceLanguage]);
   
-  // ✅ Memoize renderMessage
-  const renderMessage = useCallback(({ item }) => {
+  // ✅ Date separator helper
+  const getDateLabel = useCallback((timestamp) => {
+    if (!timestamp) return '';
+    const msgDate = new Date(timestamp);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (msgDate.toDateString() === today.toDateString()) return t('chat.today', { defaultValue: 'Today' });
+    if (msgDate.toDateString() === yesterday.toDateString()) return t('chat.yesterday', { defaultValue: 'Yesterday' });
+    return msgDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }, [t]);
+
+  // ✅ Memoize renderMessage — WhatsApp-style bubbles (no avatars)
+  const renderMessage = useCallback(({ item, index }) => {
     // ✅ Safety checks
     if (!item || typeof item !== 'object') return null;
 
     const isMyMessage = item.senderId === userId;
-  
-    const avatarUri = item.senderId !== userId
-      ? selectedUser?.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png'
-      : user?.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
-  
+
     // fruits helpers
     const fruits = Array.isArray(item.fruits) ? item.fruits : [];
     const hasFruits = fruits.length > 0;
     const totalFruitValue = hasFruits
       ? fruits.reduce((sum, f) => sum + (Number(f?.value) || 0), 0)
       : 0;
-  
-    return (
+
+    const msgBubble = (
       <View
-        style={
-          isMyMessage
-            ? [styles.mymessageBubble, styles.myMessage, { width: '80%' }]
-            : [styles.othermessageBubble, styles.otherMessage, { width: '80%' }]
-        }
+        style={{
+          alignSelf: isMyMessage ? 'flex-end' : 'flex-start',
+          maxWidth: '80%',
+          marginBottom: 4,
+          marginHorizontal: 10,
+        }}
       >
-        {/* Avatar */}
-        <Image
-          source={{ uri: avatarUri }}
-          style={styles.profileImagePvtChat}
-        />
-  
+        {/* WhatsApp-style bubble — no avatar */}
+        <View style={{
+          backgroundColor: isMyMessage
+            ? (isDarkMode ? '#0B5E3F' : '#DCF8C6')
+            : (isDarkMode ? config.colors.surfaceDark : '#FFFFFF'),
+          borderRadius: 16,
+          borderTopLeftRadius: isMyMessage ? 16 : 4,
+          borderTopRightRadius: isMyMessage ? 4 : 16,
+          paddingHorizontal: 10,
+          paddingVertical: 6,
+          shadowColor: '#000',
+          shadowOpacity: 0.05,
+          shadowRadius: 2,
+          shadowOffset: { width: 0, height: 1 },
+          elevation: 1,
+        }}>
+
         {/* Message Content */}
-       
+
         <Menu>
         {/* Images - Support multiple images */}
         {(item.imageUrls || item.imageUrl) && (() => {
-          // Support both array (imageUrls) and single (imageUrl) for backward compatibility
           const imageArray = Array.isArray(item.imageUrls) && item.imageUrls.length > 0
             ? item.imageUrls
             : (item.imageUrl ? [item.imageUrl] : []);
-          
+
           if (imageArray.length === 0) return null;
-          
+
           return (
             <View style={{ marginBottom: 4, flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
               {imageArray.map((imageUri, imgIndex) => {
-                // Fixed size approach: larger for single, smaller for multiple
                 const imageSize = imageArray.length === 1 ? 250 : imageArray.length === 2 ? 150 : 110;
-                
+
                 return (
                   <TouchableOpacity
                     key={`img-${imgIndex}`}
@@ -280,14 +300,14 @@ const PrivateMessageList = ({
                       })
                     }
                   >
-                    <Image 
-                      source={{ uri: imageUri }} 
-                      style={{ 
+                    <Image
+                      source={{ uri: imageUri }}
+                      style={{
                         width: imageSize,
                         height: imageSize,
                         borderRadius: 8,
                         resizeMode: 'cover',
-                      }} 
+                      }}
                     />
                   </TouchableOpacity>
                 );
@@ -299,113 +319,81 @@ const PrivateMessageList = ({
             onLongPress={() => triggerHapticFeedback('impactMedium')}
             customStyles={{ triggerTouchable: { activeOpacity: 1 } }}
           >
-            {/* Optional image message */}
-           
-  
-            {/* 🐾 Fruits list (your selected pets) */}
-          {/* 🐾 Fruits list (your selected pets) */}
-{hasFruits && (
-  <View
-    style={[
-      fruitStyles.fruitsWrapper,
-    ]}
-  >
-    {fruits.map((fruit, index )=> {
-      const valueType = (fruit.valueType || 'd').toLowerCase(); // 'd' | 'n' | 'm'
 
-      let valueBadgeStyle = fruitStyles.badgeDefault;
-      if (valueType === 'n') valueBadgeStyle = fruitStyles.badgeNeon;
-      if (valueType === 'm') valueBadgeStyle = fruitStyles.badgeMega;
+            {/* 🐾 Fruits list */}
+            {hasFruits && (
+              <View style={[fruitStyles.fruitsWrapper]}>
+                {fruits.map((fruit, index) => {
+                  const valueType = (fruit.valueType || 'd').toLowerCase();
 
-      return (
-        <View
-          key={`${fruit.id || fruit.name}-${index}`}
-          style={fruitStyles.fruitCard}
-        >
-          <Image
-            source={{ uri: getImageUrl(fruit) || fruit.imageUrl || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
-            style={fruitStyles.fruitImage}
-          />
+                  let valueBadgeStyle = fruitStyles.badgeDefault;
+                  if (valueType === 'n') valueBadgeStyle = fruitStyles.badgeNeon;
+                  if (valueType === 'm') valueBadgeStyle = fruitStyles.badgeMega;
 
-          <View style={fruitStyles.fruitInfo}>
-            <Text
-              style={[fruitStyles.fruitName, { color: fruitColors.name }]}
-              numberOfLines={1}
-            >
-              {`${fruit.name || fruit.Name}  `}
-            </Text>
+                  return (
+                    <View
+                      key={`${fruit.id || fruit.name}-${index}`}
+                      style={fruitStyles.fruitCard}
+                    >
+                      <Image
+                        source={{ uri: getImageUrl(fruit) || fruit.imageUrl || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
+                        style={fruitStyles.fruitImage}
+                      />
+                      <View style={fruitStyles.fruitInfo}>
+                        <Text
+                          style={[fruitStyles.fruitName, { color: fruitColors.name }]}
+                          numberOfLines={1}
+                        >
+                          {`${fruit.name || fruit.Name}  `}
+                        </Text>
+                        <Text style={[fruitStyles.fruitValue, { color: fruitColors.value }]}>
+                          · Value: {Number(fruit.value || 0).toLocaleString()}{' '}
+                        </Text>
+                        <View style={fruitStyles.badgeRow}>
+                          <View style={[fruitStyles.badge, valueBadgeStyle]}>
+                            <Text style={fruitStyles.badgeText}>{valueType.toUpperCase()}</Text>
+                          </View>
+                          {fruit.isFly && (
+                            <View style={[fruitStyles.badge, fruitStyles.badgeFly]}>
+                              <Text style={fruitStyles.badgeText}>F</Text>
+                            </View>
+                          )}
+                          {fruit.isRide && (
+                            <View style={[fruitStyles.badge, fruitStyles.badgeRide]}>
+                              <Text style={fruitStyles.badgeText}>R</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
 
-            <Text
-              style={[fruitStyles.fruitValue, { color: fruitColors.value }]}
-            >
-              · Value: {Number(fruit.value || 0).toLocaleString()}
-              {/* {fruit.category
-                ? `  ·  ${String(fruit.category).toUpperCase()}  `
-                : ''} */}{' '}
-            </Text>
-
-            <View style={fruitStyles.badgeRow}>
-              {/* D / N / M badge */}
-              <View style={[fruitStyles.badge, valueBadgeStyle]}>
-                <Text style={fruitStyles.badgeText}>
-                  {valueType.toUpperCase()}
-                </Text>
+                {/* ✅ Total row – only if more than one fruit */}
+                {fruits.length > 1 && (
+                  <View style={[fruitStyles.totalRow, { borderTopColor: fruitColors.divider }]}>
+                    <Text style={[fruitStyles.totalLabel, { color: fruitColors.totalLabel }]}>{t('private_chat.total_value')}</Text>
+                    <Text style={[fruitStyles.totalValue, { color: fruitColors.totalValue }]}>
+                      {totalFruitValue.toLocaleString()}
+                    </Text>
+                  </View>
+                )}
               </View>
+            )}
 
-              {/* Fly badge */}
-              {fruit.isFly && (
-                <View style={[fruitStyles.badge, fruitStyles.badgeFly]}>
-                  <Text style={fruitStyles.badgeText}>F</Text>
-                </View>
-              )}
-
-              {/* Ride badge */}
-              {fruit.isRide && (
-                <View style={[fruitStyles.badge, fruitStyles.badgeRide]}>
-                  <Text style={fruitStyles.badgeText}>R</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-      );
-    })}
-
-    {/* ✅ Total row – only if more than one fruit */}
-    {fruits.length > 1 && (
-      <View
-        style={[
-          fruitStyles.totalRow,
-          { borderTopColor: fruitColors.divider },
-        ]}
-      >
-        <Text
-          style={[fruitStyles.totalLabel, { color: fruitColors.totalLabel }]}
-        >
-          Total:
-        </Text>
-        <Text
-          style={[fruitStyles.totalValue, { color: fruitColors.totalValue }]}
-        >
-          {totalFruitValue.toLocaleString()}
-        </Text>
-      </View>
-    )}
-  </View>
-)}
-
-  
-            {/* Normal text (can be empty if only fruits) */}
+            {/* Normal text */}
             {!!item.text && (
-              <Text
-                style={isMyMessage ? styles.myMessageText : styles.otherMessageText}
-              >
+              <Text style={{
+                fontSize: 13,
+                color: isDarkMode ? '#FFFFFF' : '#000000',
+                lineHeight: 18,
+              }}>
                 {item.text}
               </Text>
             )}
           </MenuTrigger>
-  
-          {/* existing menu options stay the same */}
+
+          {/* Menu options */}
           <MenuOptions
             customStyles={{
               optionsContainer: styles.menuoptions,
@@ -414,10 +402,10 @@ const PrivateMessageList = ({
             }}
           >
             <MenuOption onSelect={() => handleCopy(item)}>
-              <Text style={styles.menuOptionText}>Copy</Text>
+              <Text style={styles.menuOptionText}>{t('private_chat.copy')}</Text>
             </MenuOption>
             <MenuOption onSelect={() => handleTranslate(item)}>
-              <Text style={styles.menuOptionText}>Translate</Text>
+              <Text style={styles.menuOptionText}>{t('private_chat.translate')}</Text>
             </MenuOption>
             {!isMyMessage && (
               <MenuOption onSelect={() => handleReport(item)}>
@@ -426,16 +414,66 @@ const PrivateMessageList = ({
             )}
           </MenuOptions>
         </Menu>
-  
-        <Text style={styles.timestamp}>
-          {item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          }) : ''}
-        </Text>
+
+          {/* Timestamp + Read receipts inside bubble — WhatsApp style */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 2, gap: 3 }}>
+            <Text style={{
+              fontSize: 10,
+              color: isMyMessage
+                ? (isDarkMode ? '#ffffffaa' : '#00000066')
+                : (isDarkMode ? '#ffffff77' : '#00000055'),
+            }}>
+              {item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              }) : ''}
+            </Text>
+            {/* ✅ Read receipt ticks for own messages */}
+            {isMyMessage && (localState?.showReadReceipts ?? true) && (
+              <Text style={{
+                fontSize: 12,
+                fontWeight: '700',
+                color: (otherLastRead && item.timestamp && item.timestamp <= otherLastRead)
+                  ? '#53BDEB'  // Blue ticks = read
+                  : (isDarkMode ? '#ffffff77' : '#00000044'),
+                marginLeft: 1,
+              }}>
+                ✓✓
+              </Text>
+            )}
+          </View>
+        </View>
       </View>
     );
-  }, [userId, selectedUser, user, styles, fruitColors, handleCopy, handleTranslate, handleReport, onReply, navigation, t]);
+
+    // Date separator: in inverted list, next item in array is older
+    const nextMsg = filteredMessages[index + 1];
+    const showDateSep = !nextMsg || getDateLabel(item.timestamp) !== getDateLabel(nextMsg.timestamp);
+
+    return (
+      <>
+        {msgBubble}
+        {showDateSep && (
+          <View style={{ alignItems: 'center', marginVertical: 10 }}>
+            <View style={{
+              backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#e0e0e0',
+              borderRadius: 12,
+              paddingHorizontal: 14,
+              paddingVertical: 4,
+            }}>
+              <Text style={{
+                fontSize: 11,
+                color: isDarkMode ? '#aaaaaa' : '#666666',
+                fontWeight: '600',
+              }}>
+                {getDateLabel(item.timestamp)}
+              </Text>
+            </View>
+          </View>
+        )}
+      </>
+    );
+  }, [userId, selectedUser, user, styles, fruitColors, handleCopy, handleTranslate, handleReport, onReply, navigation, t, filteredMessages, getDateLabel, otherLastRead, localState?.showReadReceipts, isDarkMode]);
 
   // ✅ Memoize keyExtractor
   const keyExtractor = useCallback((item, index) => {
@@ -449,7 +487,7 @@ const PrivateMessageList = ({
       ) : (
         <View style={{paddingBottom:140}}>  
         <>   
-        <ScamSafetyBox setShowRatingModal={setShowRatingModal} canRate={canRate} hasRated={hasRated} />
+        <ScamSafetyBox setShowRatingModal={setShowRatingModal} canRate={canRate} hasRated={hasRated} selectedUserId={selectedUser?.senderId} />
      
         <FlatList
           data={filteredMessages}

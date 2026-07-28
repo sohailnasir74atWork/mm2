@@ -268,7 +268,7 @@ export const sendGroupInvite = async (firestoreDB, groupId, invitedUserId, invit
   try {
     // Check if user is already in group (1 Firestore read)
     const groupDoc = await getDoc(doc(firestoreDB, 'groups', groupId));
-    if (!groupDoc.exists) {
+    if (!groupDoc.exists()) {
       return { success: false, error: 'Group not found' };
     }
 
@@ -363,7 +363,7 @@ export const acceptGroupInvite = async (firestoreDB, appdatabase, inviteId, user
     const inviteRef = doc(firestoreDB, 'group_invitations', inviteId);
     const inviteSnap = await getDoc(inviteRef);
 
-    if (!inviteSnap.exists) {
+    if (!inviteSnap.exists()) {
       return { success: false, error: 'Invitation not found' };
     }
 
@@ -385,7 +385,7 @@ export const acceptGroupInvite = async (firestoreDB, appdatabase, inviteId, user
     const groupRef = doc(firestoreDB, 'groups', inviteData.groupId);
     const groupSnap = await getDoc(groupRef);
 
-    if (!groupSnap.exists) {
+    if (!groupSnap.exists()) {
       return { success: false, error: 'Group not found' };
     }
 
@@ -405,7 +405,7 @@ export const acceptGroupInvite = async (firestoreDB, appdatabase, inviteId, user
     // Add user to group (transaction to prevent race conditions)
     await runTransaction(firestoreDB, async (transaction) => {
       const freshGroupSnap = await transaction.get(groupRef);
-      if (!freshGroupSnap.exists) {
+      if (!freshGroupSnap.exists()) {
         throw new Error('Group not found');
       }
 
@@ -482,7 +482,7 @@ export const declineGroupInvite = async (firestoreDB, inviteId, userId) => {
     const inviteRef = doc(firestoreDB, 'group_invitations', inviteId);
     const inviteSnap = await getDoc(inviteRef);
 
-    if (!inviteSnap.exists) {
+    if (!inviteSnap.exists()) {
       return { success: false, error: 'Invitation not found' };
     }
 
@@ -517,7 +517,7 @@ export const leaveGroup = async (firestoreDB, appdatabase, groupId, userId) => {
 
     const result = await runTransaction(firestoreDB, async (transaction) => {
       const groupSnap = await transaction.get(groupRef);
-      if (!groupSnap.exists) {
+      if (!groupSnap.exists()) {
         // Group doesn't exist - return null to indicate group was not found
         // We'll handle cleanup outside the transaction
         return null;
@@ -706,7 +706,7 @@ export const sendGroupMessage = async (appdatabase, firestoreDB, groupId, messag
 
     // 2. Get group members from Firestore (1 read)
     const groupDoc = await getDoc(doc(firestoreDB, 'groups', groupId));
-    if (!groupDoc.exists) {
+    if (!groupDoc.exists()) {
       return { success: false, error: 'Group not found' };
     }
 
@@ -752,22 +752,22 @@ export const sendGroupMessage = async (appdatabase, firestoreDB, groupId, messag
       }
     }
 
-    // 5. Get current unreadCounts for inactive members (N reads, but only for inactive)
-    if (inactiveMemberIds.length > 0) {
-      const unreadCountPromises = inactiveMemberIds.map(async (memberId) => {
-        const metaRef = ref(appdatabase, `group_meta_data/${memberId}/${groupId}`);
-        const metaSnap = await get(metaRef);
-        const currentUnread = metaSnap.exists() ? metaSnap.val().unreadCount || 0 : 0;
-        return { memberId, currentUnread };
-      });
-
-      const unreadCounts = await Promise.all(unreadCountPromises);
-
-      // Add increment updates
-      unreadCounts.forEach(({ memberId, currentUnread }) => {
-        updates[`group_meta_data/${memberId}/${groupId}/unreadCount`] = currentUnread + 1;
-      });
-    }
+    // 5. Bump unread for inactive members — server-side atomic increment.
+    //
+    // This previously read every inactive member's meta node first (one full
+    // round-trip each, downloading the whole node to extract one integer) and
+    // wrote back `currentUnread + 1`. Two problems:
+    //   • cost — N reads per message in an N-member group
+    //   • correctness — a lost-update race: two people sending at the same
+    //     time both read the same value, so one increment vanished.
+    //
+    // increment() resolves server-side: zero reads, concurrency-safe. On a
+    // missing node it initialises from 0, matching the old
+    // `metaSnap.exists() ? ... : 0` behaviour. Same path, same field, same
+    // value type — older app versions read it exactly as before.
+    inactiveMemberIds.forEach((memberId) => {
+      updates[`group_meta_data/${memberId}/${groupId}/unreadCount`] = increment(1);
+    });
 
     // 6. Batch update all metadata at once (cost-optimized: 1 write operation)
     await update(ref(appdatabase, '/'), updates);
@@ -812,7 +812,7 @@ export const addMembersToGroup = async (firestoreDB, appdatabase, groupId, newMe
     const groupRef = doc(firestoreDB, 'groups', groupId);
     const groupSnap = await getDoc(groupRef);
     
-    if (!groupSnap.exists) {
+    if (!groupSnap.exists()) {
       return { success: false, error: 'Group not found' };
     }
 
@@ -941,7 +941,7 @@ export const removeMemberFromGroup = async (firestoreDB, appdatabase, groupId, m
 
     return await runTransaction(firestoreDB, async (transaction) => {
       const groupSnap = await transaction.get(groupRef);
-      if (!groupSnap.exists) {
+      if (!groupSnap.exists()) {
         throw new Error('Group not found');
       }
 
@@ -1150,7 +1150,7 @@ export const makeMemberCreator = async (firestoreDB, appdatabase, groupId, membe
 
     return await runTransaction(firestoreDB, async (transaction) => {
       const groupSnap = await transaction.get(groupRef);
-      if (!groupSnap.exists) {
+      if (!groupSnap.exists()) {
         throw new Error('Group not found');
       }
 
@@ -1206,7 +1206,7 @@ export const updateGroupName = async (firestoreDB, appdatabase, groupId, userId,
     const groupRef = doc(firestoreDB, 'groups', groupId);
     const groupSnap = await getDoc(groupRef);
 
-    if (!groupSnap.exists) {
+    if (!groupSnap.exists()) {
       return { success: false, error: 'Group not found' };
     }
 
@@ -1260,7 +1260,7 @@ export const updateGroupDescription = async (firestoreDB, appdatabase, groupId, 
     const groupRef = doc(firestoreDB, 'groups', groupId);
     const groupSnap = await getDoc(groupRef);
 
-    if (!groupSnap.exists) {
+    if (!groupSnap.exists()) {
       return { success: false, error: 'Group not found' };
     }
 
@@ -1309,7 +1309,7 @@ export const updateGroupAvatar = async (firestoreDB, appdatabase, groupId, userI
     const groupRef = doc(firestoreDB, 'groups', groupId);
     const groupSnap = await getDoc(groupRef);
 
-    if (!groupSnap.exists) {
+    if (!groupSnap.exists()) {
       return { success: false, error: 'Group not found' };
     }
 
@@ -1362,7 +1362,7 @@ export const sendJoinRequest = async (firestoreDB, groupId, requesterData) => {
     const groupRef = doc(firestoreDB, 'groups', groupId);
     const groupSnap = await getDoc(groupRef);
 
-    if (!groupSnap.exists) {
+    if (!groupSnap.exists()) {
       return { success: false, error: 'Group not found' };
     }
 
@@ -1431,7 +1431,7 @@ export const approveJoinRequest = async (firestoreDB, appdatabase, requestId, cr
     const requestRef = doc(firestoreDB, 'group_join_requests', requestId);
     const requestSnap = await getDoc(requestRef);
 
-    if (!requestSnap.exists) {
+    if (!requestSnap.exists()) {
       return { success: false, error: 'Join request not found' };
     }
 
@@ -1454,7 +1454,7 @@ export const approveJoinRequest = async (firestoreDB, appdatabase, requestId, cr
     const groupRef = doc(firestoreDB, 'groups', groupId);
     const groupSnap = await getDoc(groupRef);
 
-    if (!groupSnap.exists) {
+    if (!groupSnap.exists()) {
       return { success: false, error: 'Group not found' };
     }
 
@@ -1556,7 +1556,7 @@ export const rejectJoinRequest = async (firestoreDB, requestId, creatorId) => {
     const requestRef = doc(firestoreDB, 'group_join_requests', requestId);
     const requestSnap = await getDoc(requestRef);
 
-    if (!requestSnap.exists) {
+    if (!requestSnap.exists()) {
       return { success: false, error: 'Join request not found' };
     }
 
@@ -1607,7 +1607,7 @@ export const deleteGroup = async (firestoreDB, appdatabase, groupId) => {
       const groupDocRef = doc(firestoreDB, 'groups', groupId);
       const groupSnap = await getDoc(groupDocRef);
       // Fix: exists is a property, not a function
-      if (groupSnap.exists) {
+      if (groupSnap.exists()) {
         groupData = groupSnap.data();
         memberIds = groupData.memberIds || [];
       }

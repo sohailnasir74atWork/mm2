@@ -8,7 +8,7 @@ import {
   StyleSheet,
 
 } from 'react-native';
-import { get, ref } from '@react-native-firebase/database';
+import { get, ref, remove } from '@react-native-firebase/database';
 import Icon from 'react-native-vector-icons/Ionicons';
 import config from '../../Helper/Environment';
 import { useLocalState } from '../../LocalGlobelStats';
@@ -68,7 +68,7 @@ const BlockedUsersScreen = () => {
 
             return {
               id,
-              displayName: displayNameSnap?.exists() ? (displayNameSnap.val()?.trim() || 'Anonymous') : 'Anonymous',
+              displayName: displayNameSnap?.exists() ? (displayNameSnap.val()?.trim() || t('private_chat.anonymous')) : t('private_chat.anonymous'),
               avatar: avatarSnap?.exists() ? (avatarSnap.val()?.trim() || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png') 
                      : 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
             };
@@ -115,6 +115,11 @@ const BlockedUsersScreen = () => {
         await updateLocalState('bannedUsers', updatedBannedUsers);
       }
 
+      // 🔹 Update Firebase: Unban user globally
+      if (user?.id && appdatabase) {
+        await remove(ref(appdatabase, `bannedUsers/${user.id}/${selectedUserId}`));
+      }
+
       // ✅ Update UI immediately
       setBlockedUsers(prevBlockedUsers => {
         if (!Array.isArray(prevBlockedUsers)) return [];
@@ -134,7 +139,7 @@ const BlockedUsersScreen = () => {
     if (!item || typeof item !== 'object') return null;
 
     const avatar = item.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
-    const displayName = item.displayName || 'Anonymous';
+    const displayName = item.displayName || t('private_chat.anonymous');
     const userId = item.id;
 
     if (!userId) return null;
@@ -181,7 +186,7 @@ export const getStyles = (isDarkMode) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDarkMode ? '#121212' : '#f2f2f7',
+      backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f2f2f7',
       padding: 10,
     },
     centerContainer: {

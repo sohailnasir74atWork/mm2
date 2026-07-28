@@ -8,6 +8,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useGlobalState } from '../../GlobelStats';
+import config from '../../Helper/Environment';
 
 const { width, height } = Dimensions.get('window');
 
@@ -22,7 +23,7 @@ const ImageViewerScreenChat = ({ route }) => {
   const isDarkMode = theme === 'dark';
 
   // ✅ Memoize backgroundColor
-  const backgroundColor = useMemo(() => isDarkMode ? '#000' : '#fff', [isDarkMode]);
+  const backgroundColor = useMemo(() => isDarkMode ? config.colors.backgroundDark : '#fff', [isDarkMode]);
 
   // ✅ Memoize renderItem with validation
   const renderItem = useCallback(

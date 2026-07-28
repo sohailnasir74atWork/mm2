@@ -1,6 +1,9 @@
 <resources>
     <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
+        <!-- Opaque window background prevents parent screen showing through during transitions -->
+        <item name="android:windowBackground">@color/app_window_background_dark</item>
+        <item name="android:windowIsTranslucent">false</item>
     </style>
 
    <style name="BootTheme" parent="Theme.BootSplash">

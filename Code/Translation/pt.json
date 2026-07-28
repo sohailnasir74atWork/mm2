@@ -74,7 +74,10 @@
         "save_changes": "Salvar Alterações",
         "watch_ad": "Assista a um anúncio para ganhar recompensas!",
         "watch_ad_message": "Ganhe pontos assistindo a anúncios. Esses pontos podem ser usados para participar de concursos e desbloquear funcionalidades especiais.",
-        "earn_reward": "Ganhar Recompensa"
+        "earn_reward": "Ganhar Recompensa",
+        "edit_cooldown_title": "Alteração bloqueada",
+        "edit_cooldown_active": "Alteração de nome bloqueada",
+        "edit_cooldown_message": "Você só pode mudar seu nome uma vez a cada {{days}} dias. Tente novamente em {{daysRemaining}} dia(s). (A foto e a bio podem ser alteradas a qualquer momento)"
     },
     "home": {
         "you": "Você",
@@ -201,7 +204,12 @@
         "feature_error": "Erro ao destacar troca",
         "feature_error_message": "Falha ao destacar a troca. Tente novamente.",
         "purchase_success": "Compra realizada com sucesso",
-        "purchase_success_message": "O usuário agora tem recursos Pro!"
+        "purchase_success_message": "O usuário agora tem recursos Pro!",
+        "my_trades": "My Trades",
+        "search_in_me": "Me",
+        "search_in_you": "You",
+        "clear": "Clear",
+        "search_error_title": "Search Error"
     },
     "signin": {
         "title_signin": "Entrar",
@@ -238,7 +246,11 @@
         "alert_welcome_back": "Bem-vindo de volta!",
         "alert_account_created": "Sua conta foi criada com sucesso!",
         "alert_error": "Erro",
-        "alert_try_again": "Ocorreu um erro inesperado. Tente novamente mais tarde."
+        "alert_try_again": "Ocorreu um erro inesperado. Tente novamente mais tarde.",
+        "error_google_unavailable_title": "Login com Google indisponível",
+        "error_google_unavailable": "O Google Play Services não está disponível neste aparelho. Entre com e-mail — toque em \"Entrar com e-mail\" abaixo.",
+        "error_network_title": "Problema de conexão",
+        "error_network": "Não conseguimos alcançar o servidor de login. Verifique sua conexão e tente novamente. Se os serviços do Google estiverem restritos na sua rede, use o login por e-mail ou outra conexão."
     },
     "tabs": {
         "calculator": "Calculadora",
@@ -324,5 +336,13 @@
         "messageTooLong": "A mensagem não pode exceder 100 palavras.",
         "sendingTooQuickly": "Você está enviando mensagens muito rapidamente. Por favor, aguarde um momento.",
         "proUsersOnlyLinks": "Apenas usuários Pro podem enviar links."
+    },
+    "profile": {
+        "recent_trades": "Trocas Recentes",
+        "no_trades_yet": "Nenhuma troca ainda.",
+        "load_more_trades": "Carregar mais trocas",
+        "recent_posts": "Publicações Recentes",
+        "no_posts_yet": "Nenhuma publicação ainda.",
+        "load_more_posts": "Carregar mais publicações"
     }
 }

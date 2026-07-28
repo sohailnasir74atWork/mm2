@@ -109,7 +109,7 @@ const LeaderboardModal = ({
             rank: ratingsArray.indexOf(item) + 1,
           };
         } catch (error) {
-          console.error(`Error fetching user ${item.userId}:`, error);
+          // silent
           return {
             ...item,
             displayName: 'Anonymous',
@@ -131,7 +131,7 @@ const LeaderboardModal = ({
 
       setLeaderboardData(leaderboardWithDetails);
     } catch (error) {
-      console.error('Error fetching leaderboard:', error);
+      // silent
       setLeaderboardData([]);
     } finally {
       setLoading(false);
@@ -175,12 +175,11 @@ const LeaderboardModal = ({
   const handleStartChat = useCallback(() => {
     if (!selectedUser) return;
 
-    const callbackFunction = () => {
-      setIsDrawerVisible(false);
-      onClose();
-      
+    setIsDrawerVisible(false);
+    onClose();
+    setTimeout(() => {
       if (navigation && typeof navigation.navigate === 'function') {
-        navigation.navigate('PrivateChat', {
+        navigation.navigate('PrivateChatRoot', {
           selectedUser: {
             senderId: selectedUser.senderId,
             sender: selectedUser.sender,
@@ -189,15 +188,8 @@ const LeaderboardModal = ({
         });
       }
       mixpanel.track("Leaderboard Start Chat");
-    };
-
-    // ✅ Show ad for non-pro users
-    if (!localState?.isPro) {
-      InterstitialAdManager.showAd(callbackFunction);
-    } else {
-      callbackFunction();
-    }
-  }, [selectedUser, navigation, onClose, localState?.isPro]);
+    }, 300);
+  }, [selectedUser, navigation, onClose]);
 
   // ✅ Render leaderboard item
   const renderLeaderboardItem = useCallback(({ item, index }) => {
@@ -320,7 +312,7 @@ const getStyles = (isDarkMode) => StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
-    backgroundColor: isDarkMode ? '#1e1e1e' : '#fff',
+    backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '90%',
@@ -374,7 +366,7 @@ const getStyles = (isDarkMode) => StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     marginVertical: 4,
-    backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5',
+    backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#f5f5f5',
     borderRadius: 12,
     marginHorizontal: 8,
   },
@@ -396,7 +388,7 @@ const getStyles = (isDarkMode) => StyleSheet.create({
     height: 50,
     borderRadius: 25,
     marginRight: 12,
-    backgroundColor: isDarkMode ? '#333' : '#e0e0e0',
+    backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#e0e0e0',
   },
   userInfo: {
     flex: 1,

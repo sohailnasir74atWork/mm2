@@ -2,12 +2,13 @@ import UIKit
 import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
-import FBSDKCoreKit // Import Facebook SDK if needed
+import Firebase
 import GoogleSignIn // Import Google Sign-In if needed
 
 @main
 class AppDelegate: RCTAppDelegate {
   override func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+    FirebaseApp.configure()
     self.moduleName = "bloxfruitevalues"
     self.dependencyProvider = RCTAppDependencyProvider()
 
@@ -30,9 +31,8 @@ class AppDelegate: RCTAppDelegate {
 #endif
   }
 
-  // ✅ Handle deep links for Facebook, Google, or other SDKs
+  // ✅ Handle deep links for Google Sign-In
   override func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
-    return ApplicationDelegate.shared.application(app, open: url, options: options) ||
-           GIDSignIn.sharedInstance.handle(url)
+    return GIDSignIn.sharedInstance.handle(url)
   }
 }

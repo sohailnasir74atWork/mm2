@@ -73,6 +73,7 @@ const PrivateMessageInput = ({
   setPetModalVisible,
   selectedFruits,
   setSelectedFruits,
+  isProUser,
 }) => {
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -84,7 +85,6 @@ const PrivateMessageInput = ({
   const { theme, user } = useGlobalState();
   const isDark = theme === 'dark';
   const { t } = useTranslation();
-
   // ✅ Memoize styles
   const styles = useMemo(() => getStyles(isDark), [isDark]);
 
@@ -98,7 +98,7 @@ const PrivateMessageInput = ({
     const remainingSlots = maxImages - currentCount;
 
     if (remainingSlots <= 0) {
-      Alert.alert('Limit Reached', 'You can only select up to 3 images per message.');
+      Alert.alert(t('private_chat.limit_reached'), t('private_chat.max_images'));
       return;
     }
 
@@ -118,7 +118,7 @@ const PrivateMessageInput = ({
           );
 
           if (response.errorCode !== 'activity') {
-            Alert.alert('Error', 'Could not open gallery.');
+            Alert.alert(t('home.alert.error'), t('private_chat.gallery_error'));
           }
           return;
         }
@@ -154,8 +154,8 @@ const PrivateMessageInput = ({
           // Show alert if any images were rejected
           if (rejectedCount.length > 0) {
             Alert.alert(
-              'Image Too Large',
-              `${rejectedCount.length} image(s) exceed 1 MB limit and were not added. Please select smaller images.`
+              t('private_chat.image_too_large_title'),
+              t('private_chat.image_too_large_msg', { count: rejectedCount.length })
             );
           }
 
@@ -192,7 +192,7 @@ const PrivateMessageInput = ({
           binary = base64ToBytes(base64);
         } catch (error) {
           console.error('Error converting base64 to bytes:', error);
-          Alert.alert('Error', 'Image processing failed.');
+          Alert.alert(t('home.alert.error'), t('private_chat.image_process_failed'));
           return null;
         }
 
@@ -208,14 +208,14 @@ const PrivateMessageInput = ({
         const txt = await res.text().catch(() => '');
         if (!res.ok) {
           console.warn('Bunny upload failed', res.status, txt);
-          Alert.alert('Error', 'Image upload failed, sending message without image.');
+          Alert.alert(t('home.alert.error'), t('private_chat.image_upload_failed'));
           return null;
         }
 
         return `${BUNNY_CDN_BASE}/${decodeURIComponent(remotePath)}`;
       } catch (e) {
         console.warn('[Bunny ERROR]', e?.message || e);
-        Alert.alert('Error', 'Image upload failed, sending message without image.');
+        Alert.alert(t('home.alert.error'), t('private_chat.image_upload_failed'));
         return null;
       }
     },
@@ -236,7 +236,7 @@ const PrivateMessageInput = ({
     if (trimmedInput) {
       const validation = validateContent(trimmedInput);
       if (!validation.isValid) {
-        Alert.alert('Error', validation.reason || 'Inappropriate content detected.');
+        Alert.alert(t('home.alert.error'), validation.reason || t('private_chat.inappropriate_content'));
         return;
       }
     }
@@ -263,8 +263,12 @@ const PrivateMessageInput = ({
 
     setMessageCount(prevCount => {
       const newCount = prevCount + 1;
-      if (!localState?.isPro && newCount % 5 === 0) {
+      if (!localState?.isPro && newCount % 7 === 0) {
         InterstitialAdManager.showAd(() => {});
+      } else if (!localState?.isPro && newCount % 7 === 6) {
+        // One message before the ad message: warm the interstitial so the
+        // trigger actually has something to show (lazy-load pipeline).
+        InterstitialAdManager.prepare();
       }
       return newCount;
     });
@@ -291,7 +295,14 @@ const PrivateMessageInput = ({
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      Alert.alert('Error', 'Failed to send message.');
+      // Restore the user's content so a failed send/upload doesn't silently
+      // lose the text, images, or selected pets they had typed.
+      setInput(textToSend);
+      setImageUris(imagesToSend);
+      if (setSelectedFruits && typeof setSelectedFruits === 'function') {
+        setSelectedFruits(fruitsToSend);
+      }
+      Alert.alert(t('home.alert.error'), t('private_chat.send_failed'));
     } finally {
       setIsSending(false); // ✅ always reset
     }
@@ -341,12 +352,13 @@ const PrivateMessageInput = ({
   }, [onSend]);
 
   return (
-    <View style={styles.inputWrapper}>
+    <View style={{ backgroundColor: isDark ? config.colors.backgroundDark : config.colors.backgroundLight }}>
+      <View style={styles.inputWrapper}>
       {/* Reply Context */}
       {replyTo && (
         <View style={styles.replyContainer}>
           <Text style={styles.replyText}>
-            Replying to: {replyTo?.text || '[Message]'}
+            {t('private_chat.replying_to', { text: replyTo?.text || t('private_chat.message_placeholder') })}
           </Text>
           <TouchableOpacity
             onPress={() => {
@@ -446,7 +458,7 @@ const PrivateMessageInput = ({
           }}
         >
           <Text style={{ color: isDark ? config.colors.textSecondaryDark : config.colors.textSecondaryLight, fontSize: 12, marginRight: 8 }}>
-            {imageUris.length} image{imageUris.length > 1 ? 's' : ''} attached
+            {imageUris.length === 1 ? t('private_chat.images_attached_singular', { count: imageUris.length }) : t('private_chat.images_attached_plural', { count: imageUris.length })}
           </Text>
           {imageUris.map((uri, index) => (
             <TouchableOpacity
@@ -477,7 +489,7 @@ const PrivateMessageInput = ({
           }}
         >
           <Text style={{ color: isDark ? config.colors.textSecondaryDark : config.colors.textSecondaryLight, fontSize: 12 }}>
-            {selectedFruits.length} pet(s) selected
+            {selectedFruits.length === 1 ? t('private_chat.pets_selected_singular', { count: selectedFruits.length }) : t('private_chat.pets_selected_plural', { count: selectedFruits.length })}
           </Text>
 
           <TouchableOpacity
@@ -542,7 +554,7 @@ const PrivateMessageInput = ({
                   color: isDark ? config.colors.textDark : config.colors.textLight,
                 }}
               >
-                Quick Messages
+                {t('private_chat.quick_messages')}
               </Text>
               <TouchableOpacity onPress={() => setShowTemplateDrawer(false)}>
                 <Icon name="close" size={24} color={isDark ? config.colors.textDark : config.colors.textLight} />
@@ -570,7 +582,7 @@ const PrivateMessageInput = ({
                       paddingHorizontal: 16,
                       paddingVertical: 12,
                       borderRadius: 20,
-                      backgroundColor: isDark ? '#374151' : '#E5E7EB',
+                      backgroundColor: isDark ? config.colors.surfaceElevatedDark : '#E5E7EB',
                       borderWidth: 1,
                       borderColor: isDark ? '#4B5563' : '#D1D5DB',
                       minWidth: '45%',
@@ -593,6 +605,7 @@ const PrivateMessageInput = ({
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+      </View>
     </View>
   );
 };

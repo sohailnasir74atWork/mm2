@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ChatScreen from './GroupChat/Trader';
 import PrivateChatScreen from './PrivateChat/PrivateChat';
@@ -12,11 +12,16 @@ import { useHaptic } from '../Helper/HepticFeedBack';
 import { useLocalState } from '../LocalGlobelStats';
 // import database from '@react-native-firebase/database';
 import ImageViewerScreenChat from './PrivateChat/ImageViewer';
-import { ref, update, get } from '@react-native-firebase/database';
+import { ref, update, get, onChildAdded, onChildChanged, onChildRemoved, onValue } from '@react-native-firebase/database';
 import CommunityChatHeader from './GroupChat/CommunityChatHeader';
-import LeaderboardScreen from './GroupChat/LeaderboardScreen';
+
 
 const Stack = createNativeStackNavigator();
+
+// Stable identities for props passed into InboxScreen — see the comment at the
+// Inbox screen below for why these must not be inline literals.
+const EMPTY_CHATS = [];
+const NOOP = () => {};
 
 export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo, setModalVisibleChatinfo }) => {
   const { user, unreadMessagesCount, appdatabase } = useGlobalState();
@@ -31,6 +36,11 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
   const [groups, setGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [groupUnreadCount, setGroupUnreadCount] = useState(0); // Total unread count for groups
+  const prevGroupsRef = useRef(null); // ✅ Track previous groups to avoid unnecessary re-renders
+  // Mirror of bannedUsers read inside the RTDB listeners, so the listener effect
+  // does NOT need bannedUsers in its deps (which would tear down + re-attach all
+  // three child listeners — and re-read the node — on every banned-list change).
+  const bannedUsersRef = useRef([]);
 
 
 
@@ -39,6 +49,7 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
     // ✅ Safety check: ensure bannedUsers is an array
     const banned = Array.isArray(localState.bannedUsers) ? localState.bannedUsers : [];
     setBannedUsers(banned);
+    bannedUsersRef.current = banned;
   }, [user?.id, localState.bannedUsers]);
 
 
@@ -47,6 +58,10 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
     headerTintColor: selectedTheme.colors.text,
     headerTitleStyle: { fontFamily: 'Lato-Bold', fontSize: 24 },
     headerBackTitleVisible: false,
+    contentStyle: { backgroundColor: selectedTheme.colors.background },
+    freezeOnBlur: true,
+    animation: 'fade',
+    animationDuration: 300,
   }), [selectedTheme]);
 
 
@@ -71,7 +86,8 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
       if (!chatData || typeof chatData !== 'object') return;
       
       const chatPartnerId = snapshot.key;
-      const isBlocked = Array.isArray(bannedUsers) && bannedUsers.includes(chatPartnerId);
+      const banned = bannedUsersRef.current;
+      const isBlocked = Array.isArray(banned) && banned.includes(chatPartnerId);
       const rawUnread = chatData?.unreadCount || 0;
       
       if (isBlocked && rawUnread > 0) {
@@ -113,7 +129,7 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
           return;
         }
         
-        const banned = Array.isArray(bannedUsers) ? bannedUsers : [];
+        const banned = Array.isArray(bannedUsersRef.current) ? bannedUsersRef.current : [];
         totalUnread = 0;
         
         Object.entries(fetchedData).forEach(([chatPartnerId, chatData]) => {
@@ -135,17 +151,19 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
     loadInitialCounts();
     
     // Listen to individual chat changes
-    userChatsRef.on('child_added', handleChildChange);
-    userChatsRef.on('child_changed', handleChildChange);
-    userChatsRef.on('child_removed', handleChildRemoved);
+    const unsubAdded = onChildAdded(userChatsRef, handleChildChange);
+    const unsubChanged = onChildChanged(userChatsRef, handleChildChange);
+    const unsubRemoved = onChildRemoved(userChatsRef, handleChildRemoved);
   
     // ✅ Proper cleanup
     return () => {
-      userChatsRef.off('child_added', handleChildChange);
-      userChatsRef.off('child_changed', handleChildChange);
-      userChatsRef.off('child_removed', handleChildRemoved);
+      unsubAdded();
+      unsubChanged();
+      unsubRemoved();
     };
-  }, [user?.id, appdatabase, bannedUsers]);
+    // bannedUsers intentionally excluded — read via bannedUsersRef so the
+    // listeners attach once per user, not on every banned-list change.
+  }, [user?.id, appdatabase]);
 
   // ✅ Load groups from group_meta_data
   useEffect(() => {
@@ -157,7 +175,7 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
     setGroupsLoading(true);
     const userGroupsRef = ref(appdatabase, `group_meta_data/${user.id}`);
 
-    const onValueChange = userGroupsRef.on('value', (snapshot) => {
+    const unsubGroups = onValue(userGroupsRef, (snapshot) => {
       try {
         if (!snapshot.exists()) {
           setGroups([]);
@@ -194,7 +212,22 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
         const sortedGroups = updatedGroups.sort(
           (a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp
         );
-        setGroups(sortedGroups);
+        // ✅ Shallow compare: only update state if data actually changed
+        const prevGroups = prevGroupsRef.current;
+        const hasChanged = !prevGroups || prevGroups.length !== sortedGroups.length ||
+          sortedGroups.some((g, i) => {
+            const p = prevGroups[i];
+            return !p || g.groupId !== p.groupId || g.groupName !== p.groupName ||
+              g.groupAvatar !== p.groupAvatar || g.lastMessage !== p.lastMessage ||
+              g.lastMessageTimestamp !== p.lastMessageTimestamp ||
+              g.unreadCount !== p.unreadCount || g.memberCount !== p.memberCount ||
+              g.createdBy !== p.createdBy;
+          });
+
+        if (hasChanged) {
+          prevGroupsRef.current = sortedGroups;
+          setGroups(sortedGroups);
+        }
         
         // ✅ Calculate total group unread count
         const totalGroupUnread = sortedGroups.reduce((sum, group) => sum + (group.unreadCount || 0), 0);
@@ -208,14 +241,14 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
     });
 
     return () => {
-      userGroupsRef.off('value', onValueChange);
+      unsubGroups();
     };
   }, [user?.id, appdatabase]);
 
   const [onlineUsersVisible, setOnlineUsersVisible] = useState(false);
 
   const getGroupChatOptions = useCallback(({ navigation }) => ({
-    title: '', // Hide title
+    title: user?.id ? '' : 'Community Chat', // Show title if logged out
     headerTitleAlign: 'left',
     headerTitleStyle: { 
       fontFamily: 'Lato-Bold', 
@@ -234,19 +267,13 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
         setGroupUnreadCount={setGroupUnreadCount}
         triggerHapticFeedback={triggerHapticFeedback}
         onOnlineUsersPress={() => setOnlineUsersVisible(true)}
-        onLeaderboardPress={() => {
-          // Navigate to Leaderboard screen instead of showing modal
-          if (navigation && typeof navigation.navigate === 'function') {
-            navigation.navigate('Leaderboard');
-          }
-        }}
       />
     ),
     headerRightContainerStyle: {
       paddingRight: 0,
       marginRight: 0,
     },
-  }), [selectedTheme, unreadcount, setunreadcount, groupUnreadCount, setGroupUnreadCount, triggerHapticFeedback]);
+  }), [selectedTheme, unreadcount, setunreadcount, groupUnreadCount, setGroupUnreadCount, triggerHapticFeedback, user?.id]);
 
   return (
     <Stack.Navigator screenOptions={headerOptions}>
@@ -266,14 +293,20 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
         name="Inbox"
         options={{ title: 'Inbox' }}
       >
-        {props => <InboxScreen {...props} chats={[]} setChats={() => {}} loading={false} bannedUsers={bannedUsers} />}
+        {/* EMPTY_CHATS / NOOP are module-level constants, NOT inline literals.
+            InboxScreen's focus effect lists `setChats` in its deps, and this
+            component re-renders on every incoming message (unread counter), so
+            fresh `[]` / `() => {}` identities tore down the three RTDB
+            listeners and re-downloaded the whole chat_meta_data node per
+            message. */}
+        {props => <InboxScreen {...props} chats={EMPTY_CHATS} setChats={NOOP} loading={false} bannedUsers={bannedUsers} />}
       </Stack.Screen>
 
       <Stack.Screen
         name="Groups"
         options={{ title: 'Groups' }}
       >
-        {props => <GroupsScreen {...props} groups={groups} setGroups={setGroups} groupsLoading={groupsLoading} />}
+        {(props) => <GroupsScreen {...props} groups={groups} setGroups={setGroups} groupsLoading={groupsLoading} />}
       </Stack.Screen>
 
       <Stack.Screen
@@ -328,12 +361,7 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
         options={{ title: 'Image' }}
       />
 
-      <Stack.Screen
-        name="Leaderboard"
-        options={{ title: 'Top Rated Users' }}
-      >
-        {props => <LeaderboardScreen {...props} />}
-      </Stack.Screen>
+
     </Stack.Navigator>
   );
 };

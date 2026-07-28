@@ -28,7 +28,7 @@ const TradeRulesModal = ({ visible, onClose }) => {
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
       <View style={styles.modalBackground}>
-        <View style={[styles.modalContainer, { backgroundColor: isDarkMode ? '#222' : 'white' }]}>
+        <View style={[styles.modalContainer, { backgroundColor: isDarkMode ? config.colors.surfaceDark : 'white' }]}>
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: isDarkMode ? 'white' : 'black' }]}>
               How Trading Works in Adopt Me
@@ -75,9 +75,15 @@ export const TradeStack = ({ selectedTheme }) => {
       headerStyle: { backgroundColor: selectedTheme.colors.background },
       headerTintColor: selectedTheme.colors.text,
       headerTitleStyle: { fontFamily: 'Lato-Bold', fontSize: 24 },
+      contentStyle: { backgroundColor: selectedTheme.colors.background },
+      freezeOnBlur: true,
+      animation: 'fade',
+      animationDuration: 300,
     }),
     [selectedTheme]
   );
+
+  const [showMyTrades, setShowMyTrades] = useState(false);
 
   return (
     <>
@@ -86,30 +92,25 @@ export const TradeStack = ({ selectedTheme }) => {
         <Stack.Screen
           name="TradeScreen"
           component={TradeList}
-          initialParams={{ bannedUsers, selectedTheme }}
+          initialParams={{ bannedUsers, selectedTheme, showMyTradesOnly: showMyTrades }}
           options={({ navigation }) => ({
-            title: t("tabs.trade"),
+            title: showMyTrades ? 'My Trades' : t("tabs.trade"),
             headerRight: () => (
-              <View style={{ flexDirection: 'row', }}>
-                {/* <TouchableOpacity onPress={() => navigation.navigate('Server')} style={{ marginRight: 5, backgroundColor:config.colors.hasBlockGreen, borderRadius:5, flexDirection:'row', alignItems:'center', paddingHorizontal:5}}>
-                  <Image
-                    source={
-                      isDarkMode
-                        ? require('../../assets/roblox.png')
-                        : require('../../assets/roblox.png')
-                    }
-                    style={{
-                      width: 20,
-                      height:25,
-                      // transform: [{ scale: 1.2 }],
-                      tintColor: config.colors.white,
-                      justifyContent:'center',
-                      alignItems:'center'
-                    }}
-                    resizeMode="contain"
+              <View style={{ flexDirection: 'row' }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    const newVal = !showMyTrades;
+                    setShowMyTrades(newVal);
+                    navigation.setParams({ showMyTradesOnly: newVal });
+                  }}
+                  style={{ marginRight: 5 }}
+                >
+                  <Icon
+                    name={showMyTrades ? "person" : "person-outline"}
+                    size={24}
+                    color={showMyTrades ? config.colors.hasBlockGreen : config.colors.primary}
                   />
-                  <Text style={{color:'white', fontFamily:'Lato-Bold' }}>Pvt Servers</Text>
-                </TouchableOpacity> */}
+                </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => navigation.navigate('Trade Notifier')} style={{ marginRight: 5 }}>
                   <Icon

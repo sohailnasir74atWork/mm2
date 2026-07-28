@@ -53,6 +53,18 @@ const openAndCheck = async (offering, offeringId, source, showoffer) => {
 // ✅ added: forceSecondOnly
 export const handleOpenPaywall = async (source, showoffer, forceSecondOnly = false) => {
   try {
+    // ✅ Guard: skip paywall if billing is unavailable (e.g. emulator)
+    try {
+      const canPay = await Purchases.canMakePayments();
+      if (!canPay) {
+        console.warn('⚠️ Billing unavailable — skipping paywall');
+        return;
+      }
+    } catch (billingCheckErr) {
+      console.warn('⚠️ Cannot check billing — skipping paywall', billingCheckErr);
+      return;
+    }
+
     const offerings = await Purchases.getOfferings();
     const all = offerings.all || {};
 

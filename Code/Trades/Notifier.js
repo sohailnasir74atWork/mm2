@@ -248,12 +248,7 @@ const NotifierDrawer = () => {
       });
     };
   
-    if (!adShown && !localState?.isPro) {
-      setAdShown(true); // mark ad as shown for this session
-      InterstitialAdManager.showAd(proceedToRemove);
-    } else {
-      proceedToRemove();
-    }
+    proceedToRemove();
   };
   
 
@@ -292,7 +287,7 @@ const NotifierDrawer = () => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: isDarkMode ? '#121212' : '#fff' }]}>
+    <View style={[styles.container, { backgroundColor: isDarkMode ? config.colors.backgroundDark : '#fff' }]}>
         {/* <Text style={[styles.infoText, { fontFamily: 'Lato-Regular', color: isDarkMode ? '#aaa' : '#666' }]}>
         Select items you want to buy or sell — we’ll notify you when someone is offering them or looking for them in a trade.
 </Text> */}
@@ -326,7 +321,7 @@ const NotifierDrawer = () => {
 
 
       <Modal visible={isDrawerVisible} animationType="slide">
-        <View style={[styles.drawerContainer, { backgroundColor: isDarkMode ? '#1e1e1e' : '#fff' }]}>
+        <View style={[styles.drawerContainer, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff' }]}>
           <Text style={[styles.sectionTitle, { fontFamily: 'Lato-Bold', color: isDarkMode ? '#fff' : '#000' }]}>Select Items to Notify</Text>
 
           <FlatList

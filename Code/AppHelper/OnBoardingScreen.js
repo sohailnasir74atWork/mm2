@@ -130,8 +130,8 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
               <View style={styles.sliderContainer}>{renderSlider(translateX3, thirdSliderImages)}</View></View> */}
             <View>
               {/* <View style={styles.spacer}></View> */}
-              <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>Welcome to MM2 Values</Text>
-              <Text style={[styles.text, { color: isDarkMode ? '#ccc' : '#666' }]}>Track pets values & optimize your trades.</Text>
+              <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>{t('first.welcome_to')}</Text>
+              <Text style={[styles.text, { color: isDarkMode ? '#ccc' : '#666' }]}>{t('first.track_pets')}</Text>
             </View>
           </View>
         );
@@ -149,7 +149,7 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
               {!user.id && <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>{t("first.signin_or_guest")}</Text>}
               {user?.id && (
                 <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>
-                  {`Welcome ${user?.displayName || 'Anonymous'}`}
+                  {`${t('first.welcome_user')} ${user?.displayName || 'Anonymous'}`}
 
                 </Text>
               )}
@@ -173,8 +173,8 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
 
   return (
     <GestureHandlerRootView style={{ paddingBottom: 50, flex: 1 }}>
-      <View style={[styles.container, { backgroundColor: isDarkMode ? '#121212' : '#f2f2f7',  }]}>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={isDarkMode ? '#121212' : '#f2f2f7'} />
+      <View style={[styles.container, { backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f2f2f7',  }]}>
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={isDarkMode ? config.colors.backgroundDark : '#f2f2f7'} />
         {renderScreen()}
         
 
@@ -217,7 +217,7 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
 
         <SignInDrawer visible={openSignin} onClose={handleLoginSuccess}  selectedTheme={selectedTheme} screen='On Boarding'/>
         <Modal visible={languageModalVisible} animationType="slide" transparent>
-          <View style={[styles.modalContainer, { backgroundColor: isDarkMode ? '#121212' : '#f2f2f7' }]}>
+          <View style={[styles.modalContainer, { backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f2f2f7' }]}>
             {/* <Text style={[styles.modalTitle, { color: isDarkMode ? 'white' : '#666' }]}>{t("settings.select_language")}</Text>
             <FlatList
               data={languageOptions}

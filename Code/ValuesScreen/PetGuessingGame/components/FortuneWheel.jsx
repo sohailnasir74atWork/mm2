@@ -13,6 +13,7 @@ import {
 import Svg, { Path } from 'react-native-svg';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../../../GlobelStats';
+import config from '../../../Helper/Environment';
 import { useHaptic } from '../../../Helper/HepticFeedBack';
 import PetWinToast from './PetWinToast';
 
@@ -54,6 +55,7 @@ const FortuneWheel = ({
   const { theme } = useGlobalState();
   const isDarkMode = theme === 'dark';
   const { triggerHapticFeedback } = useHaptic();
+  const { t } = require('react-i18next').useTranslation();
 
   const spinValue = useRef(new Animated.Value(0)).current;
 
@@ -194,7 +196,7 @@ const FortuneWheel = ({
     return (
       <View style={styles.emptyContainer}>
         <Text style={[styles.emptyText, { color: isDarkMode ? '#9ca3af' : '#6b7280' }]}>
-          No pets available for the wheel
+          {t('game.no_pets_available')}
         </Text>
       </View>
     );
@@ -202,9 +204,9 @@ const FortuneWheel = ({
 
   return (
     <View style={styles.container}>
-      <View style={[styles.turnIndicator, { backgroundColor: isDarkMode ? '#1e1e1e' : '#f3f4f6' }]}>
+      <View style={[styles.turnIndicator, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#f3f4f6' }]}>
         <Text style={[styles.turnText, { color: isDarkMode ? '#fff' : '#111827' }]}>
-          {isMyTurn ? '🎯 Your Turn!' : `⏳ ${currentPlayerName || 'Player'}'s Turn`}
+          {isMyTurn ? t('game.your_turn') : t('game.players_turn', { player: currentPlayerName || 'Player' })}
         </Text>
       </View>
 
@@ -328,10 +330,10 @@ const FortuneWheel = ({
         <Icon name={(isSpinning || isSpinningLocal) ? 'sync' : 'play-circle'} size={24} color="#fff" />
         <Text style={styles.spinButtonText}>
           {(isSpinning || isSpinningLocal)
-            ? 'Spinning...'
+            ? t('game.spinning')
             : isMyTurn
-              ? (hasSpun ? 'Already Spun' : 'SPIN!')
-              : 'Wait for your turn'}
+              ? (hasSpun ? t('game.already_spun') : t('game.spin'))
+              : t('game.wait_turn')}
         </Text>
       </TouchableOpacity>
 

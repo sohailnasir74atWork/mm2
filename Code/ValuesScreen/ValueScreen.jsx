@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -9,6 +10,7 @@ import {
   FlatList,
   Modal,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { debounce } from '../Helper/debounce';
@@ -34,6 +36,19 @@ import { handleBloxFruit, handleadoptme } from '../SettingScreen/settinghelper';
 
 
 
+// ✅ Helper function to get stability color
+const getStabilityColor = (stability) => {
+  if (!stability || stability === 'N/A') return '#888';
+  const s = stability.toLowerCase();
+  if (s === 'stable') return '#34C759';
+  if (s === 'doing well' || s === 'recovering') return '#30D158';
+  if (s === 'overpaid for' || s === 'peaking') return '#007AFF';
+  if (s === 'fluctuating') return '#FF9500';
+  if (s === 'underpaid for') return '#FF6B35';
+  if (s === 'decreasing') return '#FF3B30';
+  return '#888';
+};
+
 const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSelectedFruits, onRequestClose, fromSetting, ownedPets, setOwnedPets, wishlistPets, setWishlistPets, owned }) => {
   const [searchText, setSearchText] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('ALL'); // ✅ MM2: Default to ALL
@@ -41,9 +56,16 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
   const [filterDropdownVisible, setFilterDropdownVisible] = useState(false);
   const { analytics, appdatabase, isAdmin, reload, theme } = useGlobalState()
   const isDarkMode = theme === 'dark'
+  const insets = useSafeAreaInsets();
+  const bannerBottomPos = Math.max(insets.bottom, 8) + 6;
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
   const { localState, toggleAd } = useLocalState()
   const [valuesData, setValuesData] = useState([]);
+  // Chat item picker: default to the user's own My Stuff items with a toggle
+  // to the full catalog (adoptme pattern) — the list users attach in chat is
+  // their OWN items. Falls back to 'all' when My Stuff is empty.
+  const [chatPetSource, setChatPetSource] = useState(() =>
+    (Array.isArray(localState?.ownedPets) && localState.ownedPets.length ? 'mine' : 'all'));
   const [codesData, setCodesData] = useState([]);
   const { t } = useTranslation();
   // ✅ Removed filters state - use availableFilters directly to prevent infinite loop
@@ -70,9 +92,10 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
 
   // console.log(selectedFruits)
 
-  // ✅ MM2: Simplified ListItem (no badges needed)
+  // ✅ MM2: Enhanced ListItem showing all scraped data
   const ListItem = React.memo(({ item, getItemValue, styles, onPress }) => {
     const currentValue = getItemValue(item);
+    const stabilityColor = getStabilityColor(item.stability);
 
     return (
       <TouchableOpacity style={[styles.itemContainer]} onPress={onPress} disabled={!fromChat && !fromSetting}>
@@ -82,17 +105,37 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
           </View>
           <View style={styles.itemInfo}>
             <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-            {/* ✅ Display deprecated names if available */}
-            {(item.deprecatedNames && Array.isArray(item.deprecatedNames) && item.deprecatedNames.length > 0) || 
-             (item.deprecatedName || item.deprecated_name) ? (
-              <Text style={styles.deprecatedName} numberOfLines={1}>
-                {item.deprecatedNames?.[0] || item.deprecatedName || item.deprecated_name}
-              </Text>
-            ) : null}
-            <Text style={styles.value}>Value: {Number(currentValue).toLocaleString()}</Text>
-            {item.tier && <Text style={styles.rarity}>{item.tier}</Text>}
+            <Text style={styles.value}>{t('value.value')}: {currentValue}</Text>
+            {item.tier && <Text style={styles.tierLabel}>{item.tier}</Text>}
           </View>
         </View>
+
+        {/* Demand & Rarity pills */}
+        <View style={styles.pillsRow}>
+          {item.demand && item.demand !== 'N/A' && (
+            <View style={[styles.pill, styles.demandPill]}>
+              <Text style={styles.pillText}>Demand: {item.demand}</Text>
+            </View>
+          )}
+          {item.itemRarity && item.itemRarity !== 'N/A' && (
+            <View style={[styles.pill, styles.rarityPill]}>
+              <Text style={styles.pillText}>Rarity: {item.itemRarity}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Stability tag */}
+        {item.stability && item.stability !== 'N/A' && (
+          <View style={[styles.stabilityTag, { backgroundColor: stabilityColor + '20' }]}>
+            <View style={[styles.stabilityDot, { backgroundColor: stabilityColor }]} />
+            <Text style={[styles.stabilityText, { color: stabilityColor }]}>{item.stability}</Text>
+          </View>
+        )}
+
+        {/* Range */}
+        {item.range && item.range !== 'N/A' && (
+          <Text style={styles.rangeText}>Range: {item.range}</Text>
+        )}
       </TouchableOpacity>
     );
   });
@@ -117,13 +160,13 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
         />
         <View>
           <Text style={styles.adTitle}>Blox Fruits Values</Text>
-          <Text style={styles.tryNowText}>Try Our other app</Text>
+          <Text style={styles.tryNowText}>{t('value.try_other_app')}</Text>
         </View>
       </View>
       <TouchableOpacity style={styles.downloadButton} onPress={() => {
         handleBloxFruit(); triggerHapticFeedback('impactLight');
       }}>
-        <Text style={styles.downloadButtonText}>Download</Text>
+        <Text style={styles.downloadButtonText}>{t('value.download')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -137,13 +180,13 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
         />
         <View>
           <Text style={styles.adTitle}>MM2 Values</Text>
-          <Text style={styles.tryNowText}>Try Our other app</Text>
+          <Text style={styles.tryNowText}>{t('value.try_other_app')}</Text>
         </View>
       </View>
       <TouchableOpacity style={styles.downloadButton} onPress={() => {
         handleadoptme(); triggerHapticFeedback('impactLight');
       }}>
-        <Text style={styles.downloadButtonText}>Download</Text>
+        <Text style={styles.downloadButtonText}>{t('value.download')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -172,7 +215,7 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
 
             items.push({
               ...item,
-              Name: item.name, // ✅ Match HomeScreen structure
+              Name: item.name,
               name: item.name,
               FormattedValue: numericValue !== null ? numericValue.toLocaleString() : item.value,
               Value: numericValue !== null ? numericValue : 0,
@@ -183,8 +226,15 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
               category: category.trim(),
               Tier: tier.trim(),
               tier: tier.trim(),
-              type: category.trim(), // For compatibility with existing code
-              id: `${category}-${tier}-${item.name}`, // Generate unique ID
+              type: category.trim(),
+              id: `${category}-${tier}-${item.name}`,
+              // ✅ Pass through all scraped fields
+              demand: item.demand || 'N/A',
+              itemRarity: item.rarity || 'N/A',
+              stability: item.stability || 'N/A',
+              range: item.range || 'N/A',
+              wiki: item.wiki || '',
+              displayValue: item.displayValue || '',
             });
           }
         }
@@ -197,17 +247,17 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
 
   // Memoize the parsed data to prevent unnecessary re-parsing
   const parsedValuesData = useMemo(() => {
-    try {
-      const rawData = localState.data;
-      if (!rawData) return [];
-
-      const parsed = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
-      // ✅ MM2: Extract from nested structure
-      return typeof parsed === 'object' && parsed !== null ? extractMM2Values(parsed) : [];
-    } catch (error) {
-      console.error("❌ Error parsing data:", error);
-      return [];
-    }
+    const extract = (raw) => {
+      try {
+        if (!raw) return [];
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return typeof parsed === 'object' && parsed !== null ? extractMM2Values(parsed) : [];
+      } catch (error) {
+        console.error("❌ Error parsing data:", error);
+        return [];
+      }
+    };
+    return extract(localState.data);
   }, [localState.data, extractMM2Values]);
 
   // ✅ MM2: Image URL generation
@@ -251,11 +301,19 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
 
   // ✅ MM2: Simplified getItemValue (no modifiers needed)
   const getItemValue = useCallback((item) => {
-    if (!item) return 0;
+    if (!item) return '0';
     // ✅ MM2: Use value directly
     const cleanedValue = String(item.value || 0).replace(/,/g, '');
     const numericValue = !isNaN(cleanedValue) ? Number(cleanedValue) : 0;
-    return numericValue.toFixed(2);
+    // For values >= 1, use toLocaleString for commas (250,000,000)
+    // For values < 1 (like .44, .33), show as-is without extra zeros
+    if (numericValue >= 1) {
+      return Math.floor(numericValue) === numericValue
+        ? numericValue.toLocaleString()
+        : numericValue.toLocaleString();
+    }
+    // Small decimals: show cleanly (e.g., 0.44 not 0.440000)
+    return numericValue.toString();
   }, []);
   const filteredData = useMemo(() => {
     if (!Array.isArray(parsedValuesData) || parsedValuesData.length === 0) return [];
@@ -301,8 +359,8 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
     // Apply sort
     if (sortOrder !== 'none') {
       filtered.sort((a, b) => {
-        const aValue = parseFloat(getItemValue(a));
-        const bValue = parseFloat(getItemValue(b));
+        const aValue = parseFloat(String(getItemValue(a)).replace(/,/g, '')) || 0;
+        const bValue = parseFloat(String(getItemValue(b)).replace(/,/g, '')) || 0;
         return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
       });
     }
@@ -310,6 +368,28 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
     return filtered;
   }, [parsedValuesData, searchText, selectedFilter, sortOrder, getItemValue, CATEGORIES]);
 
+  // Chat "My Items" mode: the user's My Stuff list matched against the live
+  // catalog (fresh values, renderItem works unchanged), deduped, searchable.
+  const myPetsView = useMemo(() => {
+    if (!(fromChat && chatPetSource === 'mine')) return [];
+    const q = searchText.trim().toLowerCase();
+    const byName = new Map();
+    for (const it of parsedValuesData || []) {
+      const k = (it?.name || '').toLowerCase().trim();
+      if (k && !byName.has(k)) byName.set(k, it);
+    }
+    const seen = new Set();
+    return (localState?.ownedPets || [])
+      .map((p) => byName.get((p?.name || '').toLowerCase().trim()))
+      .filter(Boolean)
+      .filter((it) => {
+        const k = (it.name || '').toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
+      .filter((it) => !q || (it.name || '').toLowerCase().includes(q));
+  }, [fromChat, chatPetSource, localState?.ownedPets, parsedValuesData, searchText]);
 
   // ✅ MM2: Removed handleItemBadgePress - MM2 doesn't use badges/modifiers
 
@@ -405,9 +485,9 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
 
   const handleRefresh = async () => {
     setRefreshing(true);
-
     try {
       await reload(); // Re-fetch stock data
+      // Show success feedback (silent — no toast dependency needed)
     } catch (error) {
       console.error('Error refreshing data:', error);
     } finally {
@@ -417,17 +497,8 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
 
   const toggleDrawer = () => {
     triggerHapticFeedback('impactLight');
-    const callbackfunction = () => {
-      setHasAdBeenShown(true); // Mark the ad as shown
-      setIsDrawerVisible(!isDrawerVisible);
-    };
-
-    if (!hasAdBeenShown && !localState.isPro) {
-      InterstitialAdManager.showAd(callbackfunction);
-    }
-    else {
-      setIsDrawerVisible(!isDrawerVisible);
-    }
+    setHasAdBeenShown(true);
+    setIsDrawerVisible(!isDrawerVisible);
     mixpanel.track("Code Drawer Open");
   }
 
@@ -456,10 +527,10 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
               <View style={styles.selectedPetsHeader}>
                 <Text style={styles.selectedPetsTitle}>
                   {fromChat
-                    ? 'Selected pets'
+                    ? t('value.selected_pets')
                     : owned
-                      ? 'Owned pets'
-                      : 'Wishlist'}
+                      ? t('value.owned_pets')
+                      : t('value.wishlist')}
                 </Text>
 
                 <Text style={styles.selectedPetsCount}>
@@ -505,8 +576,8 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
 
             <TextInput
               style={styles.searchInput}
-              placeholder="Search"
-              placeholderTextColor="#888"
+              placeholder={t('value.search_placeholder')}
+              placeholderTextColor={isDarkMode ? config.colors.placeholderDark : config.colors.placeholderLight}
               onChangeText={handleSearchChange}
             />
             {/* Selected / owned pets strip (chat/settings only) */}
@@ -542,34 +613,92 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
               }}
             >
               <Text style={styles.filterText}>
-                {sortOrder === 'asc' ? '▲ High' : sortOrder === 'desc' ? '▼ LOw' : 'Filter'}
+                {sortOrder === 'asc' ? t('value.low') : sortOrder === 'desc' ? t('value.high') : t('value.filter')}
               </Text>
             </TouchableOpacity>
+            {!fromChat && !fromSetting && (
+              <TouchableOpacity
+                style={styles.filterButton}
+                onPress={() => {
+                  triggerHapticFeedback('impactLight');
+                  handleRefresh();
+                }}
+                disabled={refreshing}
+              >
+                {refreshing ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Icon name="refresh" size={18} color="white" />
+                )}
+              </TouchableOpacity>
+            )}
             {selectedFruits?.length > 0 && <TouchableOpacity
               style={[styles.filterButton, { backgroundColor: 'purple' }]}
               onPress={onRequestClose}
             >
               <Text style={styles.filterText}>
-                Done
+                {t('value.done')}
               </Text>
             </TouchableOpacity>}
           </View>
 
-          {filteredData.length > 0 ? (
+          {fromChat && (
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+              {[
+                { key: 'mine', label: `${t('value.my_items', 'My Items')} (${(localState?.ownedPets || []).length})` },
+                { key: 'all', label: t('value.all_items', 'All Items') },
+              ].map((opt) => {
+                const active = chatPetSource === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    onPress={() => setChatPetSource(opt.key)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      alignItems: 'center',
+                      backgroundColor: active ? config.colors.primary : 'transparent',
+                      borderWidth: 1,
+                      borderColor: active ? config.colors.primary : (isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)'),
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: active ? '#fff' : (isDarkMode ? '#E2E8F0' : '#334155') }}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+          {(fromChat && chatPetSource === 'mine' ? myPetsView : filteredData).length > 0 ? (
             <FlatList
-              data={filteredData}
+              data={fromChat && chatPetSource === 'mine' ? myPetsView : filteredData}
               keyExtractor={(item) => item.id || item.name}
               renderItem={renderItem}
               showsVerticalScrollIndicator={false}
               removeClippedSubviews={true}
               numColumns={2}
               columnWrapperStyle={styles.columnWrapper}
+              contentContainerStyle={{ paddingBottom: 180 }}
               refreshing={refreshing}
               onRefresh={handleRefresh}
               maxToRenderPerBatch={10}
               windowSize={5}
               initialNumToRender={10}
             />
+          ) : (fromChat && chatPetSource === 'mine') ? (
+            <View style={{ alignItems: 'center', marginTop: 24, paddingHorizontal: 24 }}>
+              <Text style={[styles.description, { textAlign: 'center', color: 'gray' }]}>
+                {t('value.no_my_items', 'No items in your My Stuff yet. Add them from the Home tab, or browse all items.')}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setChatPetSource('all')}
+                style={{ marginTop: 12, paddingVertical: 8, paddingHorizontal: 18, borderRadius: 10, backgroundColor: config.colors.primary }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{t('value.browse_all', 'Browse All Items')}</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <Text style={[styles.description, { textAlign: 'center', marginTop: 20, color: 'gray' }]}>
               {t("value.no_results")}
@@ -578,7 +707,11 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
         </View>
         <CodesDrawer isVisible={isDrawerVisible} toggleModal={toggleDrawer} codes={codesData} />
       </GestureHandlerRootView>
-      {!localState.isPro && !fromChat && <BannerAdComponent />}
+      {!localState.isPro && !fromChat && (
+        <View style={{ position: 'absolute', bottom: bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
+          <BannerAdComponent collapsible />
+        </View>
+      )}
     </>
   );
 });
@@ -675,6 +808,59 @@ export const getStyles = (isDarkMode) => StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  tierLabel: {
+    fontSize: 10,
+    color: config.colors.primary,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  pillsRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: 4,
+    flexWrap: 'wrap',
+  },
+  pill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  demandPill: {
+    backgroundColor: isDarkMode ? 'rgba(106, 90, 205, 0.2)' : 'rgba(106, 90, 205, 0.12)',
+  },
+  rarityPill: {
+    backgroundColor: isDarkMode ? 'rgba(255, 149, 0, 0.2)' : 'rgba(255, 149, 0, 0.12)',
+  },
+  pillText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: isDarkMode ? config.colors.textSecondaryDark : config.colors.textSecondaryLight,
+  },
+  stabilityTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+  },
+  stabilityDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    marginRight: 4,
+  },
+  stabilityText: {
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  rangeText: {
+    fontSize: 9,
+    color: isDarkMode ? config.colors.textTertiaryDark : config.colors.textTertiaryLight,
+    fontWeight: '500',
   },
   itemBadgesContainer: {
     position: 'absolute',

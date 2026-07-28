@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import ValueScreen from '../../ValuesScreen/ValueScreen';
 import { useGlobalState } from '../../GlobelStats';
+import config from '../../Helper/Environment';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -29,7 +30,7 @@ const PetModal = ({
   const isDark = useMemo(() => theme === 'dark', [theme]);
   
   // ✅ Memoize backgroundColor
-  const drawerBackgroundColor = useMemo(() => isDark ? 'black' : 'white', [isDark]);
+  const drawerBackgroundColor = useMemo(() => isDark ? config.colors.backgroundDark : 'white', [isDark]);
 
   // ✅ Validate and memoize onClose handler
   const handleClose = useCallback(() => {

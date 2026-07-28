@@ -25,7 +25,7 @@ const GroupsGuideModal = ({ visible, onClose }) => {
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <View style={[styles.modalContent, { backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF' }]}>
+        <View style={[styles.modalContent, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#FFFFFF' }]}>
           {/* Header */}
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
@@ -172,7 +172,7 @@ const getStyles = (isDarkMode) =>
     },
     divider: {
       height: 1,
-      backgroundColor: isDarkMode ? '#374151' : '#E5E7EB',
+      backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB',
       marginVertical: 20,
     },
     gotItButton: {

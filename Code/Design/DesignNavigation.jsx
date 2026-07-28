@@ -31,6 +31,10 @@ export const DesignStack = ({ selectedTheme }) => {
     headerStyle: { backgroundColor: selectedTheme.colors.background },
     headerTintColor: selectedTheme.colors.text,
     headerTitleStyle: { fontFamily: 'Lato-Bold', fontSize: 24 },
+    contentStyle: { backgroundColor: selectedTheme.colors.background },
+    freezeOnBlur: true,
+    animation: 'fade',
+    animationDuration: 300,
   }), [selectedTheme]);
 
   const sharedParams = useMemo(() => ({

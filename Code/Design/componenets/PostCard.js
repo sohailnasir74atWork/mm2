@@ -1,8 +1,9 @@
-import React, { useState, useCallback, memo, useEffect } from 'react';
+import React, { useState, useCallback, memo, useEffect, useMemo } from 'react';
 import {
-  View, Text, Image, StyleSheet, TouchableOpacity, Alert, useColorScheme,
+  View, Text, Image, StyleSheet, TouchableOpacity, Alert, Animated,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import FontAwesome6 from 'react-native-vector-icons/FontAwesome6';
 import InterstitialAdManager from '../../Ads/IntAd';
 import { mixpanel } from '../../AppHelper/MixPenel';
 import { useNavigation } from '@react-navigation/native';
@@ -16,138 +17,134 @@ import dayjs from 'dayjs';
 import { get, getDatabase, ref, set } from '@react-native-firebase/database';
 import ProfileBottomDrawer from '../../ChatScreen/GroupChat/BottomDrawer';
 import { isUserOnline } from '../../ChatScreen/utils';
+import FramedAvatar from '../../ChatScreen/GroupChat/FramedAvatar';
+import { getCachedProfile } from '../../Helper/profileCache';
 
-const PostCard = ({ item, userId, onLike, localState, appdatabase, onDelete, onDeleteAll }) => {
+const REACTION_EMOJIS = ['❤️', '🔥', '😍', '💀', '🎯'];
+
+const TAG_CONFIG = {
+  'scam alert': { color: '#FF3B30', icon: 'shield-halved' },
+  'looking for trade': { color: '#10B981', icon: 'handshake' },
+  'discussion': { color: '#3B82F6', icon: 'comments' },
+  'real or fake': { color: '#8B5CF6', icon: 'magnifying-glass' },
+  'need help': { color: '#F59E0B', icon: 'circle-question' },
+  'misc': { color: '#6B7280', icon: 'ellipsis' },
+  'misc.': { color: '#6B7280', icon: 'ellipsis' },
+};
+
+const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, onDelete, onDeleteAll }) => {
   const navigation = useNavigation();
-  const liked = !!item.likes?.[userId];
-  const likeCount = item.likes ? Object.keys(item.likes).length : 0;
+
+  // Support both old onLike and new onReaction
+  const handleReaction = onReaction || onLike;
+
+  // Merge likes + reactions into a unified map
+  const mergedReactions = useMemo(() => {
+    const map = {};
+    if (item.likes) {
+      Object.keys(item.likes).forEach(uid => {
+        if (!item.reactions?.[uid]) map[uid] = '❤️';
+      });
+    }
+    if (item.reactions) {
+      Object.entries(item.reactions).forEach(([uid, emoji]) => {
+        map[uid] = emoji;
+      });
+    }
+    return map;
+  }, [item.likes, item.reactions]);
+
+  const myReaction = mergedReactions[userId] || null;
+  const totalReactions = Object.keys(mergedReactions).length;
+
+  const reactionCounts = useMemo(() => {
+    const counts = {};
+    Object.values(mergedReactions).forEach(emoji => {
+      counts[emoji] = (counts[emoji] || 0) + 1;
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  }, [mergedReactions]);
+
   const [showComments, setShowComments] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [heartScale] = useState(new Animated.Value(1));
   const [bannedUsers, setBannedUsers] = useState([]);
   const [isOnline, setIsOnline] = useState(false);
-  // const [selectedUser, setSelectedUser] = useState(null);
 
   useEffect(() => {
-    // if (!user?.id) return;
-    setBannedUsers(localState.bannedUsers)
-
-  }, [ localState.bannedUsers]);
-  // const report = !!item.likes?.[userId];
-
-  // console.log(item)
+    setBannedUsers(localState.bannedUsers);
+  }, [localState.bannedUsers]);
 
   const { theme, isAdmin } = useGlobalState();
   const isDark = theme === 'dark';
-  const getTagColor = (tag) => {
-    switch (tag.toLowerCase()) {
-      case 'scam alert':
-        return '#FF3B30'; // Bright red
-      case 'looking for trade':
-        return '#34C759'; // Vibrant green
-      case 'discussion':
-        return '#5AC8FA'; // Sky blue
-      case 'real or fake':
-        return '#AF52DE'; // Purple
-      case 'need help':
-        return '#FF9500'; // Orange
-      case 'misc.':
-        return '#8E8E93'; // Neutral gray
-      default:
-        return config.colors.primary; // Fallback
-    }
-  };
+
+  const getTagConfig = (tag) => TAG_CONFIG[tag.toLowerCase()] || { color: config.colors.primary, icon: 'tag' };
+
   const banUserwithEmail = async (email, userId) => {
     const encodeEmail = (email) => email.replace(/\./g, '(dot)');
-  
     try {
       const db = getDatabase();
       const banRef = ref(db, `banned_users_by_email_post/${encodeEmail(email)}`);
       const snap = await get(banRef);
-  
       let strikeCount = 1;
-      let bannedUntil = Date.now() + 24 * 60 * 60 * 1000; // 1 day
-      // let bannedUntil = Date.now() +  1 * 60 * 1000; // 1 day
-  
-      
-  
+      let bannedUntil = Date.now() + 24 * 60 * 60 * 1000;
       if (snap.exists()) {
         const data = snap.val();
-        if(!isAdmin){strikeCount = data.strikeCount;}
-        if(isAdmin){strikeCount = data.strikeCount + 1;}
-  
-        if (strikeCount === 2) bannedUntil = Date.now() + 3 * 24 * 60 * 60 * 1000; // 3 days
-        //  if (strikeCount === 2) bannedUntil = Date.now() + 2  * 60 * 1000; // 3 days
+        if (!isAdmin) { strikeCount = data.strikeCount; }
+        if (isAdmin) { strikeCount = data.strikeCount + 1; }
+        if (strikeCount === 2) bannedUntil = Date.now() + 3 * 24 * 60 * 60 * 1000;
         else if (strikeCount >= 3) bannedUntil = "permanent";
       }
-  
-      await set(banRef, {
-        strikeCount,
-        bannedUntil,
-        reason: `Strike ${strikeCount}`
-      });
-      await onDeleteAll(userId)
-      if(isAdmin){Alert.alert('User Banned', `Strike ${strikeCount} applied.`);}
+      await set(banRef, { strikeCount, bannedUntil, reason: `Strike ${strikeCount}` });
+      await onDeleteAll(userId);
+      if (isAdmin) { Alert.alert('User Banned', `Strike ${strikeCount} applied.`); }
     } catch (err) {
       console.error('Ban error:', err);
-     if(isAdmin){ Alert.alert('Error', 'Could not ban user.');}
+      if (isAdmin) { Alert.alert('Error', 'Could not ban user.'); }
     }
   };
-  const closeProfileDrawer = () => {
-    setIsDrawerVisible(false);
-  };
+
+  const closeProfileDrawer = () => setIsDrawerVisible(false);
+
   const openProfileDrawer = async () => {
     if (!userId) {
-      showMessage({
-        message: 'Please sign in to message',
-        type: 'warning',
-      });
+      showMessage({ message: 'Please sign in to message', type: 'warning' });
       return;
     }
-    // setSelectedUser(item)
-    setIsOnline(false); // Reset online status before checking
+    setIsOnline(false);
     try {
       const online = await isUserOnline(item?.userId);
       setIsOnline(online);
     } catch (error) {
-      console.error('🔥 Error checking online status:', error);
       setIsOnline(false);
     }
     setIsDrawerVisible(true);
   };
-  
- const selectedUser = {
-  senderId: item.userId,
-  sender: item.displayName,
-  avatar: item.avatar,
-  flage: item.flage ? item.flage : null,
-  robloxUsername: item?.robloxUsername || null,
-  robloxUsernameVerified: item?.robloxUsernameVerified || false,
-}
+
+  const selectedUser = {
+    senderId: item.userId,
+    sender: item.displayName,
+    avatar: item.avatar,
+    flage: item.flage ? item.flage : null,
+    robloxUsername: item?.robloxUsername || null,
+    robloxUsernameVerified: item?.robloxUsernameVerified || false,
+  };
 
   const handleChatNavigation = useCallback(() => {
     const callback = () => {
       if (!userId) {
-        showMessage({
-          message: 'Please sign in to message',
-          type: 'warning',
-        });
+        showMessage({ message: 'Please sign in to message', type: 'warning' });
         return;
       }
-
-     
-      
-      mixpanel.track('Design Screen');
-      navigation.navigate('PrivateChatDesign', {
-        selectedUser: selectedUser,
-        item,
-      });
+      // Close drawer first (iOS doesn't auto-dismiss modals on navigation)
+      setIsDrawerVisible(false);
+      setTimeout(() => {
+        mixpanel.track('Design Screen');
+        navigation.navigate('PrivateChatDesign', { selectedUser, item });
+      }, 300);
     };
-
-
-
-
-
     if (!localState?.isPro) {
       InterstitialAdManager.showAd(callback);
     } else {
@@ -155,192 +152,269 @@ const PostCard = ({ item, userId, onLike, localState, appdatabase, onDelete, onD
     }
   }, [userId, item, navigation, localState?.isPro]);
 
-  const themedStyles = getStyles(isDark);
-  // console.log(item.createdAt)
+  const handleEmojiTap = useCallback((emoji) => {
+    setShowEmojiPicker(false);
+    Animated.sequence([
+      Animated.spring(heartScale, { toValue: 1.4, useNativeDriver: true, speed: 40 }),
+      Animated.spring(heartScale, { toValue: 1.0, useNativeDriver: true, speed: 40 }),
+    ]).start();
+    if (handleReaction) {
+      handleReaction(item, emoji);
+    }
+  }, [item, handleReaction]);
+
+  const handleQuickReact = useCallback(() => {
+    Animated.sequence([
+      Animated.spring(heartScale, { toValue: 1.35, useNativeDriver: true, speed: 40 }),
+      Animated.spring(heartScale, { toValue: 1.0, useNativeDriver: true, speed: 40 }),
+    ]).start();
+    if (handleReaction) {
+      if (myReaction) {
+        handleReaction(item, myReaction);
+      } else {
+        handleReaction(item, '❤️');
+      }
+    }
+  }, [myReaction, item, handleReaction]);
+
+  const s = useMemo(() => getStyles(isDark), [isDark]);
   const formattedTime = item.createdAt ? dayjs(item.createdAt.toDate()).fromNow() : 'Anonymous';
-
-
+  const hasNoImages = !Array.isArray(item.imageUrl) || item.imageUrl.length === 0;
 
   return (
-    <View style={themedStyles.card}>
-     <View style={themedStyles.header}>
-      <TouchableOpacity  onPress={openProfileDrawer}>
-  <Image source={{ uri: item.avatar }} style={themedStyles.avatar}/></TouchableOpacity>
-  <TouchableOpacity style={{ marginLeft: 10, flex: 1 }} onPress={openProfileDrawer}>
-    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-      <Text style={themedStyles.name}>{item.displayName}</Text>
-      {item.isPro && (
-        <Image
-          source={require('../../../assets/pro.png')}
-          style={{ width: 14, height: 14, marginLeft: 4 }}
-        />
-      )}
-      {item.robloxUsernameVerified && (
-        <Image
-          source={require('../../../assets/verification.png')}
-          style={{ width: 14, height: 14, marginLeft: 4 }}
-        />
-      )}
-      {(() => {
-        const hasRecentWin =
-          !!item?.hasRecentGameWin ||
-          (typeof item?.lastGameWinAt === 'number' &&
-            Date.now() - item.lastGameWinAt <= 24 * 60 * 60 * 1000);
-        return hasRecentWin ? (
-          <Image
-            source={require('../../../assets/trophy.webp')}
-            style={{ width: 12, height: 12, marginLeft: 4 }}
-          />
-        ) : null;
-      })()}
-    </View>
-    <Text style={themedStyles.time}>
-      {formattedTime}
-    </Text>
-  </TouchableOpacity>
-
-  <Menu>
-    <MenuTrigger>
-      <Icon name="ellipsis-v" size={18} color={isDark ? 'lightgrey' : 'grey'} style={{marginRight:5}}/>
-    </MenuTrigger>
-    <MenuOptions>
-      <View>
-  <MenuOption onSelect={() => setShowReportModal(true)} text="Report" style={{marginVertical: 5,}} /></View>
-    {/* {console.log(isAdmin)} */}
-  {(userId === item.userId || isAdmin) && (
- <MenuOption
- onSelect={() => {
-   Alert.alert(
-     'Delete Post',
-     'Are you sure you want to delete this post?',
-     [
-       { text: 'Cancel', style: 'cancel' },
-       { text: 'Delete', onPress: () => onDelete(item.id), style: 'destructive' },
-     ]
-   );
- }}
->
- <View style={[ {  borderTopWidth:1 }]}>
-   <Text style={[themedStyles.tagText,{marginVertical: 15,}  ]}>Delete</Text>
- </View>
-</MenuOption>
-
-
-  )}
-{isAdmin && 
- 
- <MenuOption onSelect={()=>banUserwithEmail(item.email, item.userId)}>
-    <Text>Ban User</Text>
-  
-  </MenuOption>}
-  {isAdmin &&  <MenuOption
- onSelect={() => {
-   Alert.alert(
-     'Delete Post',
-     'Are you sure you want to delete this post?',
-     [
-       { text: 'Cancel', style: 'cancel' },
-       { text: 'Delete', onPress: () => onDeleteAll(item.userId), style: 'destructive' },
-     ]
-   );
- }}
->
- <View style={[ {  borderTopWidth:1 }]}>
-   <Text style={[themedStyles.tagText,{marginVertical: 15,}  ]}>Delete All</Text>
- </View>
-</MenuOption>}
-</MenuOptions>
-
-  </Menu>
-</View>
-
-
-      <Text style={themedStyles.desc}>{item?.desc}</Text>
-      {Array.isArray(item.imageUrl) && item.imageUrl.length < 1  && <ReportModal visible={showReportModal} onClose={() => setShowReportModal(false)} item={item} banUserwithEmail={banUserwithEmail} /> }
-
-      {/* {(item.selectedTags?.length > 0 || item.budget) && (
-        <View style={themedStyles.metaInfoRow}>
-          <View style={themedStyles.tagsRow}>
-            {item.selectedTags?.map((tag, idx) => (
-              <View key={idx} style={themedStyles.tagBadge}>
-                <Text style={themedStyles.tagText}>{tag}</Text>
-              </View>
-            ))}
+    <View style={s.card}>
+      {/* ── Header ── */}
+      <View style={s.header}>
+        <TouchableOpacity onPress={openProfileDrawer} activeOpacity={0.8}>
+          <View style={s.avatarWrapper}>
+            {/* Newer posts stamp the poster's frame; older ones fall back to
+                the shared profile cache. */}
+            <FramedAvatar
+              avatarUri={item.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png'}
+              frame={item.profileFrame || getCachedProfile(item.userId)?.profileFrame || null}
+              isDarkMode={isDark}
+              avatarSize={28}
+              forceDetail
+            />
           </View>
-          {item.budget && <Text style={themedStyles.budgetText}>Budget: {item.budget}</Text>}
-        </View>
-      )} */}
-
-{Array.isArray(item.imageUrl) && item.imageUrl.length > 0 && (
-  <View style={themedStyles.imageWrapper}>
-    {/* Tags positioned above the image container */}
-    <View style={themedStyles.tagOverlayAbove}>
-      {item.selectedTags?.map((tag, idx) => (
-       <View key={idx} style={[themedStyles.overlayTag, { backgroundColor: getTagColor(tag) }]}>
-       <Text style={themedStyles.overlayTagText}>{tag}</Text>
-     </View>
-     
-      ))}
-    </View>
-
-    {/* Image block as-is */}
-    <View style={themedStyles.shadowWrapper}>
-    <View style={themedStyles.imageContainer}>
-      {item?.imageUrl.length === 1 ? (
-        <TouchableOpacity
-          onPress={() =>
-            navigation.navigate('ImageViewerScreen', {
-              images: item.imageUrl,
-              initialIndex: 0,
-            })
-          }
-        >
-          <Image source={{ uri: item?.imageUrl[0] }} style={themedStyles.singleImage} />
         </TouchableOpacity>
-      ) : (
-        <View style={themedStyles.multiImageGrid}>
-          {item?.imageUrl.slice(0, 4).map((url, idx) => (
+
+        <TouchableOpacity style={{ marginLeft: 10, flex: 1 }} onPress={openProfileDrawer} activeOpacity={0.8}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+            <Text style={s.name} numberOfLines={1}>{item.displayName}</Text>
+            {item.isPro && (
+              <Image source={require('../../../assets/pro.png')} style={s.badge} />
+            )}
+            {item.robloxUsernameVerified && (
+              <Image source={require('../../../assets/verification.png')} style={s.badge} />
+            )}
+            {(() => {
+              const hasRecentWin =
+                !!item?.hasRecentGameWin ||
+                (typeof item?.lastGameWinAt === 'number' &&
+                  Date.now() - item.lastGameWinAt <= 24 * 60 * 60 * 1000);
+              return hasRecentWin ? (
+                <Image source={require('../../../assets/trophy.webp')} style={s.badge} />
+              ) : null;
+            })()}
+          </View>
+          <Text style={s.time}>{formattedTime}</Text>
+        </TouchableOpacity>
+
+        {/* Kebab menu */}
+        <Menu>
+          <MenuTrigger>
+            <View style={s.menuBtn}>
+              <Icon name="ellipsis-v" size={14} color={isDark ? '#94a3b8' : '#64748b'} />
+            </View>
+          </MenuTrigger>
+          <MenuOptions customStyles={{ optionsContainer: { borderRadius: 14, overflow: 'hidden', backgroundColor: isDark ? config.colors.surfaceDark : '#fff', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, minWidth: 160 } }}>
+            <MenuOption onSelect={() => setShowReportModal(true)}>
+              <View style={s.menuItem}>
+                <FontAwesome6 name="flag" size={12} color="#F59E0B" solid />
+                <Text style={[s.menuItemText, { color: '#F59E0B' }]}>Report</Text>
+              </View>
+            </MenuOption>
+            {(userId === item.userId || isAdmin) && (
+              <MenuOption onSelect={() => Alert.alert('Delete Post', 'Are you sure you want to delete this post?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', onPress: () => onDelete(item.id), style: 'destructive' },
+              ])}>
+                <View style={[s.menuItem, { borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#f1f5f9' }]}>
+                  <FontAwesome6 name="trash" size={12} color="#EF4444" solid />
+                  <Text style={[s.menuItemText, { color: '#EF4444' }]}>Delete</Text>
+                </View>
+              </MenuOption>
+            )}
+            {isAdmin && (
+              <MenuOption onSelect={() => banUserwithEmail(item.email, item.userId)}>
+                <View style={[s.menuItem, { borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#f1f5f9' }]}>
+                  <FontAwesome6 name="ban" size={12} color="#EF4444" solid />
+                  <Text style={[s.menuItemText, { color: '#EF4444' }]}>Ban User</Text>
+                </View>
+              </MenuOption>
+            )}
+            {isAdmin && (
+              <MenuOption onSelect={() => Alert.alert('Delete All', 'Are you sure?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', onPress: () => onDeleteAll(item.userId), style: 'destructive' },
+              ])}>
+                <View style={[s.menuItem, { borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#f1f5f9' }]}>
+                  <FontAwesome6 name="trash-can" size={12} color="#EF4444" solid />
+                  <Text style={[s.menuItemText, { color: '#EF4444' }]}>Delete All</Text>
+                </View>
+              </MenuOption>
+            )}
+          </MenuOptions>
+        </Menu>
+      </View>
+
+      {/* ── Text-only: desc + tags ── */}
+      {hasNoImages && (
+        <View style={s.textOnlyWrapper}>
+          {item.selectedTags?.length > 0 && (
+            <View style={s.tagOverlay}>
+              {item.selectedTags.map((tag, idx) => {
+                const cfg = getTagConfig(tag);
+                return (
+                  <View key={idx} style={[s.overlayPill, { backgroundColor: cfg.color }]}>
+                    <FontAwesome6 name={cfg.icon} size={9} color="#fff" solid />
+                    <Text style={s.overlayPillText}>{tag}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+          {!!item?.desc && (
+            <Text style={[s.desc, item.selectedTags?.length > 0 && { paddingRight: 80 }]}>
+              {item.desc}
+            </Text>
+          )}
+        </View>
+      )}
+
+      {/* ── Image(s) with overlay tags ── */}
+      {!hasNoImages && (
+        <View style={s.imageWrapper}>
+          {/* Desc above image */}
+          {!!item?.desc && (
+            <Text style={[s.desc, { paddingHorizontal: 14, paddingBottom: 8 }]}>{item.desc}</Text>
+          )}
+          {/* Tag overlay */}
+          <View style={s.tagOverlay}>
+            {item.selectedTags?.map((tag, idx) => {
+              const cfg = getTagConfig(tag);
+              return (
+                <View key={idx} style={[s.overlayPill, { backgroundColor: cfg.color }]}>
+                  <FontAwesome6 name={cfg.icon} size={9} color="#fff" solid />
+                  <Text style={s.overlayPillText}>{tag}</Text>
+                </View>
+              );
+            })}
+          </View>
+
+          <View style={s.imageContainer}>
+            {item.imageUrl.length === 1 ? (
+              <TouchableOpacity
+                activeOpacity={0.95}
+                onPress={() => navigation.navigate('ImageViewerScreen', { images: item.imageUrl, initialIndex: 0 })}
+              >
+                <Image source={{ uri: item.imageUrl[0] }} style={s.singleImage} />
+              </TouchableOpacity>
+            ) : (
+              <View style={s.multiGrid}>
+                {item.imageUrl.slice(0, 4).map((url, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[
+                      s.gridCell,
+                      item.imageUrl.length === 3 && idx === 0 && s.gridCellWide,
+                    ]}
+                    activeOpacity={0.9}
+                    onPress={() => navigation.navigate('ImageViewerScreen', { images: item.imageUrl, initialIndex: idx })}
+                  >
+                    <Image source={{ uri: url }} style={s.gridImage} />
+                    {idx === 3 && item.imageUrl.length > 4 && (
+                      <View style={s.moreOverlay}>
+                        <Text style={s.moreText}>+{item.imageUrl.length - 4}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+          <ReportModal visible={showReportModal} onClose={() => setShowReportModal(false)} item={item} banUserwithEmail={banUserwithEmail} />
+        </View>
+      )}
+
+      {hasNoImages && (
+        <ReportModal visible={showReportModal} onClose={() => setShowReportModal(false)} item={item} banUserwithEmail={banUserwithEmail} />
+      )}
+
+      {/* ── Reaction summary chips ── */}
+      {reactionCounts.length > 0 && (
+        <View style={s.reactionSummary}>
+          {reactionCounts.map(([emoji, count]) => (
+            <View key={emoji} style={[s.reactionChip, mergedReactions[userId] === emoji && s.reactionChipActive]}>
+              <Text style={{ fontSize: 11 }}>{emoji}</Text>
+              <Text style={s.reactionChipCount}>{count}</Text>
+            </View>
+          ))}
+          {totalReactions > 0 && (
+            <Text style={s.totalReactionsText}>{totalReactions} {totalReactions === 1 ? 'reaction' : 'reactions'}</Text>
+          )}
+        </View>
+      )}
+
+      {/* ── Action Bar ── */}
+      <View style={s.actionBar}>
+        {/* React button */}
+        <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+          <TouchableOpacity
+            style={[s.actionBtn, myReaction && s.actionBtnActive]}
+            onPress={() => setShowEmojiPicker(v => !v)}
+            activeOpacity={0.75}
+          >
+            <Text style={{ fontSize: 14 }}>{myReaction || '🤍'}</Text>
+            {totalReactions > 0 && (
+              <Text style={[s.actionBtnLabel, myReaction && { color: '#EF4444' }]}>{totalReactions}</Text>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Comment button */}
+        <TouchableOpacity style={s.actionBtn} onPress={() => setShowComments(true)} activeOpacity={0.75}>
+          <Icon name="comment-o" size={14} color={isDark ? '#94a3b8' : '#64748b'} />
+          <Text style={s.actionBtnLabel}>
+            {item.commentCount ? `${item.commentCount} comments` : '0 Comments'}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={{ flex: 1 }} />
+
+        {/* Chat / DM button */}
+        <TouchableOpacity style={s.chatBtn} onPress={openProfileDrawer} activeOpacity={0.8}>
+          <Icon name="paper-plane" size={11} color="#fff" />
+          <Text style={s.chatBtnLabel}>Chat</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ── Emoji Picker ── */}
+      {showEmojiPicker && (
+        <View style={s.emojiPicker}>
+          {REACTION_EMOJIS.map((emoji) => (
             <TouchableOpacity
-              key={idx}
-              style={themedStyles.gridImage}
-              onPress={() =>
-                navigation.navigate('ImageViewerScreen', {
-                  images: item?.imageUrl,
-                  initialIndex: idx,
-                })
-              }
+              key={emoji}
+              style={[s.emojiBtn, myReaction === emoji && s.emojiBtnActive]}
+              onPress={() => handleEmojiTap(emoji)}
+              activeOpacity={0.8}
             >
-              <Image source={{ uri: url }} style={themedStyles.gridImageInner} />
+              <Text style={{ fontSize: 22 }}>{emoji}</Text>
             </TouchableOpacity>
           ))}
         </View>
       )}
-    </View>
-    </View>
-    <ReportModal visible={showReportModal} onClose={() => setShowReportModal(false)} item={item} banUserwithEmail={banUserwithEmail} />
-
-  </View>
-)}
-
-      <View style={themedStyles.actionsRow}>
-        <View style={{flexDirection:'row'}}>
-        <TouchableOpacity onPress={() => onLike(item)} style={themedStyles.actionBtn}>
-          <Icon name={liked ? 'heart' : 'heart-o'} size={20} color={liked ? 'red' : 'gray'} />
-          <Text style={themedStyles.likeCount}>{likeCount} likes</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowComments(true)} style={themedStyles.commentssection}>
-        <Icon name="comment" size={18} color={config.colors.primary} />
-        <Text style={themedStyles.sendText}>
-          {item.commentCount ? `${item.commentCount} comments` : '0 Comments'}
-        </Text>
-      </TouchableOpacity>
-      </View>
-
-        <TouchableOpacity onPress={openProfileDrawer} style={themedStyles.sendBtn}>
-          <Icon name="paper-plane" size={16} color={config.colors.primary} />
-          <Text style={themedStyles.sendText}>Chat</Text>
-        </TouchableOpacity>
-      </View>
 
       <CommentModal
         visible={showComments}
@@ -349,14 +423,14 @@ const PostCard = ({ item, userId, onLike, localState, appdatabase, onDelete, onD
         appdatabase={appdatabase}
       />
 
-<ProfileBottomDrawer
-          isVisible={isDrawerVisible}
-          toggleModal={closeProfileDrawer}  
-          startChat={handleChatNavigation}
-          selectedUser={selectedUser}
-          isOnline={isOnline}
-          bannedUsers={bannedUsers}
-        />
+      <ProfileBottomDrawer
+        isVisible={isDrawerVisible}
+        toggleModal={closeProfileDrawer}
+        startChat={handleChatNavigation}
+        selectedUser={selectedUser}
+        isOnline={isOnline}
+        bannedUsers={bannedUsers}
+      />
     </View>
   );
 };
@@ -364,169 +438,293 @@ const PostCard = ({ item, userId, onLike, localState, appdatabase, onDelete, onD
 const getStyles = (isDark) =>
   StyleSheet.create({
     card: {
-      padding: 10,
-      borderBottomWidth: 1,
-      borderColor: isDark ? '#444' : '#eee',
-      backgroundColor: isDark ? '#121212' : '#fff',
-    },
-    header: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
-    avatar: { width: 40, height: 40, borderRadius: 20 },
-    name: { fontFamily: 'Lato-Bold', color: isDark ? '#fff' : '#000' },
-    time: { fontSize: 10, color: 'gray', fontFamily: 'Lato-Regular' },
-    desc: { marginVertical: 5, fontSize: 14, color: isDark ? '#ccc' : '#333', fontFamily: 'Lato-Regular' },
-
-    shadowWrapper: {
-      // backgroundColor: '#fff', // needed for shadow contrast
-      borderRadius: 8,
-      // marginTop: 10,
-    
-      // iOS Shadow
-      // shadowColor: '#000',
-      // shadowOffset: { width: 0, height: 2 },
-      // shadowOpacity: 0.1,
-      // shadowRadius: 8,
-    
-      // // Android
-      // elevation: 5,
-    },
-    
-    imageContainer: {
-      borderRadius: 8,
-      // overflow: 'hidden', // Move it here if you want to clip images inside
-      // shadowColor: '#000',
-      // shadowOffset: { width: 0, height: 2 },
-      // shadowOpacity: 0.1,
-      // shadowRadius: 8,
-    
-      // Android
-      // elevation: 1,
-      borderWidth:.5,
-      borderColor: isDark ? 'grey' : 'lightgrey'
-
-    },
-    
-    singleImage: { width: '100%', height: 220, borderRadius: 8 },
-
-    multiImageGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'space-between',
-      gap: 6,
-      width: '100%',
-      borderRadius: 6,
-    
-      // Shadow for iOS
-      // shadowColor: '#000',
-      // shadowOffset: { width: 4, height: 4 },
-      // shadowOpacity: 0.5,
-      // shadowRadius: 6,
-    
-      // Elevation for Android
-      // elevation: 3,
-      // backgroundColor: '#fff',
-    },
-    
-    gridImage: { width: '49%', height: 120, marginBottom: 2, borderRadius: 6},
-    gridImageInner: { width: '100%', height: '100%', borderRadius: 8},
-
-    actionsRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginTop: 10,
-      justifyContent: 'space-between',
-    },
-    actionBtn: { flexDirection: 'row', alignItems: 'center' },
-    likeCount: { marginLeft: 5, fontSize: 14, color: isDark ? '#ccc' : config.colors.primary, fontFamily: 'Lato-Bold' },
-
-    sendBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 6,
-    },
-    commentssection: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      // backgroundColor: isDark ? '#333' : '#f7e7e4',
-      borderRadius: 6,
-      // marginTop: 6,
-      marginLeft:10
-    },
-    sendText: {
-      marginLeft: 6,
-      color: config.colors.primary,
-      fontWeight: '600',
-      fontFamily: 'Lato-Bold',
-    },
-
-    metaInfoRow: {
+      marginHorizontal: 12,
       marginVertical: 6,
-      flexDirection: 'column',
-      gap: 4,
+      borderRadius: 20,
+      backgroundColor: isDark ? '#1a2540' : '#ffffff',
+      borderWidth: 1,
+      borderColor: isDark ? '#243050' : '#f0f4ff',
+      shadowColor: isDark ? '#000' : '#1a1a2e',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.35 : 0.07,
+      shadowRadius: 12,
+      elevation: isDark ? 6 : 3,
+      overflow: 'hidden',
     },
-    tagsRow: {
+
+    /* Header */
+    header: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
+      alignItems: 'center',
+      paddingHorizontal: 14,
+      paddingTop: 14,
+      paddingBottom: 10,
     },
-    tagBadge: {
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: 12,
-      backgroundColor: isDark ? '#444' : '#f0f0f0',
+    avatarWrapper: {
+      shadowColor: config.colors.primary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
     },
-    tagText: {
-      fontSize: 12,
-      color: isDark ? '#eee' : '#333',
-      textTransform: 'capitalize',
-      fontFamily: 'Lato-Regular',
+    avatar: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      borderWidth: 2.5,
+      borderColor: config.colors.primary,
     },
-    budgetText: {
+    badge: {
+      width: 11,
+      height: 11,
+    },
+    name: {
+      fontWeight: '800',
+      fontSize: 14,
+      color: isDark ? '#e2e8f0' : config.colors.backgroundDark,
+      letterSpacing: 0.1,
+    },
+    time: {
+      fontSize: 11,
+      color: isDark ? '#475569' : '#94a3b8',
+      marginTop: 2,
+    },
+    menuBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: isDark ? '#243050' : '#f8fafc',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: isDark ? '#334155' : '#e2e8f0',
+    },
+    menuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+    },
+    menuItemText: {
       fontSize: 13,
-      fontStyle: 'italic',
-      color: isDark ? '#aaa' : 'gray',
-      marginTop: 4,
-      fontFamily: 'Lato-Regular',
+      fontWeight: '600',
     },
-    imageWrapper: {
-      marginTop: 10,
+
+    /* Description */
+    desc: {
+      fontSize: 14,
+      color: isDark ? '#cbd5e1' : config.colors.surfaceElevatedDark,
+      lineHeight: 21,
+    },
+
+    /* Text-only wrapper */
+    textOnlyWrapper: {
       position: 'relative',
+      minHeight: 44,
+      paddingHorizontal: 14,
+      paddingBottom: 10,
     },
-    
-    tagOverlayAbove: {
+
+    /* Images */
+    imageWrapper: {
+      marginHorizontal: 14,
+      marginBottom: 8,
+      borderRadius: 16,
+      overflow: 'hidden',
+    },
+    tagOverlay: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 6,
-      // marginBottom: 6,
-      position:'absolute',
-      top:5,
-      right:5,
-      zIndex:1000
+      gap: 4,
+      zIndex: 10,
     },
-    
-    overlayTag: {
-      paddingHorizontal: 10,
+    overlayPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 9,
       paddingVertical: 4,
-      borderRadius: 12,
+      borderRadius: 999,
     },
-    overlayTagText: {
-      fontSize: 12,
+    overlayPillText: {
+      fontSize: 10,
       color: '#fff',
-      fontFamily: 'Lato-Bold',
+      fontWeight: '800',
     },
-    
-    
+    imageContainer: {
+      borderRadius: 16,
+      overflow: 'hidden',
+    },
+    singleImage: {
+      width: '100%',
+      height: 230,
+      resizeMode: 'cover',
+    },
+    multiGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 3,
+    },
+    gridCell: {
+      width: '49.3%',
+      height: 140,
+      borderRadius: 10,
+      overflow: 'hidden',
+    },
+    gridCellWide: {
+      width: '100%',
+      height: 180,
+    },
+    gridImage: {
+      width: '100%',
+      height: '100%',
+      resizeMode: 'cover',
+    },
+    moreOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.55)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    moreText: {
+      color: '#fff',
+      fontSize: 22,
+      fontWeight: '800',
+    },
+
+    /* Reaction summary */
+    reactionSummary: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 14,
+      paddingBottom: 6,
+      flexWrap: 'wrap',
+    },
+    reactionChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+      backgroundColor: isDark ? config.colors.surfaceDark : '#f1f5f9',
+      borderWidth: 1,
+      borderColor: isDark ? '#334155' : '#e2e8f0',
+    },
+    reactionChipActive: {
+      backgroundColor: isDark ? '#1e3a5f' : '#eff6ff',
+      borderColor: isDark ? '#6A5ACD' : '#bfdbfe',
+    },
+    reactionChipCount: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: isDark ? '#94a3b8' : '#64748b',
+    },
+    totalReactionsText: {
+      fontSize: 10,
+      color: isDark ? '#475569' : '#94a3b8',
+      marginLeft: 2,
+    },
+
+    /* Action bar */
+    actionBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 14,
+      paddingBottom: 12,
+      paddingTop: 6,
+      borderTopWidth: 1,
+      borderTopColor: isDark ? '#243050' : '#f1f5f9',
+    },
+    actionBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: isDark ? config.colors.backgroundDark : '#f8fafc',
+      borderWidth: 1,
+      borderColor: isDark ? '#334155' : '#e2e8f0',
+    },
+    actionBtnActive: {
+      backgroundColor: isDark ? config.colors.surfaceDark : '#fff1f2',
+      borderColor: '#EF4444',
+    },
+    actionBtnLabel: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: isDark ? '#94a3b8' : '#64748b',
+    },
+    chatBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 13,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: config.colors.primary,
+      shadowColor: config.colors.primary,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.35,
+      shadowRadius: 6,
+      elevation: 4,
+    },
+    chatBtnLabel: {
+      color: '#ffffff',
+      fontWeight: '800',
+      fontSize: 11,
+    },
+
+    /* Emoji picker */
+    emojiPicker: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 10,
+      marginHorizontal: 14,
+      marginBottom: 10,
+      backgroundColor: isDark ? config.colors.backgroundDark : '#f8fafc',
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: isDark ? '#334155' : '#e2e8f0',
+    },
+    emojiBtn: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: isDark ? config.colors.surfaceDark : '#ffffff',
+      borderWidth: 1,
+      borderColor: isDark ? '#334155' : '#e2e8f0',
+    },
+    emojiBtnActive: {
+      backgroundColor: isDark ? '#1e3a5f' : '#eff6ff',
+      borderWidth: 2,
+      borderColor: config.colors.primary,
+    },
   });
 
 export default memo(PostCard, (prevProps, nextProps) => {
   return (
     prevProps.item.id === nextProps.item.id &&
     prevProps.item.likes === nextProps.item.likes &&
+    prevProps.item.reactions === nextProps.item.reactions &&
+    prevProps.item.commentCount === nextProps.item.commentCount &&
+    prevProps.item.imageUrl === nextProps.item.imageUrl &&
     prevProps.userId === nextProps.userId &&
     prevProps.localState?.isPro === nextProps.localState?.isPro &&
-    prevProps.appdatabase === nextProps.appdatabase
+    prevProps.appdatabase === nextProps.appdatabase &&
+    prevProps.onReaction === nextProps.onReaction &&
+    prevProps.onLike === nextProps.onLike &&
+    prevProps.onDelete === nextProps.onDelete &&
+    prevProps.onDeleteAll === nextProps.onDeleteAll
   );
 });

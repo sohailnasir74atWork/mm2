@@ -8,6 +8,7 @@ import {
   useColorScheme,
 } from 'react-native';
 import { useGlobalState } from '../../GlobelStats';
+import config from '../../Helper/Environment';
 
 const { width, height } = Dimensions.get('window');
 
@@ -17,7 +18,7 @@ const ImageViewerScreen = ({ route }) => {
   const { theme } = useGlobalState();
   const isDarkMode = theme === 'dark';
 
-  const backgroundColor = isDarkMode ? '#000' : '#fff';
+  const backgroundColor = isDarkMode ? config.colors.backgroundDark : '#fff';
 
   const renderItem = useMemo(
     () => ({ item }) => (

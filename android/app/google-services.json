@@ -15,6 +15,30 @@
       },
       "oauth_client": [
         {
+          "client_id": "312806709908-2gcp5u59uf9jobj2u754puc2d437p3dm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mm2tradesvalues",
+            "certificate_hash": "db56e893a2a6b54966679925b3db38caa9315c1c"
+          }
+        },
+        {
+          "client_id": "312806709908-aq0e4jgqrkvn8s4qfkioaf5l3ugqe8lc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mm2tradesvalues",
+            "certificate_hash": "d195a122f91d23f1b1ad2221fccbf09993087af1"
+          }
+        },
+        {
+          "client_id": "312806709908-ktghhd2da7su8sad4ldih9vq19ca6bll.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mm2tradesvalues",
+            "certificate_hash": "cea83f7ab4ec070d2930ec28cfb9513728cc5630"
+          }
+        },
+        {
           "client_id": "312806709908-c579rlm0rhdem882lisnpvd21no3onc8.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -30,6 +54,13 @@
             {
               "client_id": "312806709908-c579rlm0rhdem882lisnpvd21no3onc8.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "312806709908-tqaccmev49cimao5cpb73pib44ug1idi.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mm2tradesvalues"
+              }
             }
           ]
         }

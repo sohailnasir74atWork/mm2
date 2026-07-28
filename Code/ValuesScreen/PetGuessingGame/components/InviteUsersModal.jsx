@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../../../GlobelStats';
+import config from '../../../Helper/Environment';
 import {
   getOnlineUserIdsForInvite,
   fetchUserDetailsForInvite,
@@ -247,7 +248,7 @@ const InviteUsersModal = ({ visible, onClose, roomId, currentUser, onInviteSent 
           style={{ flex: 1, justifyContent: 'flex-end' }}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
-          <View style={[styles.container, { backgroundColor: isDarkMode ? '#1a1a1a' : '#fff' }]}>
+          <View style={[styles.container, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff' }]}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>
               Invite Friends to Play
@@ -263,7 +264,7 @@ const InviteUsersModal = ({ visible, onClose, roomId, currentUser, onInviteSent 
             style={[
               styles.searchInput,
               {
-                backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5',
+                backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#f5f5f5',
                 color: isDarkMode ? '#fff' : '#000',
               },
             ]}
@@ -328,7 +329,7 @@ const InviteUsersModal = ({ visible, onClose, roomId, currentUser, onInviteSent 
                   <TouchableOpacity
                     style={[
                       styles.userItem,
-                      { backgroundColor: isDarkMode ? '#2a2a2a' : '#f9f9f9' },
+                      { backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#f9f9f9' },
                     ]}
                     onPress={() => !isInvited && !isPlaying && handleInvite(item)}
                     disabled={isInviting || isInvited || isPlaying}
@@ -415,7 +416,7 @@ const getStyles = (isDark) => StyleSheet.create({
     marginBottom: 16,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5',
+    backgroundColor: isDark ? config.colors.surfaceElevatedDark : '#f5f5f5',
     borderRadius: 10,
   },
   searchIcon: {

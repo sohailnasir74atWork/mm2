@@ -23,6 +23,9 @@ import { useTranslation } from 'react-i18next';
 import { useGlobalState } from '../../GlobelStats';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { showSuccessMessage } from '../../Helper/MessageHelper';
+import FramedAvatar from './FramedAvatar';
+import { resolveProfile, warmProfileCache, getCachedProfile } from '../../Helper/profileCache';
+import { getSafeTextColor, RainbowText, isMultiColorText, getMultiColorPalette } from '../../Helper/contrastHelper';
 import axios from 'axios';
 import { useLocalState } from '../../LocalGlobelStats';
 import { getDeviceLanguage } from '../../../i18n';
@@ -65,7 +68,24 @@ const MessagesList = ({
   const scrollButtonOpacity = useMemo(() => new Animated.Value(0), []);
 
   const { t } = useTranslation();
-  const { isAdmin, api, freeTranslation } = useGlobalState();
+  const { isAdmin, api, freeTranslation, appdatabase } = useGlobalState();
+
+  // Warm the profile cache for the senders in view so avatar frames render.
+  // Public-chat messages are slim — they carry no cosmetics — so without this
+  // resolveProfile has nothing to return. Unique + uncached-only keeps it
+  // cheap; bumping the version re-renders rows via the FlatList extraData.
+  const [profileCacheVersion, setProfileCacheVersion] = useState(0);
+  useEffect(() => {
+    if (!appdatabase || !Array.isArray(messages)) return;
+    const senders = [...new Set(messages.map(m => m?.senderId).filter(Boolean))]
+      .filter(id => !getCachedProfile(id));
+    if (senders.length === 0) return;
+    let cancelled = false;
+    warmProfileCache(appdatabase, senders)
+      .then(() => { if (!cancelled) setProfileCacheVersion(v => v + 1); })
+      .catch(() => { });
+    return () => { cancelled = true; };
+  }, [messages, appdatabase]);
   const { canTranslate, incrementTranslationCount, getRemainingTranslationTries, localState } = useLocalState();
   const deviceLanguage = useMemo(() => getDeviceLanguage(), []);
 
@@ -161,7 +181,7 @@ const MessagesList = ({
   
   const fruitColors = useMemo(
     () => ({
-      wrapperBg: isDarkMode ? '#0f172a55' : '#e5e7eb55',
+      wrapperBg: isDarkMode ? `${config.colors.surfaceDark}55` : '#e5e7eb55',
       name:      isDarkMode ? '#f9fafb' : '#111827',
       value:     isDarkMode ? '#e5e7eb' : '#4b5563',
       divider:   isDarkMode ? '#ffffff22' : '#00000011',
@@ -319,6 +339,11 @@ const MessagesList = ({
     // ✅ Safety checks
     if (!item || typeof item !== 'object') return null;
 
+    // Cosmetics (frame, chat text colour) for this message's sender. Messages
+    // are slim, so this comes from the profile cache — warmed above for other
+    // users, and seeded for the signed-in user by Trader.jsx.
+    const msgProfile = resolveProfile(item) || {};
+
     const previousMessage = messages[index + 1];
     const currentDate = item.timestamp ? new Date(item.timestamp).toDateString() : null;
     const previousDate = previousMessage?.timestamp
@@ -355,6 +380,7 @@ const MessagesList = ({
             item.senderId === user?.id ? styles.mymessageBubble : styles.othermessageBubble,
             item.senderId === user?.id ? styles.myMessage : styles.otherMessage, item.isReportedByUser && styles.reportedMessage,
             item.id === highlightedMessageId && styles.highlightedMessage, // 👈 NEW
+            { width: '100%' } // Force full width so the right-aligned dots reach the screen edge
           ]}
         >
           <View
@@ -363,14 +389,13 @@ const MessagesList = ({
             ]}
           >
 
-            <TouchableOpacity onPress={() => handleProfileClick(item)} style={styles.profileImagecontainer}>
-              <Image
-                source={{
-                  uri: item.avatar
-                    ? item.avatar
-                    : 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
-                }}
-                style={styles.profileImage}
+            <TouchableOpacity onPress={() => handleProfileClick(item)}>
+              <FramedAvatar
+                avatarUri={item.avatar || msgProfile.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png'}
+                frame={msgProfile.profileFrame || null}
+                isDarkMode={isDarkMode}
+                avatarSize={28}
+                forceDetail
               />
             </TouchableOpacity>
 
@@ -401,18 +426,15 @@ const MessagesList = ({
               >
                 
                 <View style={[
-                  item.senderId === user?.id ? styles.mymessageBubble : styles.othermessageBubble,
-                  item.senderId === user?.id ? styles.myMessage : styles.otherMessage,
+                  item.senderId === user?.id ? styles.myBubbleContent : styles.otherBubbleContent,
                   item.isReportedByUser && styles.reportedMessage,
+                  isAdmin && item.strikeCount === 1 ? { backgroundColor: 'rgba(255, 192, 203, 0.8)' } : null,
+                  isAdmin && item.strikeCount >= 2 ? { backgroundColor: 'rgba(255, 0, 0, 0.8)' } : null,
                 ]}>
 
-                  <View style={[item.senderId === user?.id ? styles.myMessageText : styles.otherMessageText, isAdmin && item.strikeCount === 1
-                    ? { backgroundColor: 'pink' }
-                    : item.strikeCount >= 2
-                      ? { backgroundColor: 'red' }
-                      : null,]}>
+                  <View style={styles.bubbleInner}>
                    <View style={styles.nameRow}>
-            <Text style={styles.userNameText}>{item.sender}</Text>
+            <Text style={item.senderId === user?.id ? styles.userNameTextMy : styles.userNameText}>{item.sender}</Text>
 
   {item?.isPro && (
     <Image
@@ -468,16 +490,34 @@ const MessagesList = ({
                           />
                         </View>
                       )}
-                    {/* {'\n'} */}
                     {item?.text && (
-                      <Text style={item.senderId === user?.id ? styles.myMessageTextOnly : styles.otherMessageTextOnly}>
-                        {parseMessageText(item.text)}
-                      </Text>
+                      isMultiColorText(msgProfile.chatTextColor)
+                        ? <RainbowText
+                            colors={getMultiColorPalette(msgProfile.chatTextColor)}
+                            style={[item.senderId === user?.id ? styles.myMessageTextOnly : styles.otherMessageTextOnly]}
+                          >{item.text}</RainbowText>
+                        : <Text style={[
+                            item.senderId === user?.id ? styles.myMessageTextOnly : styles.otherMessageTextOnly,
+                            msgProfile.chatTextColor ? { color: getSafeTextColor(msgProfile.chatTextColor, null) } : null,
+                          ]}>
+                            {parseMessageText(item.text)}
+                          </Text>
                     )}
 
-
-
-
+                  {/* Timestamp inside bubble — WhatsApp style */}
+                  <Text style={{
+                    fontSize: 9,
+                    color: item.senderId === user?.id
+                      ? (isDarkMode ? '#ffffffaa' : '#00000066')
+                      : (isDarkMode ? '#ffffff77' : '#00000055'),
+                    alignSelf: 'flex-end',
+                    marginTop: 2,
+                  }}>
+                    {new Date(item.timestamp).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </Text>
                   </View>
                 </View>
                 {hasFruits && (
@@ -602,100 +642,67 @@ const MessagesList = ({
 
 
           {/* Admin Actions or Timestamp */}
-
-
-          <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Text style={styles.timestamp}>
-              {new Date(item.timestamp).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </Text>
-
+          <View style={{ flex: 1, alignItems: item.senderId === user?.id ? 'flex-start' : 'flex-end', justifyContent: 'center', paddingHorizontal: 4 }}>
+            {(!isAdmin && item.senderId === user?.id) && (
+              <Menu>
+                <MenuTrigger>
+                  <Icon
+                    name="ellipsis-vertical-outline"
+                    size={18}
+                    color={isDarkMode ? '#9ca3af' : '#6b7280'}
+                  />
+                </MenuTrigger>
+                <MenuOptions customStyles={{
+                  optionsContainer: styles.menuoptions,
+                  optionWrapper: styles.menuOption,
+                  optionText: styles.menuOptionText,
+                }}>
+                  <MenuOption onSelect={() => onDeleteMessage(item.id)}>
+                    <Text style={styles.menuOptionTextDanger}>Delete</Text>
+                  </MenuOption>
+                </MenuOptions>
+              </Menu>
+            )}
+            {(isAdmin) && (
+              <Menu>
+                <MenuTrigger>
+                  <Icon
+                    name="ellipsis-vertical-outline"
+                    size={18}
+                    color={isDarkMode ? '#9ca3af' : '#6b7280'}
+                  />
+                </MenuTrigger>
+                <MenuOptions customStyles={{
+                  optionsContainer: styles.menuoptions,
+                  optionWrapper: styles.menuOption,
+                  optionText: styles.menuOptionText,
+                }}>
+                  <MenuOption onSelect={() => onDeleteMessage(item.id)}>
+                    <Text style={styles.menuOptionTextDanger}>Delete</Text>
+                  </MenuOption>
+                  <MenuOption onSelect={() => onDeleteAllMessage(item?.senderId)}>
+                    <Text style={styles.menuOptionTextDanger}>Delete All</Text>
+                  </MenuOption>
+                  <MenuOption onSelect={() => banUserwithEmail(item.currentUserEmail, isAdmin, item.senderId)}>
+                    <Text style={styles.menuOptionTextDanger}>Block</Text>
+                  </MenuOption>
+                  <MenuOption onSelect={() => unbanUserWithEmail(item.currentUserEmail, isAdmin)}>
+                    <Text style={styles.menuOptionText}>Unblock</Text>
+                  </MenuOption>
+                  <MenuOption onSelect={() => onPinMessage(item)}>
+                    <Text style={styles.menuOptionText}>Pin Message</Text>
+                  </MenuOption>
+                </MenuOptions>
+              </Menu>
+            )}
           </View>
-          {(!isAdmin && item.senderId === user?.id) && (
-            <Menu>
-              <MenuTrigger>
-                <Icon
-                  name="ellipsis-vertical-outline"
-                  size={16}
-                  color={config.colors.hasBlockGreen}
-                />
-              </MenuTrigger>
-              <MenuOptions >
-                  {/* <MenuOption onSelect={() => onPinMessage(item)} style={styles.pinButton}>
-                    <Text style={styles.adminTextAction}>Pin</Text>
-                  </MenuOption> */}
-                  <MenuOption onSelect={() => onDeleteMessage(item.id)} >
-                    <Text style={[{backgroundColor:'red',padding:10, color:'white'}]}>Delete</Text>
-                  </MenuOption>
-               
-                
-                
-              
-                  
-                  {/* {isAdmin && (
-                    <MenuOption onSelect={() => makeadmin(item.senderId)} style={styles.deleteButton}>
-                      <Text style={styles.adminTextAction}>Make Admin</Text>
-                    </MenuOption>
-                  )}
-                  {isAdmin && (
-                    <MenuOption onSelect={() => removeAdmin(item.senderId)} style={styles.deleteButton}>
-                      <Text style={styles.adminTextAction}>Remove Admin</Text>
-                    </MenuOption>
-                  )} */}
-              </MenuOptions>
-            </Menu>
-          )}
-          {(isAdmin) && (
-            <Menu>
-              <MenuTrigger>
-                <Icon
-                  name="ellipsis-vertical-outline"
-                  size={16}
-                  color={config.colors.hasBlockGreen}
-                />
-              </MenuTrigger>
-              <MenuOptions>
-                <View style={styles.adminActions}>
-                  {/* <MenuOption onSelect={() => onPinMessage(item)} style={styles.pinButton}>
-                    <Text style={styles.adminTextAction}>Pin</Text>
-                  </MenuOption> */}
-                  <MenuOption onSelect={() => onDeleteMessage(item.id)} style={styles.deleteButton}>
-                    <Text style={styles.adminTextAction}>Delete</Text>
-                  </MenuOption>
-                  <MenuOption onSelect={() => onDeleteAllMessage(item?.senderId)} style={styles.deleteButton}>
-                    <Text style={styles.adminTextAction}>Delete All</Text>
-                  </MenuOption>
-                 <MenuOption onSelect={() => banUserwithEmail(item.currentUserEmail, isAdmin, item.senderId)} style={styles.deleteButton}>
-                    <Text style={styles.adminTextAction}>Block</Text>
-                  </MenuOption>
-                  <MenuOption onSelect={() => unbanUserWithEmail(item.currentUserEmail, isAdmin)} style={styles.deleteButton}>
-                    <Text style={styles.adminTextAction}>Unblock</Text>
-                  </MenuOption>
-                  <MenuOption onSelect={() => onPinMessage(item)} style={styles.deleteButton}>
-                    <Text style={styles.adminTextAction}>Pin Message</Text>
-                  </MenuOption>
-                  
-                  {/* {isAdmin && (
-                    <MenuOption onSelect={() => makeadmin(item.senderId)} style={styles.deleteButton}>
-                      <Text style={styles.adminTextAction}>Make Admin</Text>
-                    </MenuOption>
-                  )}
-                  {isAdmin && (
-                    <MenuOption onSelect={() => removeAdmin(item.senderId)} style={styles.deleteButton}>
-                      <Text style={styles.adminTextAction}>Remove Admin</Text>
-                    </MenuOption>
-                  )} */}
-                </View>
-              </MenuOptions>
-            </Menu>
-          )}
         </View>
         )}
       </View>
     );
-  }, [messages, highlightedMessageId, user?.id, styles, getReplyPreview, handleCopy, handleTranslate, handleReport, handleLongPress, handleProfileClick, scrollToMessage, isAdmin, t, fruitColors, onReply, onDeleteMessage, onDeleteAllMessage, onPinMessage, banUserwithEmail, unbanUserWithEmail]);
+    // isDarkMode: FramedAvatar needs the theme. Repaint-on-profiles-landing is
+    // handled by the FlatList's extraData, not here.
+  }, [messages, highlightedMessageId, user?.id, styles, getReplyPreview, handleCopy, handleTranslate, handleReport, handleLongPress, handleProfileClick, scrollToMessage, isAdmin, t, fruitColors, onReply, onDeleteMessage, onDeleteAllMessage, onPinMessage, banUserwithEmail, unbanUserWithEmail, isDarkMode]);
 
   return (
     <>
@@ -705,7 +712,8 @@ const MessagesList = ({
         renderItem={({ item, index }) => renderMessage({ item, index })}
         contentContainerStyle={styles.chatList}
         inverted
-        extraData={highlightedMessageId}
+        // profileCacheVersion so rows repaint once frames/colours land
+        extraData={`${highlightedMessageId}-${profileCacheVersion}`}
         ref={flatListRef}
         scrollEventThrottle={16}
         removeClippedSubviews={false}
@@ -781,7 +789,7 @@ export const fruitStyles = StyleSheet.create({
   fruitsWrapper: {
     marginTop: 1,
     // gap: 1,
-    backgroundColor: '#1E293B15', // subtle blue-ish bg
+    backgroundColor: `${config.colors.surfaceDark}15`, // subtle blue-ish bg
     padding: 4,
     borderRadius: 8,
 

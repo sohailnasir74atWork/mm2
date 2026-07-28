@@ -74,7 +74,10 @@
         "save_changes": "I-save ang mga Pagbabago",
         "watch_ad": "Manood ng ad upang kumita ng rewards!",
         "watch_ad_message": "Kumita ng points sa pamamagitan ng panonood ng ads. Ang mga points na ito ay magagamit sa pagsali sa mga contests sa app at pag-unlock ng special na features.",
-        "earn_reward": "Kumita ng Reward"
+        "earn_reward": "Kumita ng Reward",
+        "edit_cooldown_title": "Naka-lock ang pagpalit",
+        "edit_cooldown_active": "Naka-lock ang pagpalit ng pangalan",
+        "edit_cooldown_message": "Isang beses ka lang makakapagpalit ng pangalan kada {{days}} araw. Subukan ulit sa {{daysRemaining}} araw. (Puwede mong palitan ang larawan at bio anumang oras)"
     },
     "home": {
         "you": "Ikaw",
@@ -201,7 +204,12 @@
         "feature_error": "Error sa Pagtatampok ng Kalakal",
         "feature_error_message": "Nabigo ang pagtatampok ng kalakal. Pakisubukang muli.",
         "purchase_success": "Matagumpay na Pagbili",
-        "purchase_success_message": "Ang user ay mayroon na ngayong Pro features!"
+        "purchase_success_message": "Ang user ay mayroon na ngayong Pro features!",
+        "my_trades": "My Trades",
+        "search_in_me": "Me",
+        "search_in_you": "You",
+        "clear": "Clear",
+        "search_error_title": "Search Error"
     },
     "signin": {
         "title_signin": "Mag-sign In",
@@ -238,7 +246,11 @@
         "alert_welcome_back": "Maligayang pagbabalik!",
         "alert_account_created": "Matagumpay na nalikha ang iyong account!",
         "alert_error": "Error",
-        "alert_try_again": "Nagkaroon ng di-inaasahang error. Pakisubukang muli mamaya."
+        "alert_try_again": "Nagkaroon ng di-inaasahang error. Pakisubukang muli mamaya.",
+        "error_google_unavailable_title": "Hindi available ang Google sign-in",
+        "error_google_unavailable": "Hindi available ang Google Play Services sa device na ito. Mag-sign in gamit ang email — i-tap ang \"Sign in with Email\" sa ibaba.",
+        "error_network_title": "Problema sa koneksyon",
+        "error_network": "Hindi namin naabot ang server. Suriin ang koneksyon at subukan ulit. Kung restricted ang Google services sa network mo, gumamit ng email sign-in o ibang koneksyon."
     },
     "tabs": {
         "calculator": "Kalkulador",
@@ -324,5 +336,13 @@
         "messageTooLong": "Ang mensahe ay hindi maaaring lumagpas ng 100 salita.",
         "sendingTooQuickly": "Nagpapadala ka ng mga mensahe nang masyadong mabilis. Mangyaring maghintay ng ilang sandali.",
         "proUsersOnlyLinks": "Tanging mga Pro users lamang ang makakapagpadala ng mga link."
+    },
+    "profile": {
+        "recent_trades": "Mga Kamakailang Trade",
+        "no_trades_yet": "Wala pang mga trade.",
+        "load_more_trades": "Mag-load ng higit pang trades",
+        "recent_posts": "Mga Kamakailang Post",
+        "no_posts_yet": "Wala pang mga post.",
+        "load_more_posts": "Mag-load ng higit pang posts"
     }
 }

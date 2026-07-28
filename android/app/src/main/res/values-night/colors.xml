@@ -1,4 +1,7 @@
 <resources>
     <color name="bootsplash_background">#ffffff</color>
     <color name="bootsplash_background_dark">#121212</color>
+    <!-- Window background colors matching the app's dark theme -->
+    <color name="app_window_background">#040d1a</color>
+    <color name="app_window_background_dark">#040d1a</color>
 </resources>

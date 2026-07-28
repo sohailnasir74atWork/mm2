@@ -2,12 +2,14 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { getApp, getApps, initializeApp } from '@react-native-firebase/app';
 import { getAuth, onAuthStateChanged } from '@react-native-firebase/auth';
 import { ref, set, update, get, onDisconnect, getDatabase, onValue, remove, query, orderByValue, equalTo } from '@react-native-firebase/database';
-import { getFirestore, doc, onSnapshot } from '@react-native-firebase/firestore';
+import { getFirestore, doc, onSnapshot, getDoc } from '@react-native-firebase/firestore';
+import { syncValueAlertTopics } from './Helper/valueAlerts';
 import { createNewUser, registerForNotifications } from './Globelhelper';
 import { useLocalState } from './LocalGlobelStats';
 import { requestPermission } from './Helper/PermissionCheck';
-import { useColorScheme, InteractionManager, AppState } from 'react-native';
+import { useColorScheme, AppState } from 'react-native';
 import { getFlag } from './Helper/CountryCheck';
+import { generateOnePieceUsername } from './Helper/RendomNamegen';
 
 
 
@@ -39,6 +41,7 @@ export const GlobalStateProvider = ({ children }) => {
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [isInActiveGame, setIsInActiveGame] = useState(false); // ✅ Track if user is in active game
+  const [acceptedInviteRoom, setAcceptedInviteRoom] = useState(null); // ✅ { roomId, gameType } from toast accept
   const [user, setUser] = useState({
     id: null,
     // selectedFruits: [],
@@ -132,6 +135,30 @@ export const GlobalStateProvider = ({ children }) => {
     updateLocalStateAndDatabaseRef.current = updateLocalStateAndDatabase;
   }, [updateLocalStateAndDatabase]);
   
+  // ✅ Value alerts for EXISTING users: their My Stuff portfolio is already
+  // saved in Firestore, so subscribe their items' FCM topics at app start —
+  // they don't need to open the My Stuff screen after updating the app.
+  // One read per sign-in; syncValueAlertTopics MMKV-diffs so repeats no-op.
+  const valueAlertSyncedRef = useRef(null);
+  useEffect(() => {
+    if (!user?.id || valueAlertSyncedRef.current === user.id) return;
+    valueAlertSyncedRef.current = user.id;
+    getDoc(doc(firestoreDB, 'reviews', user.id))
+      .then((snap) => {
+        const d = snap.exists() ? snap.data() : null;
+        const owned = Array.isArray(d?.ownedPets) ? d.ownedPets : [];
+        const wishlist = Array.isArray(d?.wishlistPets) ? d.wishlistPets : [];
+        // Mirror into localState so the calculator INVENTORY tab and chat
+        // picker have the user's items from the first app open (existing
+        // users never need to visit My Stuff for these to work).
+        updateLocalState('ownedPets', owned);
+        updateLocalState('wishlistPets', wishlist);
+        const names = [...owned, ...wishlist].map((p) => p?.name).filter(Boolean);
+        if (names.length) syncValueAlertTopics(names);
+      })
+      .catch(() => {});
+  }, [user?.id]);
+
   // ✅ Handle flag setting based on user preference (saves Firebase data costs)
   useEffect(() => {
     if (!isAdmin && user?.id && appdatabase) {
@@ -210,6 +237,14 @@ export const GlobalStateProvider = ({ children }) => {
           createdAt: existing.createdAt || Date.now()   // fallback if missing
         };
 
+        // 🛡️ Fix: If displayName is empty/falsy, regenerate one and save it
+        if (!userData.displayName || !userData.displayName.trim()) {
+          const newName = loggedInUser.displayName || generateOnePieceUsername() || 'Player';
+          userData.displayName = newName;
+          // Save the fixed displayName back to Firebase
+          await update(userRef, { displayName: newName });
+        }
+
       } else {
         // 🆕 NEW USER → Set createdAt once
         userData = {
@@ -226,7 +261,29 @@ export const GlobalStateProvider = ({ children }) => {
       await Promise.all([registerForNotifications(userId)]);
 
     } catch (error) {
-      // console.error("❌ Auth state change error:", error);
+      // ⚠️ A failed profile read must NOT look like a logout.
+      //
+      // Firebase Auth still holds a valid session at this point — only the
+      // RTDB round-trip failed. Previously this catch was empty, so `user.id`
+      // stayed null, every screen rendered the signed-out UI and popped the
+      // sign-in drawer. That is the "I keep getting logged out" report, and it
+      // hits hardest wherever firebaseio.com is slow or throttled.
+      //
+      // Keep the session alive using the identity we already have from the
+      // auth record. Fields we could not read stay at their defaults and get
+      // filled in by the next successful read.
+      console.warn('[Auth] profile read failed, keeping session:', error?.message);
+      setUser((prev) => (prev?.id === loggedInUser.uid ? prev : {
+        id: loggedInUser.uid,
+        displayName: loggedInUser.displayName || 'Player',
+        avatar: loggedInUser.photoURL || null,
+        isBlock: false,
+        fcmToken: null,
+        lastActivity: null,
+        online: false,
+        isPro: false,
+        createdAt: null,
+      }));
     }
   }, [appdatabase, resetUserState]); // ✅ Uses memoized resetUserState
   useEffect(() => {
@@ -249,12 +306,12 @@ export const GlobalStateProvider = ({ children }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (loggedInUser) => {
       if (loggedInUser && !loggedInUser.emailVerified) {
-        await auth().signOut();
+        await auth.signOut();
         // showErrorMessage("Email Not Verified", "Please check your inbox and verify your email.");
         return;
       }
 
-      InteractionManager.runAfterInteractions(async () => {
+      setTimeout(async () => {
         await handleUserLogin(loggedInUser);
 
         if (loggedInUser?.uid) {
@@ -262,7 +319,7 @@ export const GlobalStateProvider = ({ children }) => {
         }
 
         await updateLocalState('isAppReady', true);
-      });
+      }, 0);
     });
 
     return () => unsubscribe();
@@ -318,42 +375,40 @@ export const GlobalStateProvider = ({ children }) => {
   useEffect(() => {
     const fetchTradingServerLink = async () => {
       try {
-        const lastServerFetch = localState.lastServerFetch ? new Date(localState.lastServerFetch).getTime() : 0;
+        const ls = localStateRef.current;
+        const lastServerFetch = ls.lastServerFetch ? new Date(ls.lastServerFetch).getTime() : 0;
         const now = Date.now();
         const timeElapsed = now - lastServerFetch;
         const EXPIRY_LIMIT = 3 * 60 * 60 * 1000; // 3 hours
 
         // Only fetch if expired or not cached
-        if (timeElapsed > EXPIRY_LIMIT || !localState.tradingServerLink) {
+        if (timeElapsed > EXPIRY_LIMIT || !ls.tradingServerLink) {
           const serverRef = ref(appdatabase, 'server');
           const snapshot = await get(serverRef);
 
           if (snapshot.exists()) {
             const serverData = snapshot.val();
-            // Convert to array and get first server link
             const serverList = Object.entries(serverData).map(([id, value]) => ({ id, ...value }));
-            
-            // Get the first server link (or you can filter by name if needed)
             const firstServer = serverList.length > 0 ? serverList[0] : null;
             const serverLink = firstServer?.link || null;
 
             if (serverLink) {
               setTradingServerLink(serverLink);
-              await updateLocalState('tradingServerLink', serverLink);
-              await updateLocalState('lastServerFetch', new Date().toISOString());
+              await updateLocalStateRef.current('tradingServerLink', serverLink);
+              await updateLocalStateRef.current('lastServerFetch', new Date().toISOString());
             }
           }
         } else {
           // Use cached link
-          if (localState.tradingServerLink) {
-            setTradingServerLink(localState.tradingServerLink);
+          if (ls.tradingServerLink) {
+            setTradingServerLink(ls.tradingServerLink);
           }
         }
       } catch (error) {
         console.error('Error fetching trading server link:', error);
-        // Fallback to cached link if available
-        if (localState.tradingServerLink) {
-          setTradingServerLink(localState.tradingServerLink);
+        const ls = localStateRef.current;
+        if (ls.tradingServerLink) {
+          setTradingServerLink(ls.tradingServerLink);
         }
       }
     };
@@ -361,13 +416,22 @@ export const GlobalStateProvider = ({ children }) => {
     if (appdatabase) {
       fetchTradingServerLink();
     }
-  }, [appdatabase, localState.lastServerFetch, localState.tradingServerLink]);
+  }, [appdatabase]); // ✅ Removed localState deps to prevent write→trigger→write loop
 
+  const lastProWriteRef = useRef({ uid: null, isPro: undefined });
   const updateUserProStatus = () => {
     if (!user?.id) {
       // console.error("User ID or database instance is missing!");
       return;
     }
+
+    // Skip redundant RTDB writes: previously this fired on every login and
+    // every isPro change, almost always re-writing the value just fetched.
+    const last = lastProWriteRef.current;
+    if (last.uid === user.id && last.isPro === localState?.isPro) {
+      return;
+    }
+    lastProWriteRef.current = { uid: user.id, isPro: localState?.isPro };
 
     const userIsProRef = ref(appdatabase, `/users/${user?.id}/isPro`);
 
@@ -384,11 +448,12 @@ export const GlobalStateProvider = ({ children }) => {
 
 
   useEffect(() => {
-    InteractionManager.runAfterInteractions(() => {
+    const t = setTimeout(() => {
       // checkInternetConnection();
       updateUserProStatus();
-    });
-  }, [user.id, localState.isPro]);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [user?.id, localState.isPro]);
 
 
   useEffect(() => {
@@ -454,21 +519,26 @@ export const GlobalStateProvider = ({ children }) => {
   //   }
   // };
 
-  const fetchStockData = async (refresh) => {
+  // ✅ Use ref for localState to keep fetchStockData stable across renders
+  const localStateRef = useRef(localState);
+  useEffect(() => { localStateRef.current = localState; }, [localState]);
+
+  const fetchStockData = useCallback(async (refresh) => {
     try {
       setLoading(true);
+      const ls = localStateRef.current;
 
-      const lastActivity = localState.lastActivity ? new Date(localState.lastActivity).getTime() : 0;
+      const lastActivity = ls.lastActivity ? new Date(ls.lastActivity).getTime() : 0;
       const now = Date.now();
       const timeElapsed = now - lastActivity;
       const EXPIRY_LIMIT = refresh ? 1 * 1000 : 6 * 60 * 1000; // 10s for refresh, 6min default
       const shouldFetch =
         timeElapsed > EXPIRY_LIMIT ||
-        !localState.data ||
-        !Object.keys(localState.data).length ||
-        !localState.suprime ||
-        !Object.keys(localState.suprime).length ||
-        !localState.imgurl;
+        !ls.data ||
+        !Object.keys(ls.data).length ||
+        !ls.suprime ||
+        !Object.keys(ls.suprime).length ||
+        !ls.imgurl;
 
       if (shouldFetch) {
         let data = {};
@@ -513,22 +583,27 @@ export const GlobalStateProvider = ({ children }) => {
           suprime = suprimeSnapshot.exists() ? suprimeSnapshot.val() : {};
         }
 
-        // ✅ Always fetch `image_url` from Firebase
-        const imageSnapShot = await get(ref(appdatabase, 'image_url'));
-        image = imageSnapShot.exists() ? imageSnapShot.val() : '';
+        // ✅ Try to fetch `image_url` from Firebase (may not exist in MM2)
+        // ✅ Try to fetch `image_url` from Firebase (may not exist in MM2)
+        try {
+          const imageSnapShot = await get(ref(appdatabase, 'image_url'));
+          image = imageSnapShot.exists() ? imageSnapShot.val() : '';
+        } catch (imgErr) {
+          // image_url node may not exist — use empty string
+        }
 
         // ✅ Store in local state
-        await updateLocalState('data', JSON.stringify(data));
-        await updateLocalState('suprime', JSON.stringify(suprime));
-        await updateLocalState('imgurl', JSON.stringify(image));
-        await updateLocalState('lastActivity', new Date().toISOString());
+        await updateLocalStateRef.current('data', JSON.stringify(data));
+        await updateLocalStateRef.current('suprime', JSON.stringify(suprime));
+        if (image) await updateLocalStateRef.current('imgurl', JSON.stringify(image));
+        await updateLocalStateRef.current('lastActivity', new Date().toISOString());
       }
     } catch (error) {
       console.error("❌ Error fetching stock data:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [appdatabase]); // ✅ Stable — only depends on appdatabase
 
 
 
@@ -537,16 +612,16 @@ export const GlobalStateProvider = ({ children }) => {
 
   // ✅ Run the function only if needed
   useEffect(() => {
-    const task = InteractionManager.runAfterInteractions(() => {
+    const timeoutId = setTimeout(() => {
       fetchStockData(); // ✅ Now runs after main thread is free
-    });
+    }, 0);
 
-    return () => task.cancel();
+    return () => clearTimeout(timeoutId);
   }, []);
 
-  const reload = () => {
+  const reload = useCallback(() => {
     fetchStockData(true);
-  };
+  }, [fetchStockData]);
 
   
 
@@ -689,8 +764,10 @@ export const GlobalStateProvider = ({ children }) => {
       robloxUsernameRef, api, currentUserEmail, single_offer_wall, tradingServerLink,
       isInActiveGame, // ✅ Game state for invite notifications
       setIsInActiveGame, // ✅ Set game state
+      acceptedInviteRoom, // ✅ Accepted invite from toast
+      setAcceptedInviteRoom, // ✅ Set accepted invite
     }),
-    [user, theme, fetchStockData, loading, robloxUsernameRef, api, freeTranslation, currentUserEmail, auth, tradingServerLink, isInActiveGame]
+    [user, theme, loading, api, freeTranslation, currentUserEmail, tradingServerLink, isInActiveGame, acceptedInviteRoom, isAdmin, single_offer_wall, fetchStockData, reload, updateLocalStateAndDatabase]
   );
 
   return (

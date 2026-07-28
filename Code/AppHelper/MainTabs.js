@@ -1,9 +1,11 @@
 import React, { useCallback, useMemo } from 'react';
-import { Image, TouchableOpacity, View } from 'react-native';
+import { Image, TouchableOpacity, View, Platform, Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
 import HomeScreen from '../Homescreen/HomeScreen';
 import ValueScreen from '../ValuesScreen/ValueScreen';
+import HomeTabNavigator from '../HomeTab/HomeTabNavigator';
 // import TimerScreen from '../StockScreen/TimerScreen';
 import { ChatStack } from '../ChatScreen/ChatNavigator';
 import { TradeStack } from '../Trades/TradeNavigator';
@@ -13,8 +15,6 @@ import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 import { useGlobalState } from '../GlobelStats';
 import DesignUploader from '../Design/DesignMainScreen';
 import DesignStack from '../Design/DesignNavigation';
-import CustomTopTabs from '../ValuesScreen/TopTabs';
-
 
 
 const Tab = createBottomTabNavigator();
@@ -34,15 +34,16 @@ const AnimatedTabIcon = React.memo(({ iconName, color, size, focused }) => {
 const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modalVisibleChatinfo, setModalVisibleChatinfo }) => {
   const { t } = useTranslation();
   const { isAdmin, user, theme } = useGlobalState();
+  const insets = useSafeAreaInsets();
 
   // ✅ Memoize icons object to avoid recreation
   const icons = useMemo(() => ({
+    Home: ['house', 'house'],
     Calculator: ['calculator', 'calculator'],
     Stock: ['cart-shopping', 'cart-shopping'],
     Trade: ['handshake', 'handshake'],
     Chat: ['envelope', 'envelope'],
     Designs: ['house-chimney-crack', 'house-chimney-crack'],
-    More: ['angles-right', 'angles-right'],
   }), []);
 
   const getTabIcon = useCallback((routeName, focused) => {
@@ -60,41 +61,19 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
           />
         </TouchableOpacity>
       )}
-      <TouchableOpacity onPress={() => navigation.navigate('Setting')} style={{ marginRight: 16 }}>
-        <View
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 16,
-            borderWidth: 2,
-            borderColor: config.colors.primary,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Image
-            source={{ uri: !user?.id ? 'https://bloxfruitscalc.com/wp-content/uploads/2025/placeholder.png' : user.avatar }}
-            style={{ width: 28, height: 28, borderRadius: 12.5 }}
-          />
-        </View>
-      </TouchableOpacity>
     </>
-  ), [isAdmin, user?.id, user?.avatar]);
+  ), [isAdmin]);
 
   // ✅ Memoize isDarkMode to avoid recalculation
   const isDarkMode = useMemo(() => theme === 'dark', [theme]);
 
-  // ✅ Memoize tabBarButton styles - using centralized colors
+  // ✅ Memoize tabBarButton styles
   const tabBarButtonStyles = useMemo(() => ({
-    selected: {
-      dark: config.colors.surfaceDark,
-      light: config.colors.surfaceLight,
-    },
     base: {
       flex: 1,
-      borderRadius: 12,
-      marginHorizontal: 4,
-      marginVertical: 2,
+      borderRadius: 14,
+      marginHorizontal: 3,
+      marginVertical: 4,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -103,54 +82,101 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
 
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => (
-          <AnimatedTabIcon
-            focused={focused}
-            iconName={getTabIcon(route.name, focused)}
-            color={config.colors.primary}
-            size={18}
-          />
-        ),
-        tabBarButton: (props) => {
-          const { onPress, children } = props;
-          const isSelected = props?.['aria-selected'];
-        
-          return (
-            <TouchableOpacity
-              onPress={onPress}
-              activeOpacity={0.9}
-              style={{
-                ...tabBarButtonStyles.base,
-                backgroundColor: isSelected
-                  ? (isDarkMode ? tabBarButtonStyles.selected.dark : tabBarButtonStyles.selected.light)
-                  : 'transparent',
-              }}
-            >
-              {children}
-            </TouchableOpacity>
-          );
-        },
-        
-        tabBarStyle: {
-          // height: 50,
-          backgroundColor: selectedTheme.colors.background,
-        },
-        tabBarLabelStyle: {
-          fontSize: 9, // 👈 Your custom label font size
-          fontFamily: 'Lato-Bold', // Optional: Custom font family
-          color: config.colors.primary,
-
-        },
-        tabBarActiveTintColor: config.colors.primary,
-        tabBarInactiveTintColor: selectedTheme.colors.text,
-        headerStyle: {
-          backgroundColor: selectedTheme.colors.background,
-        },
+      screenOptions={{
+        headerStyle: { backgroundColor: selectedTheme.colors.background },
         headerTintColor: selectedTheme.colors.text,
         headerTitleStyle: { fontFamily: 'Lato-Bold', fontSize: 24 },
-      })}
+      }}
+      tabBar={({ state, descriptors, navigation }) => {
+        return (
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-evenly',
+            height: 56 + insets.bottom,
+            paddingBottom: insets.bottom,
+            backgroundColor: selectedTheme.colors.background,
+            borderTopWidth: 0.5,
+            borderTopColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)',
+          }}>
+            {state.routes.map((route, index) => {
+                const { options } = descriptors[route.key];
+                const label =
+                  options.tabBarLabel !== undefined
+                    ? options.tabBarLabel
+                    : options.title !== undefined
+                    ? options.title
+                    : route.name;
+
+                const isFocused = state.index === index;
+
+                const onPress = () => {
+                  const event = navigation.emit({
+                    type: 'tabPress',
+                    target: route.key,
+                    canPreventDefault: true,
+                  });
+
+                  if (!isFocused && !event.defaultPrevented) {
+                    navigation.navigate(route.name);
+                  }
+                };
+
+                const activeColor = config.colors.primary;
+                const inactiveColor = isDarkMode ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.3)';
+
+                return (
+                  <TouchableOpacity
+                    key={route.key}
+                    onPress={onPress}
+                    activeOpacity={0.6}
+                    style={{
+                      flex: 1,
+                      height: 48,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <AnimatedTabIcon
+                      focused={isFocused}
+                      iconName={getTabIcon(route.name, isFocused)}
+                      color={isFocused ? activeColor : inactiveColor}
+                      size={isFocused ? 20 : 18}
+                    />
+                    <Text style={{
+                      fontSize: 9,
+                      fontFamily: 'Lato-Bold',
+                      color: isFocused ? activeColor : inactiveColor,
+                      marginTop: 2,
+                    }} numberOfLines={1}>
+                      {label}
+                    </Text>
+
+                    {/* Unread badge */}
+                    {options.tabBarBadge !== undefined && options.tabBarBadge !== null && options.tabBarBadge !== "" && (
+                      <View style={{
+                        position: 'absolute', top: 6, right: 8,
+                        width: 6, height: 6, borderRadius: 3,
+                        backgroundColor: config.colors.error,
+                      }} />
+                    )}
+                  </TouchableOpacity>
+                );
+            })}
+          </View>
+        );
+      }}
     >
+      <Tab.Screen
+        name="Home"
+        options={({ navigation }) => ({
+          title: t('tabs.home'),
+          headerShown: false,
+        })}
+      >
+        {() => <HomeTabNavigator selectedTheme={selectedTheme} />}
+      </Tab.Screen>
+
       <Tab.Screen
         name="Calculator"
         options={({ navigation }) => ({
@@ -189,7 +215,7 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
       <Tab.Screen
         name="Designs"
         options={{
-          title: 'Feed', // Translation applied here
+          title: t('tabs.feed'), // Translation applied here
           headerShown: false
         }}
       >
@@ -223,14 +249,7 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
       </Tab.Screen>
 
 
-      <Tab.Screen
-        name="More"
-        options={{
-          title: 'More', // Translation applied here
-        }}
-      >
-        {() => <CustomTopTabs selectedTheme={selectedTheme} />}
-      </Tab.Screen>
+
 
     </Tab.Navigator>
   );

@@ -10,17 +10,31 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import { useHaptic } from '../../Helper/HepticFeedBack';
 import { mixpanel } from '../../AppHelper/MixPenel';
 import { useGlobalState } from '../../GlobelStats';
-import { ref, get } from '@react-native-firebase/database';
+import { ref, get, set, remove } from '@react-native-firebase/database';
+import FramedAvatar from '../GroupChat/FramedAvatar';
+import { getCachedProfile, warmProfileCache } from '../../Helper/profileCache';
 
 const PrivateChatHeader = React.memo(({ selectedUser, selectedTheme, bannedUsers, isDrawerVisible, setIsDrawerVisible }) => {
   const { updateLocalState } = useLocalState();
   const { t } = useTranslation();
   const [isOnline, setIsOnline] = useState(false); // ✅ Add state to store online status
   const { triggerHapticFeedback } = useHaptic();
-  const { appdatabase } = useGlobalState();
+  const { user, appdatabase } = useGlobalState();
   
   // ✅ State for fetched user data (roblox username, etc.)
   const [userData, setUserData] = useState(null);
+
+  // Pull this user's cosmetics into the shared cache so their frame renders.
+  const [frameVersion, setFrameVersion] = useState(0);
+  useEffect(() => {
+    const uid = selectedUser?.senderId || selectedUser?.id;
+    if (!uid || !appdatabase || getCachedProfile(uid)) return;
+    let cancelled = false;
+    warmProfileCache(appdatabase, [uid])
+      .then(() => { if (!cancelled) setFrameVersion(v => v + 1); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedUser?.senderId, selectedUser?.id, appdatabase]);
 
   // ✅ Memoize copyToClipboard
   const copyToClipboard = useCallback((code) => {
@@ -151,9 +165,24 @@ const PrivateChatHeader = React.memo(({ selectedUser, selectedTheme, bannedUsers
               if (isBanned) {
                 // 🔹 Unban: Remove from bannedUsers
                 updatedBannedUsers = currentBanned.filter(id => id !== selectedUserId);
+                
+                // 🔹 Unban from Firebase (Remove Node)
+                if (user?.id && appdatabase) {
+                  await remove(ref(appdatabase, `bannedUsers/${user?.id}/${selectedUserId}`));
+                }
+
               } else {
                 // 🔹 Ban: Add to bannedUsers
                 updatedBannedUsers = [...currentBanned, selectedUserId];
+                
+                // 🔹 Ban in Firebase (Add Node)
+                if (user?.id && appdatabase) {
+                  await set(ref(appdatabase, `bannedUsers/${user?.id}/${selectedUserId}`), {
+                    displayName: userName || 'Anonymous',
+                    avatar: avatarUri || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
+                    timestamp: Date.now()
+                  });
+                }
               }
 
               // ✅ Update local storage & state
@@ -179,7 +208,13 @@ const PrivateChatHeader = React.memo(({ selectedUser, selectedTheme, bannedUsers
   return (
     <View style={styles.container}>
       <TouchableOpacity onPress={handleOpenDrawer}>
-        <Image source={{ uri: avatarUri }} style={styles.avatar} />
+        <FramedAvatar
+          avatarUri={avatarUri}
+          frame={getCachedProfile(selectedUser?.senderId || selectedUser?.id)?.profileFrame || null}
+          isDarkMode={selectedTheme?.dark ?? false}
+          avatarSize={40}
+          forceDetail
+        />
       </TouchableOpacity>
       <TouchableOpacity style={styles.infoContainer} onPress={handleOpenDrawer}>
         <Text style={[styles.userName, { color: selectedTheme?.colors?.text || '#000' }]}>

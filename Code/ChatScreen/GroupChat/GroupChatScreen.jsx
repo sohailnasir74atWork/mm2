@@ -11,6 +11,7 @@ import {
   Image,
 } from 'react-native';
 import { useFocusEffect, useRoute, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getStyles } from '../Style';
 import GroupMessageInput from './GroupMessageInput';
 import GroupMessageList from './GroupMessageList';
@@ -30,6 +31,7 @@ import { isUserOnline } from '../utils';
 import { useLocalState } from '../../LocalGlobelStats';
 import PetModal from '../PrivateChat/PetsModel';
 import config from '../../Helper/Environment';
+import { seedCurrentUser } from '../../Helper/profileCache';
 
 const INITIAL_PAGE_SIZE = 10; // ✅ Initial load: 10 messages
 const PAGE_SIZE = 10; // ✅ Pagination: load 10 messages per batch
@@ -41,6 +43,20 @@ const GroupChatScreen = () => {
   const { groupId } = route.params || {};
 
   const { user, theme, appdatabase, firestoreDB } = useGlobalState();
+  const insets = useSafeAreaInsets();
+
+  // Seed MY OWN profile into the shared cache.
+  // Chat message payloads are slim — they carry no frame/text-colour — so the
+  // row renderer resolves cosmetics via the profile cache. warmProfileCache
+  // deliberately skips the current user (it only fetches *other* senders), so
+  // without this the signed-in user is the one person whose frame and chat
+  // text colour never render on their own messages.
+  // Deps are deliberately narrow: `user` is a fresh object on many unrelated
+  // updates, and re-seeding on each would fire a needless DB read.
+  useEffect(() => {
+    if (user?.id) seedCurrentUser(user, null, appdatabase);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.avatar, appdatabase]);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -109,14 +125,14 @@ const GroupChatScreen = () => {
             setPendingInvite(null);
           }
         } else {
-          Alert.alert('Error', 'Group not found');
+          Alert.alert(t('home.alert.error'), t('group_chat.group_not_found'));
           setGroupData(null);
         }
         setCheckingAccess(false);
       },
       (error) => {
         console.error('Error loading group data:', error);
-        showErrorMessage('Error', 'Failed to load group');
+        showErrorMessage(t('home.alert.error'), t('group_chat.failed_load_group'));
         setCheckingAccess(false);
       }
     );
@@ -587,7 +603,7 @@ const GroupChatScreen = () => {
 
       // Validate fruits count - maximum 18 fruits allowed
       if (hasFruits && fruits.length > 18) {
-        showErrorMessage(t('home.alert.error'), 'You can only send up to 18 pets in a message.');
+        showErrorMessage(t('home.alert.error'), t('group_chat.limit_pets'));
         return;
       }
 
@@ -599,7 +615,7 @@ const GroupChatScreen = () => {
 
       // Safety checks
       if (!user?.id || !groupId || !appdatabase || !firestoreDB) {
-        showErrorMessage(t('home.alert.error'), 'Missing required data. Please try again.');
+        showErrorMessage(t('home.alert.error'), t('group_chat.missing_data'));
         return;
       }
 
@@ -609,12 +625,12 @@ const GroupChatScreen = () => {
         const isMuted = groupData.members?.[user.id]?.muted;
 
         if (!isMember) {
-          showErrorMessage('Error', 'You are not a member of this group');
+          showErrorMessage(t('home.alert.error'), t('group_chat.not_member'));
           return;
         }
 
         if (isMuted) {
-          showErrorMessage('Error', 'You are muted in this group');
+          showErrorMessage(t('home.alert.error'), t('group_chat.muted_in_group'));
           return;
         }
       }
@@ -683,14 +699,14 @@ const GroupChatScreen = () => {
         );
 
         if (!result.success) {
-          showErrorMessage('Error', result.error || 'Failed to send message');
+          showErrorMessage(t('home.alert.error'), result.error || t('group_chat.failed_send'));
         } else {
           // Clear reply after successful send
           setReplyTo(null);
         }
       } catch (error) {
         console.error('Error sending message:', error);
-        Alert.alert('Error', 'Could not send your message. Please try again.');
+        Alert.alert(t('home.alert.error'), t('group_chat.could_not_send'));
       }
     },
     [user, groupId, appdatabase, firestoreDB, groupData, t, localState?.isPro]
@@ -701,12 +717,12 @@ const GroupChatScreen = () => {
     if (!user?.id || !groupId) return;
 
     Alert.alert(
-      'Remove Member',
-      `Are you sure you want to remove ${memberName || 'this member'} from the group?`,
+      t('group_chat.remove_member_title'),
+      t('group_chat.remove_member_msg', { name: memberName || t('group_chat.anonymous') }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('group_chat.btn_cancel'), style: 'cancel' },
         {
-          text: 'Remove',
+          text: t('group_chat.btn_remove'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -719,13 +735,13 @@ const GroupChatScreen = () => {
               );
 
               if (result.success) {
-                showSuccessMessage('Success', 'Member removed successfully');
+                showSuccessMessage(t('home.alert.success'), t('group_chat.remove_success'));
               } else {
-                showErrorMessage('Error', result.error || 'Failed to remove member');
+                showErrorMessage(t('home.alert.error'), result.error || t('group_chat.remove_failed'));
               }
             } catch (error) {
               console.error('Error removing member:', error);
-              showErrorMessage('Error', 'Failed to remove member. Please try again.');
+              showErrorMessage(t('home.alert.error'), t('group_chat.remove_failed'));
             }
           },
         },
@@ -742,18 +758,18 @@ const GroupChatScreen = () => {
     // Use setTimeout to ensure modal closes before showing alert
     setTimeout(() => {
       Alert.alert(
-        '⚠️ Transfer Creator Status',
-        `You are about to make ${memberName} the creator of this group.\n\nThis action is IRREVERSIBLE.\n\nYou will lose all creator privileges and become a regular member. You will no longer be able to remove members, add members, or transfer creator status.`,
+        t('group_chat.transfer_creator_title'),
+        t('group_chat.transfer_creator_msg', { name: memberName }),
         [
           {
-            text: 'Cancel',
+            text: t('group_chat.btn_cancel'),
             style: 'cancel',
             onPress: () => {
               setMemberToMakeCreator(null);
             },
           },
           {
-            text: 'Transfer Creator',
+            text: t('group_chat.btn_transfer'),
             style: 'destructive',
             onPress: async () => {
               if (!groupId || !firestoreDB || !appdatabase || !user?.id) {
@@ -770,14 +786,14 @@ const GroupChatScreen = () => {
                 );
 
                 if (result.success) {
-                  showSuccessMessage('Success', `${memberName} is now the creator.`);
+                  showSuccessMessage(t('home.alert.success'), t('group_chat.transfer_success', { name: memberName }));
                   setMemberToMakeCreator(null);
                 } else {
-                  showErrorMessage('Error', result.error || 'Failed to transfer creator status.');
+                  showErrorMessage(t('home.alert.error'), result.error || t('group_chat.transfer_failed'));
                 }
               } catch (error) {
                 console.error('Error making member creator:', error);
-                showErrorMessage('Error', 'Failed to transfer creator status. Please try again.');
+                showErrorMessage(t('home.alert.error'), t('group_chat.transfer_failed'));
               }
             },
           },
@@ -808,15 +824,15 @@ const GroupChatScreen = () => {
       );
 
       if (result.success) {
-        showSuccessMessage('Success', 'You joined the group!');
+        showSuccessMessage(t('home.alert.success'), t('group_chat.join_success'));
         setPendingInvite(null);
         setIsMember(true);
       } else {
-        showErrorMessage('Error', result.error || 'Failed to accept invitation');
+        showErrorMessage(t('home.alert.error'), result.error || t('group_chat.accept_failed'));
       }
     } catch (error) {
       console.error('Error accepting invitation:', error);
-      showErrorMessage('Error', 'Failed to accept invitation. Please try again.');
+      showErrorMessage(t('home.alert.error'), t('group_chat.accept_failed'));
     }
   }, [pendingInvite, user, firestoreDB, appdatabase]);
 
@@ -825,26 +841,26 @@ const GroupChatScreen = () => {
     if (!pendingInvite || !user?.id) return;
 
     Alert.alert(
-      'Decline Invitation',
-      'Are you sure you want to decline this invitation?',
+      t('group_chat.decline_title'),
+      t('group_chat.decline_msg'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('group_chat.btn_cancel'), style: 'cancel' },
         {
-          text: 'Decline',
+          text: t('group_chat.btn_decline'),
           style: 'destructive',
           onPress: async () => {
             try {
               const result = await declineGroupInvite(firestoreDB, pendingInvite.id, user.id);
               if (result.success) {
-                showSuccessMessage('Success', 'Invitation declined');
+                showSuccessMessage(t('home.alert.success'), t('group_chat.decline_success'));
                 setPendingInvite(null);
                 navigation.goBack();
               } else {
-                showErrorMessage('Error', result.error || 'Failed to decline invitation');
+                showErrorMessage(t('home.alert.error'), result.error || t('group_chat.decline_failed'));
               }
             } catch (error) {
               console.error('Error declining invitation:', error);
-              showErrorMessage('Error', 'Failed to decline invitation. Please try again.');
+              showErrorMessage(t('home.alert.error'), t('group_chat.decline_failed'));
             }
           },
         },
@@ -857,25 +873,25 @@ const GroupChatScreen = () => {
     if (!groupId || !user?.id) return;
 
     Alert.alert(
-      'Leave Group',
-      'Are you sure you want to leave this group?',
+      t('group_chat.leave_title'),
+      t('group_chat.leave_msg'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('group_chat.btn_cancel'), style: 'cancel' },
         {
-          text: 'Leave',
+          text: t('group_chat.btn_leave'),
           style: 'destructive',
           onPress: async () => {
             try {
               const result = await leaveGroup(firestoreDB, appdatabase, groupId, user.id);
               if (result.success) {
-                showSuccessMessage('Success', 'You left the group');
+                showSuccessMessage(t('home.alert.success'), t('group_chat.leave_success'));
                 navigation.goBack();
               } else {
-                showErrorMessage('Error', result.error || 'Failed to leave group');
+                showErrorMessage(t('home.alert.error'), result.error || t('group_chat.leave_failed'));
               }
             } catch (error) {
               console.error('Error leaving group:', error);
-              showErrorMessage('Error', 'Failed to leave group. Please try again.');
+              showErrorMessage(t('home.alert.error'), t('group_chat.leave_failed'));
             }
           },
         },
@@ -954,7 +970,7 @@ const GroupChatScreen = () => {
   if (!groupId) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={styles.text}>Group ID not provided</Text>
+        <Text style={styles.text}>{t('group_chat.no_group_id')}</Text>
       </View>
     );
   }
@@ -963,7 +979,7 @@ const GroupChatScreen = () => {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color="#8B5CF6" />
-        <Text style={[styles.text, { marginTop: 16 }]}>Loading...</Text>
+        <Text style={[styles.text, { marginTop: 16 }]}>{t('group_chat.loading')}</Text>
       </View>
     );
   }
@@ -974,10 +990,10 @@ const GroupChatScreen = () => {
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
         <Icon name="mail-outline" size={64} color={isDarkMode ? '#8B5CF6' : '#8B5CF6'} />
         <Text style={[styles.text, { fontSize: 24, fontFamily: 'Lato-Bold', marginTop: 20, marginBottom: 10 }]}>
-          Group Invitation
+          {t('group_chat.invite_title')}
         </Text>
         <Text style={[styles.text, { fontSize: 16, textAlign: 'center', marginBottom: 30, opacity: 0.7 }]} numberOfLines={2} ellipsizeMode="tail">
-          You've been invited to join "{groupData?.name ? (groupData.name.length > 25 ? groupData.name.substring(0, 25).trim() + '...' : groupData.name) : 'this group'}"
+          {t('group_chat.invite_msg', { groupName: groupData?.name ? (groupData.name.length > 25 ? groupData.name.substring(0, 25).trim() + '...' : groupData.name) : 'this group' })}
         </Text>
         <View style={{ flexDirection: 'row', gap: 15 }}>
           <TouchableOpacity
@@ -986,10 +1002,10 @@ const GroupChatScreen = () => {
               paddingHorizontal: 30,
               paddingVertical: 12,
               borderRadius: 8,
-              backgroundColor: isDarkMode ? '#374151' : '#E5E7EB',
+              backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB',
             }}
           >
-            <Text style={{ color: isDarkMode ? '#fff' : '#000', fontFamily: 'Lato-SemiBold' }}>Decline</Text>
+            <Text style={{ color: isDarkMode ? '#fff' : '#000', fontFamily: 'Lato-SemiBold' }}>{t('group_chat.btn_decline')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={handleAcceptInvite}
@@ -1000,7 +1016,7 @@ const GroupChatScreen = () => {
               backgroundColor: '#8B5CF6',
             }}
           >
-            <Text style={{ color: '#fff', fontFamily: 'Lato-SemiBold' }}>Accept</Text>
+            <Text style={{ color: '#fff', fontFamily: 'Lato-SemiBold' }}>{t('group_chat.btn_accept')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1013,10 +1029,10 @@ const GroupChatScreen = () => {
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
         <Icon name="lock-closed-outline" size={64} color={isDarkMode ? '#9CA3AF' : '#6B7280'} />
         <Text style={[styles.text, { fontSize: 24, fontFamily: 'Lato-Bold', marginTop: 20, marginBottom: 10 }]}>
-          Access Denied
+          {t('group_chat.access_denied_title')}
         </Text>
         <Text style={[styles.text, { fontSize: 16, textAlign: 'center', marginBottom: 30, opacity: 0.7 }]}>
-          You are not a member of this group. Please wait for an invitation.
+          {t('group_chat.access_denied_msg')}
         </Text>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -1027,7 +1043,7 @@ const GroupChatScreen = () => {
             backgroundColor: '#8B5CF6',
           }}
         >
-          <Text style={{ color: '#fff', fontFamily: 'Lato-SemiBold' }}>Go Back</Text>
+          <Text style={{ color: '#fff', fontFamily: 'Lato-SemiBold' }}>{t('group_chat.btn_go_back')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -1037,7 +1053,7 @@ const GroupChatScreen = () => {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color="#8B5CF6" />
-        <Text style={[styles.text, { marginTop: 16 }]}>Loading messages...</Text>
+        <Text style={[styles.text, { marginTop: 16 }]}>{t('group_chat.loading_msgs')}</Text>
       </View>
     );
   }
@@ -1049,7 +1065,7 @@ const GroupChatScreen = () => {
           {messages.length === 0 && !loading ? (
             // No messages yet - show empty state but keep input visible
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No messages yet</Text>
+              <Text style={styles.emptyText}>{t('group_chat.no_msgs')}</Text>
             </View>
           ) : (
             <GroupMessageList
@@ -1083,6 +1099,9 @@ const GroupChatScreen = () => {
         </View>
       </ConditionalKeyboardWrapper>
 
+      {/* Spacer: reserves space for floating tab bar so input isn't hidden behind it */}
+      <View style={{ height: Math.max(insets.bottom, 8) + 68 }} />
+
       {/* Members Modal */}
       <Modal
         visible={showMembersModal}
@@ -1091,10 +1110,10 @@ const GroupChatScreen = () => {
         onRequestClose={() => setShowMembersModal(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: isDarkMode ? '#1F2937' : '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: isDarkMode ? '#374151' : '#E5E7EB' }}>
+          <View style={{ backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB' }}>
               <Text style={{ fontSize: 20, fontFamily: 'Lato-Bold', color: isDarkMode ? '#fff' : '#000' }}>
-                Members ({memberCount})
+                {t('group_chat.members_title', { count: memberCount })}
               </Text>
               <TouchableOpacity onPress={() => setShowMembersModal(false)}>
                 <Icon name="close" size={24} color={isDarkMode ? '#fff' : '#000'} />
@@ -1138,7 +1157,7 @@ const GroupChatScreen = () => {
                   // ✅ Render pending invitation - Shows the INVITED USER (the person who was invited)
                   const inviteData = item.inviteData;
                   return (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: isDarkMode ? '#374151' : '#E5E7EB' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB' }}>
                       <Image
                         source={{ uri: inviteData.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
                         style={{ width: 50, height: 50, borderRadius: 25, marginRight: 12, opacity: 0.6 }}
@@ -1148,7 +1167,7 @@ const GroupChatScreen = () => {
                           {inviteData.displayName || 'Anonymous'}
                         </Text>
                         <Text style={{ fontSize: 12, fontFamily: 'Lato-Regular', color: isDarkMode ? '#9CA3AF' : '#6B7280', marginTop: 2 }}>
-                          Pending to Join
+                          {t('group_chat.pending_join')}
                         </Text>
                       </View>
                     </View>
@@ -1165,7 +1184,7 @@ const GroupChatScreen = () => {
                 const canMakeCreator = isCreator && !isCurrentUser && !isMemberCreator;
 
                 return (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: isDarkMode ? '#374151' : '#E5E7EB' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB' }}>
                     <Image
                       source={{ uri: member.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
                       style={{ width: 50, height: 50, borderRadius: 25, marginRight: 12 }}
@@ -1180,8 +1199,8 @@ const GroupChatScreen = () => {
                         )}
                       </View>
                       <Text style={{ fontSize: 12, fontFamily: 'Lato-Regular', color: isDarkMode ? '#9CA3AF' : '#6B7280', marginTop: 2 }}>
-                        {isMemberCreator ? 'Creator' : 'Member'}
-                        {isOnline && ' · Online'}
+                        {isMemberCreator ? t('group_chat.role_creator') : t('group_chat.role_member')}
+                        {isOnline && t('group_chat.online')}
                       </Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1207,7 +1226,7 @@ const GroupChatScreen = () => {
               }}
               ListEmptyComponent={
                 <View style={{ padding: 40, alignItems: 'center' }}>
-                  <Text style={{ color: isDarkMode ? '#9CA3AF' : '#6B7280' }}>No members found</Text>
+                  <Text style={{ color: isDarkMode ? '#9CA3AF' : '#6B7280' }}>{t('group_chat.no_members')}</Text>
                 </View>
               }
             />

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../GlobelStats';
+import config from '../Helper/Environment';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useHaptic } from '../Helper/HepticFeedBack';
 import { t } from 'i18next';
@@ -42,7 +43,7 @@ const CodesDrawer = ({ isVisible, toggleModal, codes }) => {
     <View style={styles.codeItem}>
       <Text style={styles.codeText}>[{item.code}]</Text>
       <View style={styles.rewardContainer}>
-        <Text style={styles.rewardText}>Reward: {item.reward}</Text>
+        <Text style={styles.rewardText}>{t('value.reward')}: {item.reward}</Text>
         <TouchableOpacity
           onPress={() => copyToClipboard(item.code)}
           style={styles.copyButton}
@@ -87,7 +88,7 @@ export const getStyles = (isDarkMode) =>
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
     },
     drawer: {
-      backgroundColor: isDarkMode ? '#121212' : '#f2f2f7',
+      backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f2f2f7',
       borderTopLeftRadius: 15,
       borderTopRightRadius: 15,
       padding: 20,

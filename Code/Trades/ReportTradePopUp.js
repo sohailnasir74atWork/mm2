@@ -116,7 +116,7 @@ const ReportTradePopup = ({ visible, trade, onClose }) => {
             <TextInput
               style={styles.input}
               placeholder="Enter custom reason"
-              placeholderTextColor="#888"
+              placeholderTextColor={isDarkMode ? '#999' : '#888'}
               value={customReason}
               onChangeText={setCustomReason}
             />

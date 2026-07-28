@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,8 @@ const LeaderboardScreen = ({ route }) => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
   const [bannedUsers] = useState(Array.isArray(localState.bannedUsers) ? localState.bannedUsers : []);
+  // Guards against a repeat fetch while this screen stays focused
+  const fetchedRef = useRef(false);
 
   // ✅ Memoize styles
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
@@ -98,8 +100,8 @@ const LeaderboardScreen = ({ route }) => {
       const cacheDocSnap = await getDoc(cacheDocRef);
       
       // ✅ Firestore: exists is a property, not a function
-      if (!cacheDocSnap.exists) {
-        console.log('⚠️ [Leaderboard] Cache not found - leaderboard may not be initialized yet');
+      if (!cacheDocSnap.exists()) {
+        // Cache not initialized yet — Cloud Function hasn't run
         setLeaderboardData([]);
         setLoading(false);
         return;
@@ -109,7 +111,7 @@ const LeaderboardScreen = ({ route }) => {
       const cachedUsers = cacheData?.users || [];
       
       if (cachedUsers.length === 0) {
-        console.log('⚠️ [Leaderboard] Cache is empty - waiting for Cloud Function to update');
+        // Cache is empty — waiting for Cloud Function
         setLeaderboardData([]);
         setLoading(false);
         return;
@@ -123,7 +125,7 @@ const LeaderboardScreen = ({ route }) => {
         userId: user.userId,
         ratingCount: user.ratingCount || 0,
         averageRating: user.averageRating || 0,
-        displayName: user.displayName || 'Anonymous',
+        displayName: user.displayName || t('private_chat.anonymous'),
         avatar: user.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
         rank: index + 1, // Ensure rank is 1-based (though it should already be set)
         updatedAt: user.updatedAt || Date.now(),
@@ -131,10 +133,15 @@ const LeaderboardScreen = ({ route }) => {
 
       // ✅ Save to local cache (2-day caching)
       // Cache includes the timestamp from Cloud Function's lastUpdated field
-      const cacheTimestamp = cacheData.lastUpdated?.toMillis?.() || cacheData.lastUpdated || Date.now();
+      // ⚠️ `timestamp` MUST be when *we* fetched, not the server doc's
+      // lastUpdated. It drives a LOCAL 2-day TTL, and this write is in the
+      // focus effect's dep list — stamping an already-stale server time made
+      // the freshly written cache instantly invalid, so the effect re-ran and
+      // re-fetched in an unbounded loop for as long as the screen was focused.
+      // The server's time is kept separately for display/debugging.
       const localCacheData = {
         data: leaderboardWithDetails,
-        timestamp: cacheTimestamp, // Use Cloud Function's timestamp, not current time
+        timestamp: Date.now(),
         lastFetched: cacheData.lastUpdated?.toDate?.()?.toISOString() || new Date().toISOString(),
         cloudFunctionUpdated: cacheData.lastUpdated?.toDate?.()?.toISOString() || null,
       };
@@ -142,14 +149,7 @@ const LeaderboardScreen = ({ route }) => {
 
       setLeaderboardData(leaderboardWithDetails);
     } catch (error) {
-      console.error('❌ [Leaderboard] Error fetching leaderboard from cache:', error);
-      
-      // ✅ Check if cache document doesn't exist (Cloud Function may not have run yet)
-      if (error.code === 'not-found' || error.code === 'permission-denied') {
-        console.error('⚠️ [Leaderboard] Cache document not found or access denied');
-        console.error('   The Cloud Function "updateLeaderboardCache" should run daily to populate this cache');
-        console.error('   Check Firebase Console → Functions → Logs to verify the function is running');
-      }
+      // Cache fetch failed — expected if Cloud Function hasn't run yet
       
       setLeaderboardData([]);
     } finally {
@@ -167,10 +167,14 @@ const LeaderboardScreen = ({ route }) => {
         // ✅ Use cached data (still fresh, less than 2 days old)
         setLeaderboardData(cachedData.data);
         setLoading(false);
-      } else {
-        // ✅ Cache expired (older than 2 days) or doesn't exist, fetch fresh data from Firebase
+      } else if (!fetchedRef.current) {
+        // Cache expired or missing — fetch once per focus. The ref guard is a
+        // belt-and-braces stop against this effect re-triggering itself via
+        // the cache it writes.
+        fetchedRef.current = true;
         fetchLeaderboard();
       }
+      return () => { fetchedRef.current = false; };
     }, [localState.leaderboardTop50, isCacheValid, fetchLeaderboard])
   );
 
@@ -191,7 +195,7 @@ const LeaderboardScreen = ({ route }) => {
       const online = await isUserOnline(item.userId);
       setIsOnline(online);
     } catch (error) {
-      console.error('Error checking online status:', error);
+      // silent
       setIsOnline(false);
     }
 
@@ -203,11 +207,10 @@ const LeaderboardScreen = ({ route }) => {
   const handleStartChat = useCallback(() => {
     if (!selectedUser) return;
 
-    const callbackFunction = () => {
-      setIsDrawerVisible(false);
-      
+    setIsDrawerVisible(false);
+    setTimeout(() => {
       if (navigation && typeof navigation.navigate === 'function') {
-        navigation.navigate('PrivateChat', {
+        navigation.navigate('PrivateChatRoot', {
           selectedUser: {
             senderId: selectedUser.senderId,
             sender: selectedUser.sender,
@@ -216,15 +219,8 @@ const LeaderboardScreen = ({ route }) => {
         });
       }
       mixpanel.track("Leaderboard Start Chat");
-    };
-
-    // ✅ Show ad for non-pro users
-    if (!localState?.isPro) {
-      InterstitialAdManager.showAd(callbackFunction);
-    } else {
-      callbackFunction();
-    }
-  }, [selectedUser, navigation, localState?.isPro]);
+    }, 300);
+  }, [selectedUser, navigation]);
 
   // ✅ Render leaderboard item
   const renderLeaderboardItem = useCallback(({ item, index }) => {
@@ -251,12 +247,12 @@ const LeaderboardScreen = ({ route }) => {
         {/* User Info */}
         <View style={styles.userInfo}>
           <Text style={styles.userName} numberOfLines={1}>
-            {item.displayName || 'Anonymous'}
+            {item.displayName || t('private_chat.anonymous')}
           </Text>
           <View style={styles.ratingInfo}>
             <Icon name="star" size={12} color="#FFD700" />
             <Text style={styles.ratingText}>
-              {item.averageRating.toFixed(1)} ({item.ratingCount} {item.ratingCount === 1 ? 'rating' : 'ratings'})
+              {item.ratingCount === 1 ? t('leaderboard.rating_info_singular', { avg: item.averageRating.toFixed(1), count: item.ratingCount }) : t('leaderboard.rating_info_plural', { avg: item.averageRating.toFixed(1), count: item.ratingCount })}
             </Text>
           </View>
         </View>
@@ -274,14 +270,14 @@ const LeaderboardScreen = ({ route }) => {
         {loading && leaderboardData.length === 0 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={config.colors.primary} />
-            <Text style={styles.loadingText}>Loading leaderboard...</Text>
-            <Text style={styles.loadingSubtext}>Showing most reviewed users with 3.7+ rating...</Text>
+            <Text style={styles.loadingText}>{t('leaderboard.loading_text')}</Text>
+            <Text style={styles.loadingSubtext}>{t('leaderboard.loading_subtext')}</Text>
           </View>
         ) : leaderboardData.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Icon name="trophy-outline" size={48} color={config.colors.primary} />
-            <Text style={styles.emptyText}>No users found with 3.7+ rating</Text>
-            <Text style={styles.emptySubtext}>Leaderboard is updated daily</Text>
+            <Text style={styles.emptyText}>{t('leaderboard.empty_text')}</Text>
+            <Text style={styles.emptySubtext}>{t('leaderboard.empty_subtext')}</Text>
           </View>
         ) : (
           <FlatList
@@ -296,7 +292,7 @@ const LeaderboardScreen = ({ route }) => {
         {/* Cache Info */}
         {localState.leaderboardTop50?.lastFetched && !loading && (
           <Text style={styles.cacheInfo}>
-            Last updated: {new Date(localState.leaderboardTop50.lastFetched).toLocaleDateString()}
+            {t('leaderboard.last_updated', { date: new Date(localState.leaderboardTop50.lastFetched).toLocaleDateString() })}
           </Text>
         )}
       </View>
@@ -317,7 +313,7 @@ const LeaderboardScreen = ({ route }) => {
 const getStyles = (isDarkMode) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: isDarkMode ? '#121212' : '#f2f2f7',
+    backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f2f2f7',
   },
   loadingContainer: {
     flex: 1,
@@ -363,7 +359,7 @@ const getStyles = (isDarkMode) => StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     marginVertical: 4,
-    backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5',
+    backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#f5f5f5',
     borderRadius: 12,
     marginHorizontal: 8,
   },
@@ -385,7 +381,7 @@ const getStyles = (isDarkMode) => StyleSheet.create({
     height: 50,
     borderRadius: 25,
     marginRight: 12,
-    backgroundColor: isDarkMode ? '#333' : '#e0e0e0',
+    backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#e0e0e0',
   },
   userInfo: {
     flex: 1,

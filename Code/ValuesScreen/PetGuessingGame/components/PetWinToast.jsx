@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../../../GlobelStats';
+import config from '../../../Helper/Environment';
 
 const { width } = Dimensions.get('window');
 const MAX_TOAST_WIDTH = 280;
@@ -94,7 +95,7 @@ const PetWinToast = ({ visible, petName, petValue, petImage, onDismiss }) => {
         style={[
           styles.toast,
           {
-            backgroundColor: isDarkMode ? '#1a1a1a' : '#fff',
+            backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff',
             shadowColor: isDarkMode ? '#10B981' : '#000',
           },
         ]}

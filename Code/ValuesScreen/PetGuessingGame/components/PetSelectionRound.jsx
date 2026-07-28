@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../../../GlobelStats';
+import config from '../../../Helper/Environment';
 import { useLocalState } from '../../../LocalGlobelStats';
 import { useHaptic } from '../../../Helper/HepticFeedBack';
 
@@ -18,6 +19,7 @@ const PetSelectionRound = ({ roomData, currentUser, onSelectPet, roomId }) => {
   const { localState } = useLocalState();
   const { triggerHapticFeedback } = useHaptic();
   const isDarkMode = theme === 'dark';
+  const { t } = require('react-i18next').useTranslation();
 
   const [selectedPet, setSelectedPet] = useState(null);
   const [timeLeft, setTimeLeft] = useState(60);
@@ -176,7 +178,7 @@ const PetSelectionRound = ({ roomData, currentUser, onSelectPet, roomId }) => {
           <Text style={styles.countdownText}>{timeLeft}</Text>
         </Animated.View>
         <Text style={[styles.countdownLabel, { color: isDarkMode ? '#9ca3af' : '#6b7280' }]}>
-          {isLocked ? 'Picks Locked!' : 'Seconds Left'}
+          {isLocked ? t('game.picks_locked') : t('game.seconds_left')}
         </Text>
       </View>
 
@@ -184,24 +186,24 @@ const PetSelectionRound = ({ roomData, currentUser, onSelectPet, roomId }) => {
       {waitingForOthers && (
         <View style={styles.waitingContainer}>
           <Text style={[styles.waitingText, { color: isDarkMode ? '#9ca3af' : '#6b7280' }]}>
-            Waiting for others to pick...
+            {t('game.waiting_others_pick')}
           </Text>
           <TouchableOpacity style={styles.hypeButton} onPress={handleHype}>
-            <Text style={styles.hypeButtonText}>Cheer 🎉</Text>
+            <Text style={styles.hypeButtonText}>{t('game.cheer')}</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {!userPick && !isLocked && (
         <Text style={[styles.instructionText, { color: isDarkMode ? '#fff' : '#000' }]}>
-          Choose your pet! {timeLeft <= 5 && '⏰ Hurry!'}
+          {t('game.choose_pet')} {timeLeft <= 5 && `⏰ ${t('game.hurry')}`}
         </Text>
       )}
 
       {userPick && (
         <View style={styles.selectedContainer}>
           <Text style={[styles.selectedLabel, { color: isDarkMode ? '#9ca3af' : '#6b7280' }]}>
-            Your Pick:
+            {t('game.your_pick')}
           </Text>
           <View style={styles.selectedPetCard}>
             <Image
@@ -210,7 +212,7 @@ const PetSelectionRound = ({ roomData, currentUser, onSelectPet, roomId }) => {
             />
             <Text style={[styles.selectedPetName, { color: isDarkMode ? '#fff' : '#000' }]}>
               {userPick.petName}
-              {userPick.isRandom && ' (Random!)'}
+              {userPick.isRandom && t('game.random_pick')}
             </Text>
           </View>
         </View>
@@ -228,7 +230,7 @@ const PetSelectionRound = ({ roomData, currentUser, onSelectPet, roomId }) => {
                   style={[
                     styles.petCard,
                     isSelected && styles.petCardSelected,
-                    { backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff' },
+                    { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#ffffff' },
                   ]}
                   onPress={() => handleSelectPet(item)}
                   activeOpacity={0.7}
@@ -237,7 +239,7 @@ const PetSelectionRound = ({ roomData, currentUser, onSelectPet, roomId }) => {
                     source={{ uri: getImageUrl(item) }}
                     style={styles.petImage}
                     resizeMode="contain"
-                    defaultSource={{ uri: 'https://bloxfruitscalc.com/wp-content/uploads/2025/placeholder.png' }}
+                    defaultSource={{ uri: 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
                   />
                   <Text
                     style={[styles.petName, { color: isDarkMode ? '#fff' : '#000' }]}

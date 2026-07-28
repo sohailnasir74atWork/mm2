@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useGlobalState } from '../../GlobelStats';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import config from '../../Helper/Environment';
 import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
@@ -110,7 +111,14 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
   const [groupInfoLoading, setGroupInfoLoading] = useState(false);
 
   const isDarkMode = theme === 'dark';
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
+
+  // ✅ Refs for current values — avoids adding volatile state to callback deps
+  const mutedGroupsRef = useRef(mutedGroups);
+  const groupsRef = useRef(groups);
+  useEffect(() => { mutedGroupsRef.current = mutedGroups; }, [mutedGroups]);
+  useEffect(() => { groupsRef.current = groups; }, [groups]);
 
   // Set header with info icon
   useEffect(() => {
@@ -261,25 +269,21 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
           }
         );
         if (result.success) {
-          showSuccessMessage('Success', `You joined "${result.groupName || 'the group'}"!`);
+          showSuccessMessage(t('home.alert.success'), t('groups_screen.success_join', { groupName: result.groupName || t('groups_screen.group') }));
           // Remove from pending list locally
           setPendingInvitations(prev => prev.filter(invite => invite.id !== inviteId));
           // Navigate to the group chat
           navigation.navigate('GroupChatDetail', { groupId, groupName: result.groupName });
         } else {
-          showErrorMessage('Error', result.error || 'Failed to accept invitation.');
+          showErrorMessage(t('home.alert.error'), result.error || t('groups_screen.failed_accept'));
         }
       } catch (error) {
         console.error('Error accepting invitation:', error);
-        showErrorMessage('Error', 'Failed to accept invitation. Please try again.');
+        showErrorMessage(t('home.alert.error'), t('groups_screen.failed_accept'));
       }
     };
 
-    if (!localState?.isPro) {
-      InterstitialAdManager.showAd(callbackFunction);
-    } else {
-      callbackFunction();
-    }
+    callbackFunction();
   }, [user?.id, firestoreDB, appdatabase, navigation, localState?.isPro]);
 
   const handleDeclineInvitation = useCallback(async (inviteId) => {
@@ -287,14 +291,14 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
     try {
       const result = await declineGroupInvite(firestoreDB, inviteId, user.id);
       if (result.success) {
-        showSuccessMessage('Success', 'Invitation declined.');
+        showSuccessMessage(t('home.alert.success'), t('groups_screen.invite_declined'));
         setPendingInvitations(prev => prev.filter(invite => invite.id !== inviteId));
       } else {
-        showErrorMessage('Error', result.error || 'Failed to decline invitation.');
+        showErrorMessage(t('home.alert.error'), result.error || t('groups_screen.failed_decline'));
       }
     } catch (error) {
       console.error('Error declining invitation:', error);
-      showErrorMessage('Error', 'Failed to decline invitation. Please try again.');
+      showErrorMessage(t('home.alert.error'), t('groups_screen.failed_decline'));
     }
   }, [user?.id, firestoreDB]);
 
@@ -302,7 +306,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
   const handleOpenGroup = useCallback((groupId, groupName) => {
     if (!groupId) {
       console.warn('Cannot open group: missing groupId');
-      showErrorMessage('Error', 'Group ID is missing. Please try again.');
+      showErrorMessage(t('home.alert.error'), t('groups_screen.missing_id'));
       return;
     }
 
@@ -315,11 +319,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
       }
     };
 
-    if (!localState?.isPro) {
-      InterstitialAdManager.showAd(callbackFunction);
-    } else {
-      callbackFunction();
-    }
+    callbackFunction();
   }, [navigation, localState?.isPro]);
 
   // Handle delete group (Group Admin only)
@@ -335,23 +335,23 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
     const isGroupAdmin = isCreator || (group?.members?.[user.id]?.role === 'admin') || (isAdmin && group?.members?.[user.id]);
     
     if (!isGroupAdmin) {
-      showErrorMessage('Error', 'Only group admins can delete groups');
+      showErrorMessage(t('home.alert.error'), t('groups_screen.only_admin_delete'));
       return;
     }
 
     Alert.alert(
-      'Delete Group',
-      `Are you sure you want to delete "${groupName || 'this group'}"? This action cannot be undone.`,
+      t('groups_screen.delete_title'),
+      t('groups_screen.delete_msg', { groupName: groupName || t('groups_screen.group') }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('groups_screen.btn_cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('groups_screen.btn_delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               const result = await deleteGroup(firestoreDB, appdatabase, groupId);
               if (result.success) {
-                showSuccessMessage('Success', 'Group deleted successfully');
+                showSuccessMessage(t('home.alert.success'), t('groups_screen.delete_success'));
                 // Update local state
                 if (setGroups && typeof setGroups === 'function') {
                   setGroups((prevGroups) => {
@@ -360,11 +360,11 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                   });
                 }
               } else {
-                showErrorMessage('Error', result.error || 'Failed to delete group');
+                showErrorMessage(t('home.alert.error'), result.error || t('groups_screen.delete_failed'));
               }
             } catch (error) {
               console.error('Error deleting group:', error);
-              showErrorMessage('Error', 'Failed to delete group. Please try again.');
+              showErrorMessage(t('home.alert.error'), t('groups_screen.delete_failed'));
             }
           },
         },
@@ -380,18 +380,18 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
     }
 
     Alert.alert(
-      'Leave Group',
-      `Are you sure you want to leave "${groupName || 'this group'}"?`,
+      t('groups_screen.leave_title'),
+      t('groups_screen.leave_msg', { groupName: groupName || t('groups_screen.group') }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('groups_screen.btn_cancel'), style: 'cancel' },
         {
-          text: 'Leave',
+          text: t('groups_screen.btn_leave'),
           style: 'destructive',
           onPress: async () => {
             try {
               const result = await leaveGroup(firestoreDB, appdatabase, groupId, user.id);
               if (result.success) {
-                showSuccessMessage('Success', 'You left the group');
+                showSuccessMessage(t('home.alert.success'), t('groups_screen.leave_success'));
                 // Update local state
                 if (setGroups && typeof setGroups === 'function') {
                   setGroups((prevGroups) => {
@@ -400,11 +400,11 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                   });
                 }
               } else {
-                showErrorMessage('Error', result.error || 'Failed to leave group');
+                showErrorMessage(t('home.alert.error'), result.error || t('groups_screen.leave_failed'));
               }
             } catch (error) {
               console.error('Error leaving group:', error);
-              showErrorMessage('Error', 'Failed to leave group. Please try again.');
+              showErrorMessage(t('home.alert.error'), t('groups_screen.leave_failed'));
             }
           },
         },
@@ -446,7 +446,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
     
     const group = groups.find(g => g.groupId === groupId);
     if (!group) {
-      showErrorMessage('Error', 'Group not found');
+      showErrorMessage(t('home.alert.error'), t('groups_screen.not_found'));
       return;
     }
 
@@ -456,7 +456,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
     const canEdit = isCreator || isGroupAdmin || (isAdmin && group.members?.[user.id]);
     
     if (!canEdit) {
-      showErrorMessage('Error', 'Only group creator or admin can edit this group');
+      showErrorMessage(t('home.alert.error'), t('groups_screen.only_admin_edit'));
       return;
     }
 
@@ -478,21 +478,27 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
     }
   }, [setGroups]);
 
-  // ✅ Load mute status for all groups
-  useEffect(() => {
-    if (!appdatabase || !user?.id || groups.length === 0) return;
+  // ✅ Memoize group IDs so mute useEffect only re-runs when groups are added/removed
+  const groupIds = useMemo(() => {
+    if (!Array.isArray(groups)) return '';
+    return groups.map(g => g.groupId).filter(Boolean).sort().join(',');
+  }, [groups]);
 
+  // ✅ Load mute status for all groups — depends on stable groupIds string
+  useEffect(() => {
+    if (!appdatabase || !user?.id || !groupIds) return;
+
+    const ids = groupIds.split(',');
     const loadMuteStatus = async () => {
       const muteStatusMap = {};
-      const promises = groups.map(async (group) => {
-        if (!group.groupId) return;
+      const promises = ids.map(async (groupId) => {
         try {
-          const muteRef = ref(appdatabase, `group_meta_data/${user.id}/${group.groupId}/muted`);
+          const muteRef = ref(appdatabase, `group_meta_data/${user.id}/${groupId}/muted`);
           const snapshot = await get(muteRef);
-          muteStatusMap[group.groupId] = snapshot.exists() ? snapshot.val() === true : false;
+          muteStatusMap[groupId] = snapshot.exists() ? snapshot.val() === true : false;
         } catch (error) {
-          console.error(`Error loading mute status for group ${group.groupId}:`, error);
-          muteStatusMap[group.groupId] = false;
+          console.error(`Error loading mute status for group ${groupId}:`, error);
+          muteStatusMap[groupId] = false;
         }
       });
 
@@ -501,7 +507,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
     };
 
     loadMuteStatus();
-  }, [appdatabase, user?.id, groups]);
+  }, [appdatabase, user?.id, groupIds]);
 
   // Handle show group info
   const handleShowGroupInfo = useCallback(async (groupId) => {
@@ -520,8 +526,8 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
       const groupDocRef = doc(firestoreDB, 'groups', groupId);
       const groupDocSnapshot = await getDoc(groupDocRef);
       
-      if (!groupDocSnapshot.exists) {
-        showErrorMessage('Error', 'Group not found');
+      if (!groupDocSnapshot.exists()) {
+        showErrorMessage(t('home.alert.error'), t('groups_screen.not_found'));
         setGroupInfoModalVisible(false);
         return;
       }
@@ -539,7 +545,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
       }
       
       // Get creator info
-      let creatorName = 'Unknown';
+      let creatorName = t('groups_screen.unknown');
       let creatorAvatar = null;
       if (createdBy) {
         try {
@@ -550,7 +556,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
           ]);
           
           if (displayNameSnap?.exists() || avatarSnap?.exists()) {
-            creatorName = displayNameSnap?.exists() ? displayNameSnap.val() : 'Unknown';
+            creatorName = displayNameSnap?.exists() ? displayNameSnap.val() : t('groups_screen.unknown');
             creatorAvatar = avatarSnap?.exists() ? avatarSnap.val() : null;
           }
         } catch (error) {
@@ -564,8 +570,8 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
 
       const groupInfo = {
         groupId,
-        name: groupData.name || 'Group',
-        description: groupData.description || 'No description',
+        name: groupData.name || t('groups_screen.group'),
+        description: groupData.description || t('groups_screen.no_desc'),
         avatar: groupData.avatar || groupData.groupAvatar || null,
         createdBy: {
           id: createdBy,
@@ -580,7 +586,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
       setSelectedGroupInfo(groupInfo);
     } catch (error) {
       console.error('Error loading group info:', error);
-      showErrorMessage('Error', 'Failed to load group information');
+      showErrorMessage(t('home.alert.error'), t('groups_screen.failed_load_info'));
       setGroupInfoModalVisible(false);
     } finally {
       setGroupInfoLoading(false);
@@ -588,11 +594,11 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
     }
   }, [firestoreDB, appdatabase, showErrorMessage]);
 
-  // ✅ Toggle mute notifications for a group
+  // ✅ Toggle mute notifications for a group — reads current mute state from ref
   const handleToggleMute = useCallback(async (groupId, groupName) => {
     if (!appdatabase || !user?.id || !groupId) return;
 
-    const currentMuted = mutedGroups[groupId] || false;
+    const currentMuted = mutedGroupsRef.current[groupId] || false;
     const newMutedStatus = !currentMuted;
 
     try {
@@ -606,16 +612,16 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
       }));
 
       showSuccessMessage(
-        'Success',
+        t('home.alert.success'),
         newMutedStatus 
-          ? `Notifications muted for "${groupName || 'group'}"` 
-          : `Notifications enabled for "${groupName || 'group'}"`
+          ? t('groups_screen.muted_success', { groupName: groupName || t('groups_screen.group') }) 
+          : t('groups_screen.unmuted_success', { groupName: groupName || t('groups_screen.group') })
       );
     } catch (error) {
       console.error('Error toggling mute status:', error);
-      showErrorMessage('Error', 'Failed to update notification settings. Please try again.');
+      showErrorMessage(t('home.alert.error'), t('groups_screen.failed_mute'));
     }
-  }, [appdatabase, user?.id, mutedGroups]);
+  }, [appdatabase, user?.id]);
 
   // Handle update group icon (Admin or creator)
   const handleUpdateGroupIcon = useCallback(async (groupId) => {
@@ -625,7 +631,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
     const group = groups.find(g => g.groupId === groupId);
     const isCreator = group?.createdBy === user.id;
     if (!isAdmin && !isCreator) {
-      showErrorMessage('Error', 'Only admin or creator can update group icon');
+      showErrorMessage(t('home.alert.error'), t('groups_screen.only_admin_icon'));
       return;
     }
 
@@ -650,7 +656,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
             const result = await updateGroupAvatar(firestoreDB, appdatabase, groupId, user.id, avatarUrl, isAdmin);
 
             if (result.success) {
-              showSuccessMessage('Success', 'Group icon updated successfully!');
+              showSuccessMessage(t('home.alert.success'), t('groups_screen.icon_success'));
               // Refresh groups list
               if (setGroups && typeof setGroups === 'function') {
                 setGroups((prevGroups) => {
@@ -663,18 +669,18 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                 });
               }
             } else {
-              showErrorMessage('Error', result.error || 'Failed to update group icon');
+              showErrorMessage(t('home.alert.error'), result.error || t('groups_screen.icon_failed'));
             }
           } catch (error) {
             console.error('Error updating group icon:', error);
-            showErrorMessage('Error', 'Failed to update group icon. Please try again.');
+            showErrorMessage(t('home.alert.error'), t('groups_screen.icon_failed'));
           }
         }
       }
     );
   }, [user?.id, firestoreDB, appdatabase, uploadToBunny, setGroups, isAdmin, groups]);
 
-  // Render group item
+  // Render group item — reads groups/mutedGroups from refs to avoid dep churn
   const renderGroupItem = useCallback(({ item }) => {
     if (!item || typeof item !== 'object') return null;
 
@@ -687,12 +693,13 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
     const groupName = item.groupName || 'Group';
     const truncatedName = truncateGroupName(groupName, 25);
     const groupAvatar = item.groupAvatar || null;
-    const lastMessage = item.lastMessage || 'No messages yet';
+    const lastMessage = item.lastMessage || t('groups_screen.no_msgs');
     const unreadCount = item.unreadCount || 0;
     const memberCount = item.memberCount || 0;
     const isMyGroup = item.createdBy === user?.id;
-    // Check if user is admin in this specific group (creator or has admin role)
-    const isGroupAdmin = isMyGroup || (item.members?.[user?.id]?.role === 'admin') || (isAdmin && item.members?.[user?.id]); // Global admin can also delete if they're a member
+    // Check admin from item itself — no need to search groups array
+    const isGroupAdmin = isMyGroup || (item.members?.[user?.id]?.role === 'admin') || (isAdmin && item.members?.[user?.id]);
+    const currentMutedGroups = mutedGroupsRef.current;
 
     return (
       <View style={styles.itemContainer}>
@@ -721,11 +728,11 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                     color: '#FFF',
                     fontSize: 10,
                     fontWeight: '600',
-                  }}>My Group</Text>
+                  }}>{t('groups_screen.my_group')}</Text>
                 </View>
               )}
               {memberCount > 0 && (
-                <Text style={styles.memberCountText}> · {memberCount} members</Text>
+                <Text style={styles.memberCountText}>{t('groups_screen.members_count', { count: memberCount })}</Text>
               )}
             </View>
             <Text style={styles.lastMessage} numberOfLines={1}>
@@ -749,10 +756,10 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               style={{ paddingLeft: 10 }}
             />
           </MenuTrigger>
-          <MenuOptions>
+          <MenuOptions customStyles={{}}>
             {/* Group Info */}
             <MenuOption onSelect={() => handleShowGroupInfo(groupId)}>
-              <Text style={{ fontSize: 16, padding: 10 }}>Group Info</Text>
+              <Text style={{ fontSize: 16, padding: 10 }}>{t('groups_screen.menu_info')}</Text>
             </MenuOption>
             {/* Mute/Unmute Notifications */}
             <MenuOption onSelect={() => {}} closeOnSelect={false}>
@@ -763,38 +770,38 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                 paddingHorizontal: 10,
                 paddingVertical: 10,
               }}>
-                <Text style={{ fontSize: 16, flex: 1 }}>Mute Notifications</Text>
+                <Text style={{ fontSize: 16, flex: 1 }}>{t('groups_screen.menu_mute')}</Text>
                 <Switch
-                  value={mutedGroups[groupId] || false}
+                  value={currentMutedGroups[groupId] || false}
                   onValueChange={() => handleToggleMute(groupId, groupName)}
                   trackColor={{ false: '#767577', true: config.colors.primary }}
-                  thumbColor={mutedGroups[groupId] ? '#fff' : '#f4f3f4'}
+                  thumbColor={currentMutedGroups[groupId] ? '#fff' : '#f4f3f4'}
                 />
               </View>
             </MenuOption>
             {isGroupAdmin && (
               <>
                 <MenuOption onSelect={() => handleEditGroup(groupId)}>
-                  <Text style={{ fontSize: 16, padding: 10 }}>Edit</Text>
+                  <Text style={{ fontSize: 16, padding: 10 }}>{t('groups_screen.menu_edit')}</Text>
                 </MenuOption>
                 <MenuOption onSelect={() => handleDeleteGroup(groupId, groupName)}>
-                  <Text style={{ color: 'red', fontSize: 16, padding: 10, fontWeight: 'bold' }}>Delete Group (Admin)</Text>
+                  <Text style={{ color: 'red', fontSize: 16, padding: 10, fontWeight: 'bold' }}>{t('groups_screen.menu_delete_admin')}</Text>
                 </MenuOption>
               </>
             )}
             {!isGroupAdmin && isMyGroup && (
               <MenuOption onSelect={() => handleUpdateGroupIcon(groupId)}>
-                <Text style={{ fontSize: 16, padding: 10 }}>Update Group Icon</Text>
+                <Text style={{ fontSize: 16, padding: 10 }}>{t('groups_screen.menu_icon')}</Text>
               </MenuOption>
             )}
             <MenuOption onSelect={() => handleLeaveGroup(groupId, groupName)}>
-              <Text style={{ color: 'red', fontSize: 16, padding: 10 }}>Leave Group</Text>
+              <Text style={{ color: 'red', fontSize: 16, padding: 10 }}>{t('groups_screen.menu_leave')}</Text>
             </MenuOption>
           </MenuOptions>
         </Menu>
       </View>
     );
-  }, [styles, handleOpenGroup, handleLeaveGroup, handleUpdateGroupIcon, handleEditGroup, handleDeleteGroup, handleToggleMute, user?.id, isDarkMode, isAdmin, groups, mutedGroups]);
+  }, [styles, handleOpenGroup, handleLeaveGroup, handleUpdateGroupIcon, handleEditGroup, handleDeleteGroup, handleToggleMute, handleShowGroupInfo, user?.id, isDarkMode, isAdmin]);
 
   const filteredGroups = useMemo(() => {
     if (!Array.isArray(groups)) return [];
@@ -857,7 +864,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
 
       loadAllGroups();
     }
-  }, [activeTab, firestoreDB, appdatabase, allGroupsSearchQuery, filteredGroups]);
+  }, [activeTab, firestoreDB, appdatabase, allGroupsSearchQuery]);
 
   // ✅ Load more groups on scroll
   const loadMoreGroups = useCallback(async () => {
@@ -928,12 +935,12 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
     
     return (
       <View style={{
-        backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF',
+        backgroundColor: isDarkMode ? config.colors.surfaceDark : '#FFFFFF',
         marginBottom: 10,
         borderRadius: 12,
         padding: 14,
         borderWidth: 1,
-        borderColor: isDarkMode ? '#374151' : '#E5E7EB',
+        borderColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
@@ -966,7 +973,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               color: isDarkMode ? '#9CA3AF' : '#6B7280',
               fontFamily: 'Lato-Regular',
             }}>
-              Invited by {item.invitedByDisplayName || 'Someone'}
+              {t('groups_screen.invited_by', { name: item.invitedByDisplayName || t('groups_screen.anonymous') })}
             </Text>
           </View>
         </View>
@@ -976,7 +983,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
             style={{
               flex: 1,
               paddingVertical: 10,
-              backgroundColor: isDarkMode ? '#374151' : '#F3F4F6',
+              backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#F3F4F6',
               borderRadius: 8,
               borderWidth: 1,
               borderColor: isDarkMode ? '#4B5563' : '#E5E7EB',
@@ -988,7 +995,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               fontFamily: 'Lato-Bold',
               fontSize: 13,
               textAlign: 'center',
-            }}>Decline</Text>
+            }}>{t('groups_screen.btn_decline')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => handleAcceptInvitation(item.id, item.groupId)}
@@ -1005,7 +1012,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               fontFamily: 'Lato-Bold',
               fontSize: 13,
               textAlign: 'center',
-            }}>Accept</Text>
+            }}>{t('groups_screen.btn_accept')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1019,12 +1026,12 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
     
     return (
       <View style={{
-        backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF',
+        backgroundColor: isDarkMode ? config.colors.surfaceDark : '#FFFFFF',
         marginBottom: 10,
         borderRadius: 12,
         padding: 14,
         borderWidth: 1,
-        borderColor: isDarkMode ? '#374151' : '#E5E7EB',
+        borderColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
@@ -1052,7 +1059,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               borderRadius: 8,
               backgroundColor: '#4CAF50',
               borderWidth: 2,
-              borderColor: isDarkMode ? '#1F2937' : '#FFFFFF',
+              borderColor: isDarkMode ? config.colors.surfaceDark : '#FFFFFF',
               justifyContent: 'center',
               alignItems: 'center',
             }}>
@@ -1066,14 +1073,14 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               color: isDarkMode ? '#fff' : '#111827',
               marginBottom: 4,
             }} numberOfLines={1} ellipsizeMode="tail">
-              {item.requesterDisplayName || 'Anonymous'}
+              {item.requesterDisplayName || t('groups_screen.anonymous')}
             </Text>
             <Text style={{
               fontSize: 12,
               color: isDarkMode ? '#9CA3AF' : '#6B7280',
               fontFamily: 'Lato-Regular',
             }}>
-              Wants to join "{truncatedGroupName}"
+              {t('groups_screen.wants_to_join', { groupName: truncatedGroupName })}
             </Text>
           </View>
         </View>
@@ -1082,15 +1089,15 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
             onPress={async () => {
               const result = await rejectJoinRequest(firestoreDB, item.id, user.id);
               if (result.success) {
-                showSuccessMessage('Success', 'Join request rejected');
+                showSuccessMessage(t('home.alert.success'), t('groups_screen.reject_success'));
               } else {
-                showErrorMessage('Error', result.error || 'Failed to reject request');
+                showErrorMessage(t('home.alert.error'), result.error || t('groups_screen.reject_failed'));
               }
             }}
             style={{
               flex: 1,
               paddingVertical: 10,
-              backgroundColor: isDarkMode ? '#374151' : '#F3F4F6',
+              backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#F3F4F6',
               borderRadius: 8,
               borderWidth: 1,
               borderColor: isDarkMode ? '#4B5563' : '#E5E7EB',
@@ -1102,15 +1109,15 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               fontFamily: 'Lato-Bold',
               fontSize: 13,
               textAlign: 'center',
-            }}>Reject</Text>
+            }}>{t('groups_screen.btn_reject')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={async () => {
               const result = await approveJoinRequest(firestoreDB, appdatabase, item.id, user.id);
               if (result.success) {
-                showSuccessMessage('Success', 'Join request approved');
+                showSuccessMessage(t('home.alert.success'), t('groups_screen.approve_success'));
               } else {
-                showErrorMessage('Error', result.error || 'Failed to approve request');
+                showErrorMessage(t('home.alert.error'), result.error || t('groups_screen.approve_failed'));
               }
             }}
             style={{
@@ -1126,19 +1133,237 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               fontFamily: 'Lato-Bold',
               fontSize: 13,
               textAlign: 'center',
-            }}>Approve</Text>
+            }}>{t('groups_screen.btn_approve')}</Text>
           </TouchableOpacity>
         </View>
       </View>
     );
   }, [styles, isDarkMode, firestoreDB, appdatabase, user?.id]);
 
+  // ✅ Extracted: memoized renderItem for All Groups FlatList
+  const renderAllGroupItem = useCallback(({ item }) => {
+    const groupId = item.id || item.groupId;
+    const groupName = item.groupName || item.name || 'Group';
+    const groupAvatar = item.groupAvatar || item.avatar || null;
+    const memberCount = item.memberCount || (item.members ? Object.keys(item.members).length : 0) || 0;
+    const createdBy = item.createdBy || null;
+    const description = item.description || null;
+    const truncatedName = truncateGroupName(groupName, 30);
+    const creatorName = createdBy ? (creatorNames[createdBy] || t('groups_screen.creator')) : null;
+
+    // Check if user is already a member
+    const currentGroups = groupsRef.current;
+    const isAlreadyJoined = Array.isArray(currentGroups) && currentGroups.some(g => g.groupId === groupId);
+    // Check if user has a pending join request
+    const hasPendingRequest = myPendingJoinRequests.some(r => r.groupId === groupId);
+
+    return (
+      <View
+        style={{
+          padding: 12,
+          marginHorizontal: 12,
+          marginBottom: 4,
+          backgroundColor: isDarkMode ? config.colors.surfaceDark : '#FFFFFF',
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB',
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+          <Image
+            source={{ uri: groupAvatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              marginRight: 10,
+            }}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={{
+              fontSize: 12,
+              fontFamily: 'Lato-Bold',
+              color: isDarkMode ? '#FFFFFF' : '#111827',
+              marginBottom: 4,
+            }} numberOfLines={1}>
+              {truncatedName}
+            </Text>
+            {createdBy && (
+              <Text style={{
+                fontSize: 10,
+                fontFamily: 'Lato-Regular',
+                color: isDarkMode ? '#9CA3AF' : '#6B7280',
+                marginBottom: 4,
+              }}>
+                {t('groups_screen.created_by', { name: creatorName })}
+              </Text>
+            )}
+            {description && (
+              <Text style={{
+                fontSize: 11,
+                fontFamily: 'Lato-Regular',
+                color: isDarkMode ? '#D1D5DB' : '#4B5563',
+                marginBottom: 4,
+              }} numberOfLines={2}>
+                {description}
+              </Text>
+            )}
+            <Text style={{
+              fontSize: 10,
+              fontFamily: 'Lato-Regular',
+              color: isDarkMode ? '#9CA3AF' : '#6B7280',
+            }}>
+              {memberCount === 1 ? t('groups_screen.member_count_singular', { count: memberCount }) : t('groups_screen.member_count_plural', { count: memberCount })}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'flex-start', marginTop: 2 }}>
+            {isAlreadyJoined ? (
+              <View style={{
+                backgroundColor: isDarkMode ? '#10B981' : '#D1FAE5',
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 6,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <Text style={{
+                  color: isDarkMode ? '#FFFFFF' : '#065F46',
+                  fontSize: 11,
+                  fontFamily: 'Lato-Bold',
+                  letterSpacing: 0.2,
+                }}>
+                  Joined
+                </Text>
+              </View>
+            ) : hasPendingRequest ? (
+              <View style={{
+                backgroundColor: isDarkMode ? '#F59E0B' : '#FEF3C7',
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 6,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <Text style={{
+                  color: isDarkMode ? '#FFFFFF' : '#92400E',
+                  fontSize: 11,
+                  fontFamily: 'Lato-Bold',
+                  letterSpacing: 0.2,
+                }}>
+                  Pending
+                </Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={async () => {
+                  if (!firestoreDB || !user?.id) {
+                    showErrorMessage(t('home.alert.error'), t('groups_screen.req_login'));
+                    return;
+                  }
+                  try {
+                    const result = await sendJoinRequest(
+                      firestoreDB,
+                      groupId,
+                      {
+                        id: user.id,
+                        displayName: user.displayName || t('groups_screen.anonymous'),
+                        avatar: user.avatar || null,
+                      }
+                    );
+                    if (result.success) {
+                      showSuccessMessage(t('home.alert.success'), t('groups_screen.req_sent'));
+                    } else {
+                      showErrorMessage(t('home.alert.error'), result.error || t('groups_screen.req_failed'));
+                    }
+                  } catch (error) {
+                    console.error('Error sending join request:', error);
+                    showErrorMessage(t('home.alert.error'), t('groups_screen.req_failed'));
+                  }
+                }}
+                style={{
+                  backgroundColor: config.colors.primary || '#8B5CF6',
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 6,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 2,
+                  elevation: 2,
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 11,
+                  fontFamily: 'Lato-Bold',
+                  letterSpacing: 0.2,
+                }}>
+                  {t('groups_screen.btn_send_req')}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {isAdmin && (
+              <TouchableOpacity
+                onPress={() => {
+                  Alert.alert(
+                    t('groups_screen.delete_title'),
+                    t('groups_screen.delete_msg', { groupName: groupName || t('groups_screen.group') }),
+                    [
+                      { text: t('groups_screen.btn_cancel'), style: 'cancel' },
+                      {
+                        text: t('groups_screen.btn_delete'),
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            const result = await deleteGroup(firestoreDB, appdatabase, groupId);
+                            if (result.success) {
+                              showSuccessMessage(t('home.alert.success'), t('groups_screen.delete_success'));
+                              setAllGroups((prev) => prev.filter((g) => (g.id || g.groupId) !== groupId));
+                            } else {
+                              showErrorMessage(t('home.alert.error'), result.error || t('groups_screen.delete_failed'));
+                            }
+                          } catch (error) {
+                            console.error('Error deleting group:', error);
+                            showErrorMessage(t('home.alert.error'), t('groups_screen.delete_failed'));
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+                style={{
+                  backgroundColor: '#EF4444',
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 6,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 2,
+                  elevation: 2,
+                }}
+                activeOpacity={0.8}
+              >
+                <Icon name="trash-outline" size={14} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  }, [isDarkMode, creatorNames, myPendingJoinRequests, firestoreDB, appdatabase, user?.id, isAdmin]);
+
   return (
     <View style={styles.container}>
       {/* Tab Bar - Modern & Compact */}
       <View style={{
         flexDirection: 'row',
-        backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6',
+        backgroundColor: isDarkMode ? config.colors.surfaceDark : '#F3F4F6',
         marginHorizontal: 12,
         marginTop: 12,
         marginBottom: 8,
@@ -1170,7 +1395,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               : (isDarkMode ? '#9CA3AF' : '#6B7280'),
             letterSpacing: 0.3,
           }}>
-            Joined Groups
+            {t('groups_screen.tab_joined')}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -1197,7 +1422,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               : (isDarkMode ? '#9CA3AF' : '#6B7280'),
             letterSpacing: 0.3,
           }}>
-            All Groups
+            {t('groups_screen.tab_all')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -1205,9 +1430,9 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
       {/* Pending Join Requests Banner (for groups where user is creator) - Only show in Joined Groups tab */}
       {activeTab === 'joined' && pendingJoinRequests.length > 0 && (
         <View style={{ 
-          backgroundColor: isDarkMode ? '#111827' : '#FFFFFF', 
+          backgroundColor: isDarkMode ? config.colors.surfaceDark : '#FFFFFF', 
           borderBottomWidth: 1, 
-          borderBottomColor: isDarkMode ? '#374151' : '#E5E7EB',
+          borderBottomColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB',
           marginBottom: 8,
           borderRadius: 12,
           marginHorizontal: 12,
@@ -1225,7 +1450,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               alignItems: 'center', 
               justifyContent: 'space-between', 
               padding: 16,
-              backgroundColor: isDarkMode ? '#1F2937' : '#F9FAFB',
+              backgroundColor: isDarkMode ? config.colors.surfaceDark : '#F9FAFB',
               borderTopLeftRadius: 12,
               borderTopRightRadius: 12,
             }}
@@ -1250,14 +1475,14 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                   fontSize: 12,
                   marginBottom: 2,
                 }}>
-                  Join Requests
+                  {t('groups_screen.join_requests')}
                 </Text>
                 <Text style={{ 
                   color: isDarkMode ? '#9CA3AF' : '#6B7280', 
                   fontFamily: 'Lato-Regular', 
                   fontSize: 10,
                 }}>
-                  {pendingJoinRequests.length} pending approval
+                  {t('groups_screen.pending_approval', { count: pendingJoinRequests.length })}
                 </Text>
               </View>
             </View>
@@ -1265,7 +1490,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               width: 28,
               height: 28,
               borderRadius: 12,
-              backgroundColor: isDarkMode ? '#374151' : '#E5E7EB',
+              backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB',
               justifyContent: 'center',
               alignItems: 'center',
             }}>
@@ -1293,9 +1518,9 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
       {/* Pending Invitations Banner - Only show in Joined Groups tab */}
       {activeTab === 'joined' && pendingInvitations.length > 0 && (
         <View style={{ 
-          backgroundColor: isDarkMode ? '#111827' : '#FFFFFF', 
+          backgroundColor: isDarkMode ? config.colors.surfaceDark : '#FFFFFF', 
           borderBottomWidth: 1, 
-          borderBottomColor: isDarkMode ? '#374151' : '#E5E7EB',
+          borderBottomColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB',
           marginBottom: 8,
           borderRadius: 12,
           marginHorizontal: 12,
@@ -1313,7 +1538,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               alignItems: 'center', 
               justifyContent: 'space-between', 
               padding: 16,
-              backgroundColor: isDarkMode ? '#1F2937' : '#F9FAFB',
+              backgroundColor: isDarkMode ? config.colors.surfaceDark : '#F9FAFB',
               borderTopLeftRadius: 12,
               borderTopRightRadius: 12,
             }}
@@ -1338,14 +1563,14 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                   fontSize: 12,
                   marginBottom: 2,
                 }}>
-                  Pending Invitations
+                  {t('groups_screen.pending_invites')}
                 </Text>
                 <Text style={{ 
                   color: isDarkMode ? '#9CA3AF' : '#6B7280', 
                   fontFamily: 'Lato-Regular', 
                   fontSize: 12,
                 }}>
-                  {pendingInvitations.length} waiting for you
+                  {t('groups_screen.waiting_for_you', { count: pendingInvitations.length })}
                 </Text>
               </View>
             </View>
@@ -1353,7 +1578,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               width: 28,
               height: 28,
               borderRadius: 14,
-              backgroundColor: isDarkMode ? '#374151' : '#E5E7EB',
+              backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB',
               justifyContent: 'center',
               alignItems: 'center',
             }}>
@@ -1385,7 +1610,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         // Joined Groups Tab
         filteredGroups.length === 0 && pendingInvitations.length === 0 && pendingJoinRequests.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No groups yet</Text>
+          <Text style={styles.emptyText}>{t('groups_screen.no_groups_yet')}</Text>
         </View>
       ) : (
         <FlatList
@@ -1406,7 +1631,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         ) : allGroups.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>
-              {allGroupsSearchQuery ? 'No groups found' : 'No groups available'}
+              {allGroupsSearchQuery ? t('groups_screen.no_groups_found') : t('groups_screen.no_groups_avail')}
             </Text>
           </View>
         ) : (
@@ -1426,225 +1651,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                 </View>
               ) : null
             }
-            renderItem={({ item }) => {
-              const groupId = item.id || item.groupId;
-              const groupName = item.groupName || item.name || 'Group';
-              const groupAvatar = item.groupAvatar || item.avatar || null;
-              const memberCount = item.memberCount || (item.members ? Object.keys(item.members).length : 0) || 0;
-              const createdBy = item.createdBy || null;
-              const description = item.description || null;
-              const truncatedName = truncateGroupName(groupName, 30);
-              const creatorName = createdBy ? (creatorNames[createdBy] || 'Creator') : null;
-
-              // Check if user is already a member
-              const isAlreadyJoined = filteredGroups.some(g => g.groupId === groupId);
-              // Check if user has a pending join request
-              const hasPendingRequest = myPendingJoinRequests.some(r => r.groupId === groupId);
-
-              return (
-                <View
-                  style={{
-                    padding: 12,
-                    marginHorizontal: 12,
-                    marginBottom: 4,
-                    backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF',
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: isDarkMode ? '#374151' : '#E5E7EB',
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                    <Image
-                      source={{ uri: groupAvatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 20,
-                        marginRight: 10,
-                      }}
-                    />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{
-                        fontSize: 12,
-                        fontFamily: 'Lato-Bold',
-                        color: isDarkMode ? '#FFFFFF' : '#111827',
-                        marginBottom: 4,
-                      }} numberOfLines={1}>
-                        {truncatedName}
-                      </Text>
-                      {createdBy && (
-                        <Text style={{
-                          fontSize: 10,
-                          fontFamily: 'Lato-Regular',
-                          color: isDarkMode ? '#9CA3AF' : '#6B7280',
-                          marginBottom: 4,
-                        }}>
-                          Created by {creatorName}
-                        </Text>
-                      )}
-                      {description && (
-                        <Text style={{
-                          fontSize: 11,
-                          fontFamily: 'Lato-Regular',
-                          color: isDarkMode ? '#D1D5DB' : '#4B5563',
-                          marginBottom: 4,
-                        }} numberOfLines={2}>
-                          {description}
-                        </Text>
-                      )}
-                      <Text style={{
-                        fontSize: 10,
-                        fontFamily: 'Lato-Regular',
-                        color: isDarkMode ? '#9CA3AF' : '#6B7280',
-                      }}>
-                        {memberCount} {memberCount === 1 ? 'member' : 'members'}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 6, alignItems: 'flex-start', marginTop: 2 }}>
-                      {isAlreadyJoined ? (
-                        <View style={{
-                          backgroundColor: isDarkMode ? '#10B981' : '#D1FAE5',
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                          borderRadius: 6,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}>
-                          <Text style={{
-                            color: isDarkMode ? '#FFFFFF' : '#065F46',
-                            fontSize: 11,
-                            fontFamily: 'Lato-Bold',
-                            letterSpacing: 0.2,
-                          }}>
-                            Joined
-                          </Text>
-                        </View>
-                      ) : hasPendingRequest ? (
-                        <View style={{
-                          backgroundColor: isDarkMode ? '#F59E0B' : '#FEF3C7',
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                          borderRadius: 6,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}>
-                          <Text style={{
-                            color: isDarkMode ? '#FFFFFF' : '#92400E',
-                            fontSize: 11,
-                            fontFamily: 'Lato-Bold',
-                            letterSpacing: 0.2,
-                          }}>
-                            Pending
-                          </Text>
-                        </View>
-                      ) : (
-      <TouchableOpacity
-                          onPress={async () => {
-                            // Send join request
-                            if (!firestoreDB || !user?.id) {
-                              showErrorMessage('Error', 'You must be logged in to send a join request');
-                              return;
-                            }
-
-                            try {
-                              const result = await sendJoinRequest(
-                                firestoreDB,
-                                groupId,
-                                {
-                                  id: user.id,
-                                  displayName: user.displayName || 'Anonymous',
-                                  avatar: user.avatar || null,
-                                }
-                              );
-
-                              if (result.success) {
-                                showSuccessMessage('Success', 'Join request sent! The group creator will review it.');
-                              } else {
-                                showErrorMessage('Error', result.error || 'Failed to send join request');
-                              }
-                            } catch (error) {
-                              console.error('Error sending join request:', error);
-                              showErrorMessage('Error', 'Failed to send join request');
-                            }
-                          }}
-        style={{
-          backgroundColor: config.colors.primary || '#8B5CF6',
-                            paddingHorizontal: 10,
-                            paddingVertical: 6,
-                            borderRadius: 6,
-                            alignItems: 'center',
-          justifyContent: 'center',
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 1 },
-                            shadowOpacity: 0.1,
-                            shadowRadius: 2,
-                            elevation: 2,
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={{
-                            color: '#FFFFFF',
-                            fontSize: 11,
-                            fontFamily: 'Lato-Bold',
-                            letterSpacing: 0.2,
-                          }}>
-                            Send Request
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                      {isAdmin && (
-                        <TouchableOpacity
-                          onPress={() => {
-                            Alert.alert(
-                              'Delete Group',
-                              `Are you sure you want to delete "${groupName || 'this group'}"? This action cannot be undone.`,
-                              [
-                                { text: 'Cancel', style: 'cancel' },
-                                {
-                                  text: 'Delete',
-                                  style: 'destructive',
-                                  onPress: async () => {
-                                    try {
-                                      const result = await deleteGroup(firestoreDB, appdatabase, groupId);
-                                      if (result.success) {
-                                        showSuccessMessage('Success', 'Group deleted successfully');
-                                        // Remove from allGroups list
-                                        setAllGroups((prev) => prev.filter((g) => (g.id || g.groupId) !== groupId));
-                                      } else {
-                                        showErrorMessage('Error', result.error || 'Failed to delete group');
-                                      }
-                                    } catch (error) {
-                                      console.error('Error deleting group:', error);
-                                      showErrorMessage('Error', 'Failed to delete group. Please try again.');
-                                    }
-                                  },
-                                },
-                              ]
-                            );
-                          }}
-                          style={{
-                            backgroundColor: '#EF4444',
-                            paddingHorizontal: 10,
-                            paddingVertical: 6,
-                            borderRadius: 6,
-          alignItems: 'center',
-                            justifyContent: 'center',
-          shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 1 },
-                            shadowOpacity: 0.1,
-          shadowRadius: 2,
-                            elevation: 2,
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <Icon name="trash-outline" size={14} color="#FFFFFF" />
-      </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                </View>
-              );
-            }}
+            renderItem={renderAllGroupItem}
             removeClippedSubviews={true}
             maxToRenderPerBatch={10}
             windowSize={10}
@@ -1652,35 +1659,38 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         )
       )}
 
-      {/* FAB Button - Create Group or Add Members (Only show in Joined Groups tab) */}
-      {activeTab === 'joined' && (
+      {/* FAB Button - Create Group */}
       <TouchableOpacity
         onPress={() => setOnlineUsersListVisible(true)}
         style={{
           position: 'absolute',
-          bottom: 20,
+          bottom: Math.max(insets.bottom, 8) + 56 + 20,
           right: 20,
-          width: 36,
-          height: 36,
-          borderRadius: 18,
-          backgroundColor: config.colors.primary || '#8B5CF6',
-          justifyContent: 'center',
+          flexDirection: 'row',
           alignItems: 'center',
-          elevation: 4,
+          gap: 6,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          borderRadius: 28,
+          backgroundColor: config.colors.primary || '#8B5CF6',
+          elevation: 6,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.25,
-          shadowRadius: 2,
+          shadowOpacity: 0.3,
+          shadowRadius: 4,
           zIndex: 1000,
         }}
+        activeOpacity={0.8}
       >
         <Icon 
           name="add" 
-          size={24} 
+          size={22} 
           color="#fff" 
         />
+        <Text style={{ color: '#fff', fontSize: 14, fontFamily: 'Lato-Bold' }}>
+          {t('groups_screen.create_group') || 'Create'}
+        </Text>
       </TouchableOpacity>
-      )}
 
       {/* Online Users List for Group Creation/Adding Members */}
       <OnlineUsersList
@@ -1726,7 +1736,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
           justifyContent: 'flex-end',
         }}>
           <View style={{
-            backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF',
+            backgroundColor: isDarkMode ? config.colors.surfaceDark : '#FFFFFF',
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
             maxHeight: '90%',
@@ -1739,14 +1749,14 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               justifyContent: 'space-between',
               padding: 20,
               borderBottomWidth: 1,
-              borderBottomColor: isDarkMode ? '#374151' : '#E5E7EB',
+              borderBottomColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB',
             }}>
               <Text style={{
                 fontSize: 20,
                 fontFamily: 'Lato-Bold',
                 color: isDarkMode ? '#fff' : '#000',
               }}>
-                Group Information
+                {t('groups_screen.info_title')}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -1766,7 +1776,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
             ) : selectedGroupInfo ? (
               <ScrollView 
                 style={{ flex: 1 }} 
-                contentContainerStyle={{ flexGrow: 1, paddingBottom: 20 }}
+                contentContainerStyle={{ flexGrow: 1, paddingBottom: 180 }}
                 showsVerticalScrollIndicator={false}
               >
                 <View style={{ padding: 20 }}>
@@ -1804,12 +1814,12 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                       color: isDarkMode ? '#9CA3AF' : '#6B7280',
                       marginBottom: 8,
                     }}>
-                      Description
+                      {t('groups_screen.info_desc')}
                     </Text>
                     <Text style={{
                       fontSize: 15,
                       fontFamily: 'Lato-Regular',
-                      color: isDarkMode ? '#E5E7EB' : '#374151',
+                      color: isDarkMode ? '#E5E7EB' : config.colors.surfaceElevatedDark,
                       lineHeight: 22,
                     }}>
                       {selectedGroupInfo.description || 'No description'}
@@ -1823,7 +1833,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                       alignItems: 'center',
                       marginBottom: 24,
                       padding: 12,
-                      backgroundColor: isDarkMode ? '#111827' : '#F9FAFB',
+                      backgroundColor: isDarkMode ? config.colors.surfaceDark : '#F9FAFB',
                       borderRadius: 12,
                     }}>
                       <Image
@@ -1845,7 +1855,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                           color: isDarkMode ? '#9CA3AF' : '#6B7280',
                           marginBottom: 4,
                         }}>
-                          Created by
+                          {t('groups_screen.info_created_by')}
                         </Text>
                         <Text style={{
                           fontSize: 16,
@@ -1867,12 +1877,12 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                         color: isDarkMode ? '#9CA3AF' : '#6B7280',
                         marginBottom: 8,
                       }}>
-                        Created on
+                        {t('groups_screen.info_created_on')}
                       </Text>
                       <Text style={{
                         fontSize: 15,
                         fontFamily: 'Lato-Regular',
-                        color: isDarkMode ? '#E5E7EB' : '#374151',
+                        color: isDarkMode ? '#E5E7EB' : config.colors.surfaceElevatedDark,
                       }}>
                         {new Date(selectedGroupInfo.createdAt).toLocaleDateString('en-US', {
                           year: 'numeric',
@@ -1889,7 +1899,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                       flexDirection: 'row',
                       alignItems: 'center',
                       padding: 16,
-                      backgroundColor: isDarkMode ? '#111827' : '#F9FAFB',
+                      backgroundColor: isDarkMode ? config.colors.surfaceDark : '#F9FAFB',
                       borderRadius: 12,
                     }}>
                       <Icon 
@@ -1905,14 +1915,14 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                           color: isDarkMode ? '#9CA3AF' : '#6B7280',
                           marginBottom: 4,
                         }}>
-                          Members
+                          {t('groups_screen.info_members')}
                         </Text>
                         <Text style={{
                           fontSize: 18,
                           fontFamily: 'Lato-Bold',
                           color: isDarkMode ? '#fff' : '#000',
                         }}>
-                          {selectedGroupInfo.memberCount || 0} {selectedGroupInfo.memberCount === 1 ? 'member' : 'members'}
+                          {selectedGroupInfo.memberCount === 1 ? t('groups_screen.member_count_singular', { count: selectedGroupInfo.memberCount || 0 }) : t('groups_screen.member_count_plural', { count: selectedGroupInfo.memberCount || 0 })}
                         </Text>
                       </View>
                     </View>
@@ -1926,7 +1936,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                   fontFamily: 'Lato-Regular',
                   color: isDarkMode ? '#9CA3AF' : '#6B7280',
                 }}>
-                  No group information available
+                  {t('groups_screen.info_no_avail')}
                 </Text>
               </View>
             )}
@@ -1943,7 +1953,7 @@ const getStyles = (isDarkMode) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDarkMode ? '#121212' : '#f2f2f7',
+      backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f2f2f7',
     },
     itemContainer: {
       flex: 1,

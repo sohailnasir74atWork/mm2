@@ -1,5 +1,6 @@
-import { getDatabase, ref, update, get, set, onDisconnect, query, orderByChild, equalTo, limitToLast } from '@react-native-firebase/database';
+import { getDatabase, ref, update, get, set, onDisconnect, onValue, query, orderByChild, equalTo, limitToLast } from '@react-native-firebase/database';
 import { Alert } from 'react-native';
+import { useState, useEffect } from 'react';
 
 // Initialize the database reference
 const database = getDatabase();
@@ -584,3 +585,85 @@ export const unbanUserWithEmail = async (email, showAlert = true) => {
     return false;
   }
 };
+
+// ========== Real-time Online Status ==========
+
+/**
+ * Real-time online status hook — uses onValue listener on presence/{userId}.
+ * Unlike isUserOnline() which is a one-shot get(), this updates live
+ * when the user goes online/offline.
+ */
+export const useOnlineStatus = (userId) => {
+  const [isOnline, setIsOnline] = useState(false);
+
+  useEffect(() => {
+    if (!userId) {
+      setIsOnline(false);
+      return;
+    }
+
+    const presenceRef = ref(getDatabase(), `presence/${userId}`);
+    const unsubscribe = onValue(presenceRef, (snapshot) => {
+      setIsOnline(snapshot.val() === true);
+    }, (error) => {
+      console.error('useOnlineStatus listener error:', error);
+      setIsOnline(false);
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [userId]);
+
+  return isOnline;
+};
+
+// ========== Read Receipts (lastRead) ==========
+
+/**
+ * Update lastRead timestamp for the current user in a private chat.
+ * Called when user enters or is actively viewing the chat.
+ */
+export const updateLastRead = async (chatKey, userId) => {
+  if (!chatKey || !userId) return;
+
+  try {
+    const db = getDatabase();
+    const lastReadRef = ref(db, `private_messages/${chatKey}/lastRead/${userId}`);
+    await set(lastReadRef, Date.now());
+  } catch (error) {
+    console.warn('updateLastRead error:', error?.message);
+  }
+};
+
+/**
+ * Hook: listen to the OTHER user's lastRead timestamp.
+ * Returns a timestamp (number) or 0 if not yet read.
+ */
+export const useOtherLastRead = (chatKey, otherUserId) => {
+  const [lastRead, setLastRead] = useState(0);
+
+  useEffect(() => {
+    if (!chatKey || !otherUserId) {
+      setLastRead(0);
+      return;
+    }
+
+    const db = getDatabase();
+    const lastReadRef = ref(db, `private_messages/${chatKey}/lastRead/${otherUserId}`);
+
+    const unsubscribe = onValue(lastReadRef, (snapshot) => {
+      setLastRead(snapshot.exists() ? (Number(snapshot.val()) || 0) : 0);
+    }, (error) => {
+      console.warn('useOtherLastRead listener error:', error?.message);
+      setLastRead(0);
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [chatKey, otherUserId]);
+
+  return lastRead;
+};
+

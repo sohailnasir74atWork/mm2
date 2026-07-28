@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, FlatList, TextInput, Image, Pressable, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, FlatList, TextInput, Image, Pressable, Platform, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import ViewShot from 'react-native-view-shot';
 import { useGlobalState } from '../GlobelStats';
@@ -18,10 +20,11 @@ import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
 import Share from 'react-native-share';
 import ShareTradeModal from '../Trades/ShareTradeModal';
+import TradeCompletion from '../Engagement/TradeCompletion';
 import { addDoc, collection, serverTimestamp, doc, getDoc, setDoc } from '@react-native-firebase/firestore';
 import SubscriptionScreen from '../SettingScreen/OfferWall';
 
-const GRID_STEPS = [9, 12, 15, 18];
+const GRID_STEPS = [4, 8, 12, 16];
 
 const createEmptySlots = (count) => Array(count).fill(null);
 
@@ -45,30 +48,22 @@ const getTradeStatus = (hasTotal, wantsTotal) => {
   return 'fair';
 };
 
-// ✅ Format values with K, M, T abbreviations
+// ✅ Format values as simple numbers with commas
 const formatValue = (value) => {
-  if (!value || value === 0) return '0';
+  if (value === null || value === undefined || value === 0) return '0';
   const numValue = Number(value);
-  
-  if (numValue >= 1_000_000_000_000) {
-    return `${(numValue / 1_000_000_000_000).toFixed(1)}T`; // Trillions
-  } else if (numValue >= 1_000_000_000) {
-    return `${(numValue / 1_000_000_000).toFixed(1)}B`; // Billions
-  } else if (numValue >= 1_000_000) {
-    return `${(numValue / 1_000_000).toFixed(1)}M`; // Millions
-  } else if (numValue >= 1_000) {
-    return `${(numValue / 1_000).toFixed(1)}K`; // Thousands
-  } else {
-    return numValue.toLocaleString(); // Default formatting for numbers < 1000
-  }
+  if (isNaN(numValue)) return '0';
+  // Show fractional values as-is (e.g. 0.33), integers with commas (e.g. 500,000,000)
+  if (numValue % 1 !== 0) return numValue.toFixed(2).replace(/\.?0+$/, '');
+  return numValue.toLocaleString();
 };
 
 const HomeScreen = ({ selectedTheme }) => {
-  const { theme, user, firestoreDB, single_offer_wall } = useGlobalState();
+  const { theme, user, firestoreDB, appdatabase, single_offer_wall, reload } = useGlobalState();
   const tradesCollection = collection(firestoreDB, 'trades_new');
   const [gridStepIndex, setGridStepIndex] = useState(0); // 0 -> 9, 1 -> 12, 2 -> 15, 3 -> 18
-const [hasItems, setHasItems] = useState(() => createEmptySlots(GRID_STEPS[0]));
-const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0]));
+  const [hasItems, setHasItems] = useState(() => createEmptySlots(GRID_STEPS[0]));
+  const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0]));
 
   const [fruitRecords, setFruitRecords] = useState([]);
   const [selectedPetType, setSelectedPetType] = useState('INVENTORY');
@@ -80,10 +75,12 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
   const [wantsTotal, setWantsTotal] = useState(0);
   const { triggerHapticFeedback } = useHaptic();
   const { localState, updateLocalState } = useLocalState();
+  const navigation = useNavigation();
   const [modalVisible, setModalVisible] = useState(false);
   const [description, setDescription] = useState('');
   const [isSigninDrawerVisible, setIsSigninDrawerVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showTradeCompletion, setShowTradeCompletion] = useState(false);
   const { language } = useLanguage();
   const [lastTradeTime, setLastTradeTime] = useState(null);
   const [adShowen, setadShowen] = useState(false);
@@ -92,6 +89,8 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
   const platform = Platform.OS.toLowerCase();
   const { t } = useTranslation();
   const isDarkMode = theme === 'dark';
+  const insets = useSafeAreaInsets();
+  const bannerBottomPos = 0; // tab bar is docked (in layout flow), so screen bottom == tab bar top; banner sits flush above it
   const viewRef = useRef();
   // ✅ Add refs to track timeouts and animation frames for cleanup
   const timeoutRefs = useRef({});
@@ -102,6 +101,8 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
   const [isShareModalVisible, setIsShareModalVisible] = useState(false);
   const [debouncedSearchText, setDebouncedSearchText] = useState(searchText);
   const [showofferwall, setShowofferwall] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdatedTime, setLastUpdatedTime] = useState(new Date());
 
   // ✅ Cleanup all timeouts and animation frames on unmount
   useEffect(() => {
@@ -121,6 +122,36 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
     };
   }, []);
 
+  // ✅ Format last updated time as relative string
+  const getLastUpdatedText = useCallback(() => {
+    const now = new Date();
+    const diffMs = now - lastUpdatedTime;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    if (diffMins < 1) return t('home.just_now', { defaultValue: 'just now' });
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return lastUpdatedTime.toLocaleDateString();
+  }, [lastUpdatedTime, t]);
+
+  // ✅ Hard refresh values - reloads data from CDN
+  const handleRefresh = useCallback(async () => {
+    if (refreshing || !isMountedRef.current) return;
+    triggerHapticFeedback('impactLight');
+    setRefreshing(true);
+    try {
+      await reload();
+      if (!isMountedRef.current) return;
+      setLastUpdatedTime(new Date());
+      showSuccessMessage(t('home.alert.success'), t('home.alert.values_reloaded', { defaultValue: 'Values updated!' }));
+    } catch (error) {
+      console.error('Error refreshing values:', error);
+      if (!isMountedRef.current) return;
+      showErrorMessage(t('home.alert.error'), t('home.alert.reload_error', { defaultValue: 'Failed to refresh' }));
+    } finally {
+      if (isMountedRef.current) setRefreshing(false);
+    }
+  }, [reload, refreshing, triggerHapticFeedback, t]);
 
 
   // ✅ MM2 Categories
@@ -169,7 +200,7 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
     setHasItems(createEmptySlots(GRID_STEPS[0]));
     setWantsItems(createEmptySlots(GRID_STEPS[0]));
   }, [triggerHapticFeedback]);
-  
+
 
   // ✅ MM2 image URL generation
   const getImageUrl = useCallback((item) => {
@@ -208,22 +239,22 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
     (nextHasItems, nextWantsItems) => {
       const currentSize = GRID_STEPS[gridStepIndex];
       const maxStepIndex = GRID_STEPS.length - 1;
-  
+
       const hasCount = nextHasItems.filter(Boolean).length;
       const wantsCount = nextWantsItems.filter(Boolean).length;
-  
+
       // Already at max (18 slots per side)
       if (gridStepIndex === maxStepIndex) {
         setHasItems(nextHasItems);
         setWantsItems(nextWantsItems);
         return;
       }
-  
+
       // If either side filled all current slots -> grow to next step
       if (hasCount >= currentSize || wantsCount >= currentSize) {
         const nextSize = GRID_STEPS[gridStepIndex + 1];
         const diff = nextSize - currentSize;
-  
+
         setGridStepIndex((prev) => prev + 1);
         setHasItems([...nextHasItems, ...createEmptySlots(diff)]);
         setWantsItems([...nextWantsItems, ...createEmptySlots(diff)]);
@@ -234,39 +265,39 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
     },
     [gridStepIndex]
   );
-  
+
 
   const selectItem = useCallback(
     (item) => {
       if (!item || !selectedSection) return;
-  
+
       triggerHapticFeedback('impactLight');
-  
+
       // ✅ MM2: Use Value directly (no modifiers needed)
       const value = Number(item.Value || 0);
-  
+
       const selectedItem = {
         ...item,
         selectedValue: value,
         Value: value,
       };
-  
+
       // Work on copies of both sides so we can decide expansion
       const nextHasItems = [...hasItems];
       const nextWantsItems = [...wantsItems];
-  
+
       const targetArray =
         selectedSection === 'has' ? nextHasItems : nextWantsItems;
-  
+
       let nextEmptyIndex = targetArray.indexOf(null);
-  
+
       // No empty slot left even at 18 → do nothing
       if (nextEmptyIndex === -1) {
         return;
       }
-  
+
       targetArray[nextEmptyIndex] = selectedItem;
-  
+
       // Update totals for the side we modified
       updateTotal(
         selectedItem,
@@ -274,10 +305,10 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
         true,
         true
       );
-  
+
       // This will also expand 9→12→15→18 if needed
       maybeExpandGrid(nextHasItems, nextWantsItems);
-  
+
       setIsDrawerVisible(false);
     },
     [
@@ -289,12 +320,12 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
       maybeExpandGrid,
     ]
   );
-  
+
 
   const handleCellPress = useCallback((index, isHas) => {
     const items = isHas ? hasItems : wantsItems;
 
-    const callbackfunction = () => {};
+    const callbackfunction = () => { };
 
     if (items[index]) {
       triggerHapticFeedback('impactLight');
@@ -322,17 +353,17 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
 
       rafRefs.current[rafKey1] = requestAnimationFrame(() => {
         if (!isMountedRef.current) return;
-        
+
         timeoutRefs.current[timeoutKey1] = setTimeout(() => {
           if (!isMountedRef.current) return;
-          
+
           if (!adShowen && index === 1 && !localState.isPro && !isHas) {
             rafRefs.current[rafKey2] = requestAnimationFrame(() => {
               if (!isMountedRef.current) return;
-              
+
               timeoutRefs.current[timeoutKey2] = setTimeout(() => {
                 if (!isMountedRef.current) return;
-                
+
                 try {
                   callbackfunction();
                 } catch (err) {
@@ -365,18 +396,18 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
       name: itemName,
       id: item.id,
     };
-    
+
     const isFavorite = currentFavorites.some(
-      fav => (fav.id && fav.id === item.id) || 
-             (fav.name && fav.name.toLowerCase() === itemName.toLowerCase())
+      fav => (fav.id && fav.id === item.id) ||
+        (fav.name && fav.name.toLowerCase() === itemName.toLowerCase())
     );
 
     let newFavorites;
     if (isFavorite) {
       // Remove by matching id or name
       newFavorites = currentFavorites.filter(
-        fav => !((fav.id && fav.id === item.id) || 
-                 (fav.name && fav.name.toLowerCase() === itemName.toLowerCase()))
+        fav => !((fav.id && fav.id === item.id) ||
+          (fav.name && fav.name.toLowerCase() === itemName.toLowerCase()))
       );
     } else {
       newFavorites = [...currentFavorites, favoriteIdentifier];
@@ -390,21 +421,31 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
   const filteredData = useMemo(() => {
     let list;
     if (selectedPetType === 'INVENTORY') {
-      // ✅ Match favorite identifiers with current fruitRecords to get latest data
-      const favoriteIdentifiers = localState.favorites || [];
-      list = favoriteIdentifiers
-        .map(favIdentifier => {
-          // Find matching item in fruitRecords by id or name
+      // ✅ INVENTORY = the user's My Stuff list (same list as MyStuffScreen /
+      // Firestore reviews doc, mirrored in localState) — one list everywhere.
+      const myItems = localState.ownedPets || [];
+      const seen = new Set();
+      list = myItems
+        .map(owned => {
+          // Match saved items with current fruitRecords to get latest values
           const foundItem = fruitRecords.find(
             item => item && (
-              (favIdentifier.id && item.id === favIdentifier.id) ||
-              (favIdentifier.name && item.name && 
-               item.name.toLowerCase() === favIdentifier.name.toLowerCase())
+              (owned.id && item.id === owned.id) ||
+              (owned.name && item.name &&
+                item.name.toLowerCase() === owned.name.toLowerCase())
             )
           );
           return foundItem || null;
         })
-        .filter(Boolean); // Remove nulls (items that no longer exist)
+        .filter(Boolean)
+        .filter(item => {
+          // Dedupe (users can own the same item twice) — the calc grid adds
+          // per-tap anyway, so one row per distinct item is what we want.
+          const k = (item.name || '').toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
     } else {
       list = fruitRecords;
     }
@@ -412,10 +453,10 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
       .filter(item => {
         if (!item) return false;
         const matchesSearch = item.name?.toLowerCase().includes(debouncedSearchText.toLowerCase());
-        const matchesType = selectedPetType === 'INVENTORY' || 
-                           selectedPetType === 'ALL' || 
-                           selectedPetType.toLowerCase() === item.Category?.toLowerCase() ||
-                           selectedPetType.toLowerCase() === item.type?.toLowerCase();
+        const matchesType = selectedPetType === 'INVENTORY' ||
+          selectedPetType === 'ALL' ||
+          selectedPetType.toLowerCase() === item.Category?.toLowerCase() ||
+          selectedPetType.toLowerCase() === item.type?.toLowerCase();
         return matchesSearch && matchesType;
       })
       .sort((a, b) => (b.Value || 0) - (a.Value || 0));
@@ -423,7 +464,7 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
     fruitRecords,
     debouncedSearchText,
     selectedPetType,
-    localState.favorites,
+    localState.ownedPets,
   ]);
   // ✅ MM2: Removed badge handlers - MM2 doesn't use badges
 
@@ -436,7 +477,7 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
     const handleAddToCalculator = () => {
       if (!selectedSection) return;
       triggerHapticFeedback('impactLight');
-      
+
       const selectedItem = {
         ...item,
         selectedValue: currentValue,
@@ -469,7 +510,7 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
               <Image source={{ uri: imageUrl }} style={styles.favoriteItemImage} />
             ) : (
               <View style={[styles.favoriteItemImage, { backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : config.colors.dividerLight, justifyContent: 'center', alignItems: 'center' }]}>
-              <Icon name="image-outline" size={18} color={isDarkMode ? config.colors.textTertiaryDark : config.colors.textTertiaryLight} />
+                <Icon name="image-outline" size={18} color={isDarkMode ? config.colors.textTertiaryDark : config.colors.textTertiaryLight} />
               </View>
             )}
           </View>
@@ -502,10 +543,10 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
   const renderGridItem = useCallback(({ item }) => {
     const imageUrl = getImageUrl(item);
     const isFavorite = (localState.favorites || []).some(
-      fav => (fav.id && fav.id === item.id) || 
-             (fav.name && fav.name.toLowerCase() === (item.name || item.Name)?.toLowerCase())
+      fav => (fav.id && fav.id === item.id) ||
+        (fav.name && fav.name.toLowerCase() === (item.name || item.Name)?.toLowerCase())
     );
-    
+
     return (
       <TouchableOpacity
         style={styles.gridItem}
@@ -529,24 +570,30 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
             <Icon name="image-outline" size={30} color={isDarkMode ? config.colors.textTertiaryDark : config.colors.textTertiaryLight} />
           </View>
         )}
-      <Text numberOfLines={1} style={styles.gridItemText}>
-        {item.name || item.Name}
-      </Text>
-      {isAddingToFavorites && (
-        <TouchableOpacity
-          style={styles.favoriteButton}
-          activeOpacity={0.8}
-          onPress={() => {
-            toggleFavorite(item);
-          }}
-        >
-          <Icon
-            name={isFavorite ? "heart" : "heart-outline"}
-            size={20}
-            color={isFavorite ? "#e74c3c" : "#666"}
-          />
-        </TouchableOpacity>
-      )}
+        <Text numberOfLines={1} style={styles.gridItemText}>
+          {item.name || item.Name}
+        </Text>
+        <Text numberOfLines={1} style={styles.gridItemValue}>
+          {formatValue(item.Value || item.value || 0)}
+        </Text>
+        {item.demand != null && item.demand !== 'N/A' && (
+          <Text style={styles.gridItemDemand}>{item.demand}/10</Text>
+        )}
+        {isAddingToFavorites && (
+          <TouchableOpacity
+            style={styles.favoriteButton}
+            activeOpacity={0.8}
+            onPress={() => {
+              toggleFavorite(item);
+            }}
+          >
+            <Icon
+              name={isFavorite ? "heart" : "heart-outline"}
+              size={20}
+              color={isFavorite ? "#e74c3c" : "#666"}
+            />
+          </TouchableOpacity>
+        )}
       </TouchableOpacity>
     );
   }, [selectItem, toggleFavorite, localState.favorites, isAddingToFavorites, isDarkMode, getImageUrl]);
@@ -554,35 +601,40 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
   // Update renderFavoritesHeader function
   const renderFavoritesHeader = useCallback(() => {
     if (selectedPetType === 'INVENTORY') {
+      const count = (localState.ownedPets || []).length;
       return (
         <View style={styles.favoritesHeader}>
-          <Text style={styles.favoritesTitle}>My Inventory</Text>
+          <Text style={styles.favoritesTitle}>{t('home.my_inventory')}{count > 0 ? ` (${count})` : ''}</Text>
         </View>
       );
     }
     return null;
-  }, [selectedPetType]);
+  }, [selectedPetType, localState.ownedPets]);
 
   // Update renderFavoritesFooter function
   const renderFavoritesFooter = useCallback(() => {
     if (selectedPetType === 'INVENTORY') {
+      // INVENTORY is managed in My Stuff (one list everywhere) — the CTA
+      // routes there instead of the old separate in-calculator favorites.
+      const hasItems = (localState.ownedPets || []).length > 0;
       return (
         <View style={styles.badgeContainer}>
           <TouchableOpacity
             style={styles.addToFavoritesButton}
             onPress={() => {
-              setIsAddingToFavorites(true);
-              setSelectedPetType('ALL');
+              requestAnimationFrame(() => navigation.navigate('MyStuff'));
             }}
           >
-            <Icon name="add-circle" size={30} color={config.colors.hasBlockGreen} />
-            <Text style={styles.addToFavoritesText}>Add Items to Inventory</Text>
+            <Icon name={hasItems ? 'create-outline' : 'add-circle'} size={26} color={config.colors.hasBlockGreen} />
+            <Text style={styles.addToFavoritesText}>
+              {hasItems ? t('home.manage_my_stuff', 'Manage My Stuff') : t('home.add_items_my_stuff', 'Add items in My Stuff')}
+            </Text>
           </TouchableOpacity>
         </View>
       );
     }
     return null;
-  }, [selectedPetType]);
+  }, [selectedPetType, localState.ownedPets, navigation]);
 
   // Memoize key extractor
   const keyExtractor = useCallback((item, index) =>
@@ -619,6 +671,10 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
             const cleanedValue = String(item.value).replace(/,/g, '');
             const numericValue = !isNaN(cleanedValue) ? Number(cleanedValue) : null;
 
+            // ✅ Parse demand score (numeric like "5", "6.5", or "N/A")
+            const demandRaw = item.demand;
+            const demandNum = demandRaw && demandRaw !== 'N/A' ? Number(demandRaw) : null;
+
             items.push({
               Name: item.name,
               name: item.name,
@@ -632,6 +688,8 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
               tier: tier,
               type: category.trim(), // For compatibility with existing code
               id: `${category}-${tier}-${item.name}`, // Generate unique ID
+              demand: demandNum, // ✅ Demand score (numeric or null)
+              rarity: item.rarity || null,
             });
           }
         }
@@ -648,24 +706,17 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
 
     const parseAndSetData = async () => {
       try {
-        const source = localState.data;
-
-        if (!source) {
-          if (isMounted) setFruitRecords([]);
-          return;
-        }
-
-        const parsed = typeof source === 'string' ? JSON.parse(source) : source;
-
-        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
-          // ✅ MM2 data structure: {category: {tier: [items]}}
-          const extracted = extractMM2Values(parsed);
-          if (isMounted) {
-            setFruitRecords(extracted);
+        const parseSource = (raw) => {
+          if (!raw) return [];
+          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+            return extractMM2Values(parsed);
           }
-        } else {
-          if (isMounted) setFruitRecords([]);
-        }
+          return [];
+        };
+
+        const items = [...parseSource(localState.data), ...parseSource(localState.suprime)];
+        if (isMounted) setFruitRecords(items);
       } catch (err) {
         console.error("❌ Error parsing data in HomeScreen:", err);
         if (isMounted) setFruitRecords([]);
@@ -677,7 +728,7 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
     return () => {
       isMounted = false;
     };
-  }, [localState.data, extractMM2Values]);
+  }, [localState.data, localState.suprime, extractMM2Values]);
 
   // console.log(filteredData.length)
 
@@ -696,7 +747,7 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
     const timeoutKey = `createTrade_${Date.now()}`;
     timeoutRefs.current[timeoutKey] = setTimeout(() => {
       if (!isMountedRef.current) return;
-      
+
       const hasItemsCount = hasItems.filter(Boolean).length;
       const wantsItemsCount = wantsItems.filter(Boolean).length;
 
@@ -720,10 +771,10 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
       // ✅ FIRESTORE ONLY: Read rating summary from user_ratings_summary (single source of truth)
       let userRating = null;
       let ratingCount = 0;
-      
+
       if (firestoreDB && user?.id) {
         const summaryDocSnap = await getDoc(doc(firestoreDB, 'user_ratings_summary', user.id));
-        if (summaryDocSnap.exists) {
+        if (summaryDocSnap.exists()) {
           const summaryData = summaryDocSnap.data();
           userRating = summaryData.averageRating || null;
           ratingCount = summaryData.count || 0;
@@ -733,11 +784,11 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
           const database = getDatabase();
           const avgRatingSnap = await ref(database, `averageRatings/${user.id}`).once('value');
           const avgRatingData = avgRatingSnap.val();
-          
+
           if (avgRatingData) {
             userRating = avgRatingData.value || null;
             ratingCount = avgRatingData.count || 0;
-            
+
             // ✅ ONE-TIME MIGRATION: Copy to Firestore (async, don't wait)
             if (userRating || ratingCount > 0) {
               setDoc(
@@ -765,12 +816,12 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
       const mapTradeItem = item => {
         // ✅ Prioritize Image (full URL) over image (relative path) for old app compatibility
         let imageUrl = item.Image || item.image || '';
-        
+
         // ✅ If we have a relative path, convert it to full URL (for backward compatibility)
         if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
           imageUrl = `https://mm2values.com/${imageUrl}`;
         }
-        
+
         return {
           name: item.name || item.Name,
           type: item.type || item.Category || item.Type,
@@ -781,11 +832,11 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
           deprecatedName: item.deprecatedName || item.deprecated_name || null,
         };
       };
-      
+
       // ✅ Calculate trade status and convert to single letter: 'w' (win), 'l' (lose), 'f' (fair)
       const tradeStatus = getTradeStatus(hasTotal, wantsTotal);
       const statusLetter = tradeStatus === 'win' ? 'w' : tradeStatus === 'lose' ? 'l' : 'f';
-      
+
       const newTrade = {
         userId: user?.id || "Anonymous",
         traderName: user?.displayName || "Anonymous",
@@ -810,14 +861,14 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
 
 
       };
-      
+
       // ✅ 2-minute cooldown check (using Date.now() for accurate comparison)
       const COOLDOWN_MS = 120000; // 2 minutes
       if (lastTradeTime && (now - lastTradeTime) < COOLDOWN_MS) {
         const secondsLeft = Math.ceil((COOLDOWN_MS - (now - lastTradeTime)) / 1000);
         const minutesLeft = Math.floor(secondsLeft / 60);
         const remainingSeconds = secondsLeft % 60;
-        const timeMessage = minutesLeft > 0 
+        const timeMessage = minutesLeft > 0
           ? `${minutesLeft} minute${minutesLeft === 1 ? '' : 's'} and ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'}`
           : `${secondsLeft} second${secondsLeft === 1 ? '' : 's'}`;
         showErrorMessage(t("home.alert.error"), `Please wait ${timeMessage} before creating a new trade.`);
@@ -826,7 +877,7 @@ const [wantsItems, setWantsItems] = useState(() => createEmptySlots(GRID_STEPS[0
       }
 
 
-await addDoc(tradesCollection, newTrade);
+      await addDoc(tradesCollection, newTrade);
       // Step 1: Close modal first
       setModalVisible(false);
 
@@ -853,18 +904,18 @@ await addDoc(tradesCollection, newTrade);
       // Step 5: Wait for next frame (modal animation finish) then delay for iOS
       rafRefs.current[rafKey1] = requestAnimationFrame(() => {
         if (!isMountedRef.current) return;
-        
+
         // Wait for modal animation to finish before showing ad
         timeoutRefs.current[timeoutKey1] = setTimeout(() => {
           if (!isMountedRef.current) return;
-          
+
           if (!localState.isPro) {
             rafRefs.current[rafKey2] = requestAnimationFrame(() => {
               if (!isMountedRef.current) return;
-              
+
               timeoutRefs.current[timeoutKey2] = setTimeout(() => {
                 if (!isMountedRef.current) return;
-                
+
                 try {
                   InterstitialAdManager.showAd(callbackfunction);
                 } catch (err) {
@@ -891,6 +942,51 @@ await addDoc(tradesCollection, newTrade);
     }
   }, [isSubmitting, user, localState.isPro, hasItems, wantsItems, description, type, lastTradeTime, tradesCollection, t, resetState]);
 
+  // ── Open the Log Trade sheet ──
+  // Unlike "Create Trade" this posts nothing public — TradeCompletion records
+  // the trade in the journal that My Stuff → History reads back.
+  const handleLogTradePress = useCallback(() => {
+    if (!user?.id) {
+      setIsSigninDrawerVisible(true);
+      return;
+    }
+    const filled = hasItems.filter(Boolean).length + wantsItems.filter(Boolean).length;
+    if (filled === 0) {
+      showErrorMessage(t("home.alert.error"), t("home.alert.missing_items_error"));
+      return;
+    }
+    setShowTradeCompletion(true);
+  }, [user?.id, hasItems, wantsItems, t]);
+
+  // Fired when the sheet closes. `didSave` is false on a plain dismissal, in
+  // which case the calculator is left exactly as the user had it.
+  const handleTradeLogged = useCallback((didSave) => {
+    setShowTradeCompletion(false);
+    if (!didSave) return;
+    resetState();
+    mixpanel.track("Trade Logged", { user: user?.id, result: tradeStatus });
+
+    const callbackfunction = () => {
+      if (!isMountedRef.current) return;
+      showSuccessMessage(
+        '📋 ' + t('home.trade_logged', { defaultValue: 'Trade Logged!' }),
+        t('home.trade_logged_message', { defaultValue: 'Saved to your Trade Journal.' })
+      );
+    };
+
+    // Same monetization beat as Create Trade — interstitial, then the toast.
+    if (!localState.isPro) {
+      try {
+        InterstitialAdManager.showAd(callbackfunction);
+      } catch (err) {
+        console.warn('[AdManager] Failed to show ad:', err);
+        callbackfunction();
+      }
+    } else {
+      callbackfunction();
+    }
+  }, [user?.id, tradeStatus, localState.isPro, t, resetState]);
+
   const handleShareTrade = useCallback(() => {
     const hasItemsCount = hasItems.filter(Boolean).length;
     const wantsItemsCount = wantsItems.filter(Boolean).length;
@@ -907,7 +1003,7 @@ await addDoc(tradesCollection, newTrade);
   const isProfit = profitLoss >= 0;
   const neutral = profitLoss === 0;
 
-  const  isGG = localState.isGG
+  const isGG = localState.isGG
 
   const styles = useMemo(() => getStyles(isDarkMode, isGG), [isDarkMode, isGG]);
 
@@ -919,41 +1015,56 @@ await addDoc(tradesCollection, newTrade);
     wantsItems.reduce((lastIndex, item, index) => (item ? index : lastIndex), -1)
     , [wantsItems]);
 
+  // ✅ Aggregate demand for each side
+  const hasAvgDemand = useMemo(() => {
+    const items = hasItems.filter(i => i && i.demand != null && typeof i.demand === 'number');
+    if (items.length === 0) return null;
+    const avg = Math.min(10, items.reduce((sum, i) => sum + i.demand, 0) / items.length);
+    return avg % 1 === 0 ? avg.toFixed(0) : avg.toFixed(1);
+  }, [hasItems]);
+
+  const wantsAvgDemand = useMemo(() => {
+    const items = wantsItems.filter(i => i && i.demand != null && typeof i.demand === 'number');
+    if (items.length === 0) return null;
+    const avg = Math.min(10, items.reduce((sum, i) => sum + i.demand, 0) / items.length);
+    return avg % 1 === 0 ? avg.toFixed(0) : avg.toFixed(1);
+  }, [wantsItems]);
+
   return (
     <>
       <GestureHandlerRootView>
         <View style={styles.container} key={language}>
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: bannerBottomPos + 80 }}>
             <ViewShot ref={viewRef} style={styles.screenshotView}>
               {config.isNoman && (
                 <View style={styles.summaryContainer}>
                   <View style={styles.summaryInner}>
                     <View style={styles.topSection}>
-                      <Text style={styles.bigNumber}>{formatValue(hasTotal) || '0'}</Text>
+                      <Text style={styles.bigNumber} numberOfLines={1} adjustsFontSizeToFit>{formatValue(hasTotal) || '0'}</Text>
                       <View style={styles.statusContainer}>
-                        <Text style={[
-                          styles.statusText,
-                          tradeStatus === 'fair' ? {
-                            ...styles.statusActive,
-                            backgroundColor: config.colors.secondary // Blue for fair
-                          } : styles.statusInactive
-                        ]}>FAIR</Text>
                         <Text style={[
                           styles.statusText,
                           tradeStatus === 'win' ? {
                             ...styles.statusActive,
                             backgroundColor: '#10B981' // Green for win
                           } : styles.statusInactive
-                        ]}>WIN</Text>
+                        ]}>{t('home.win')}</Text>
+                        <Text style={[
+                          styles.statusText,
+                          tradeStatus === 'fair' ? {
+                            ...styles.statusActive,
+                            backgroundColor: config.colors.secondary // Blue for fair
+                          } : styles.statusInactive
+                        ]}>{t('home.fair')}</Text>
                         <Text style={[
                           styles.statusText,
                           tradeStatus === 'lose' ? {
                             ...styles.statusActive,
                             backgroundColor: config.colors.primary // Primary color for lose
                           } : styles.statusInactive
-                        ]}>LOSE</Text>
+                        ]}>{t('home.lose')}</Text>
                       </View>
-                      <Text style={styles.bigNumber}>{formatValue(wantsTotal) || '0'}</Text>
+                      <Text style={styles.bigNumber} numberOfLines={1} adjustsFontSizeToFit>{formatValue(wantsTotal) || '0'}</Text>
                     </View>
                     {/* <View style={styles.progressContainer}>
                       <View style={styles.progressBar}>
@@ -971,34 +1082,47 @@ await addDoc(tradesCollection, newTrade);
                         />
                       </View>
                     </View> */}
-                   
-                     <View style={styles.profitLossBox}>
-                <Text style={[styles.bigNumber2, { color: isProfit ? config.colors.hasBlockGreen : config.colors.wantBlockRed }]}>
-                  {formatValue(Math.abs(profitLoss))}
-                </Text>
-                <View style={[styles.divider, { position: 'absolute', right: 0 , bottom:0}]}>
-                  <Image
-                    source={require('../../assets/reset.png')}
-                    style={{ width: 18, height: 18, tintColor: 'white' }}
-                    onTouchEnd={resetState}
-                  />
-                </View>
-              </View>
+
+                    {/* ✅ Aggregate demand row */}
+                    {(hasAvgDemand || wantsAvgDemand) && (
+                      <View style={styles.demandSummaryRow}>
+                        <View style={styles.demandSummaryPill}>
+                          <Text style={styles.demandSummaryText}>{hasAvgDemand || '—'}/10</Text>
+                        </View>
+                        <Text style={styles.demandSummaryLabel}>Demand</Text>
+                        <View style={styles.demandSummaryPill}>
+                          <Text style={styles.demandSummaryText}>{wantsAvgDemand || '—'}/10</Text>
+                        </View>
+                      </View>
+                    )}
+
+                    <View style={styles.profitLossBox}>
+                      <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.bigNumber2, { color: isProfit ? config.colors.hasBlockGreen : config.colors.wantBlockRed }]}>
+                        {formatValue(Math.abs(profitLoss))}
+                      </Text>
+                      <View style={[styles.divider, { position: 'absolute', right: 0, bottom: 0 }]}>
+                        <Image
+                          source={require('../../assets/reset.png')}
+                          style={{ width: 18, height: 18, tintColor: 'white' }}
+                          onTouchEnd={resetState}
+                        />
+                      </View>
+                    </View>
                   </View>
                 </View>
               )}
-             
- <View style={styles.labelContainer}>
-                      <Text style={styles.offerLabel}>ME</Text>
-                      <Text style={styles.dividerText}></Text>
-                      <Text style={styles.offerLabel}>YOU</Text>
-                    </View>
+
+              <View style={styles.labelContainer}>
+                <Text style={styles.offerLabel}>{t('home.me')}</Text>
+                <Text style={styles.dividerText}></Text>
+                <Text style={styles.offerLabel}>{t('home.you')}</Text>
+              </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <View style={styles.itemRow}>
                   {hasItems?.map((item, index) => {
-                    // For 3 columns
-                    const isLastColumn = (index + 1) % 3 === 0;
-                    const isLastRow = index >= hasItems.length - 3;
+                    // For 2 columns
+                    const isLastColumn = (index + 1) % 2 === 0;
+                    const isLastRow = index >= hasItems.length - 2;
                     return (
                       <TouchableOpacity
                         key={index}
@@ -1015,10 +1139,12 @@ await addDoc(tradesCollection, newTrade);
                               source={{ uri: getImageUrl(item) }}
                               style={[styles.itemImageOverlay]}
                             />
-                            {/* ✅ MM2: Show tier badge if available */}
-                            {item.Tier && (
-                              <View style={styles.itemBadgesContainer}>
-                                <Text style={[styles.itemBadge]}>{item.Tier}</Text>
+                            {/* ✅ MM2: Show demand pill if demand >= 5 */}
+                            {item.demand != null && item.demand >= 5 && (
+                              <View style={styles.calcDemandOverlay}>
+                                <View style={[styles.calcDemandPill, item.demand >= 8 && { backgroundColor: '#EF4444CC' }]}>
+                                  <Text style={styles.calcDemandPillText}>{item.demand}/10</Text>
+                                </View>
                               </View>
                             )}
                           </>
@@ -1026,7 +1152,7 @@ await addDoc(tradesCollection, newTrade);
                           index === lastFilledIndexHas + 1 && (
                             <Icon
                               name="add-circle"
-                              size={30}
+                              size={24}
                               color={isDarkMode ? "#fdf7e5" : 'grey'}
                             />
                           )
@@ -1037,8 +1163,8 @@ await addDoc(tradesCollection, newTrade);
                 </View>
                 <View style={[styles.itemRow]}>
                   {wantsItems?.map((item, index) => {
-                    const isLastColumn = (index + 1) % 3 === 0;
-                    const isLastRow = index >= wantsItems.length - 3;
+                    const isLastColumn = (index + 1) % 2 === 0;
+                    const isLastRow = index >= wantsItems.length - 2;
                     return (
                       <TouchableOpacity
                         key={index}
@@ -1055,10 +1181,12 @@ await addDoc(tradesCollection, newTrade);
                               source={{ uri: getImageUrl(item) }}
                               style={[styles.itemImageOverlay]}
                             />
-                            {/* ✅ MM2: Show tier badge if available */}
-                            {item.Tier && (
-                              <View style={styles.itemBadgesContainer}>
-                                <Text style={[styles.itemBadge]}>{item.Tier}</Text>
+                            {/* ✅ MM2: Show demand pill if demand >= 5 */}
+                            {item.demand != null && item.demand >= 5 && (
+                              <View style={styles.calcDemandOverlay}>
+                                <View style={[styles.calcDemandPill, item.demand >= 8 && { backgroundColor: '#EF4444CC' }]}>
+                                  <Text style={styles.calcDemandPillText}>{item.demand}/10</Text>
+                                </View>
                               </View>
                             )}
                           </>
@@ -1066,7 +1194,7 @@ await addDoc(tradesCollection, newTrade);
                           index === lastFilledIndexWant + 1 && (
                             <Icon
                               name="add-circle"
-                              size={30}
+                              size={24}
                               color={isDarkMode ? "#fdf7e5" : 'grey'}
                             />
                           )
@@ -1102,41 +1230,72 @@ await addDoc(tradesCollection, newTrade);
                 style={styles.createtradeButton}
                 onPress={() => handleCreateTradePress()}
               >
-                <Text style={{ color: 'white' }}>{t('home.create_trade')}</Text>
+                <Text style={styles.tradeBtnText} numberOfLines={1}>{t('home.create_trade')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.logTradeButton}
+                onPress={handleLogTradePress}
+              >
+                <Icon name="book-outline" size={13} color="#fff" style={{ marginRight: 4 }} />
+                <Text style={styles.tradeBtnText} numberOfLines={1}>
+                  {t('home.log_trade', { defaultValue: 'Log Trade' })}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.shareTradeButton}
                 onPress={handleShareTrade}
               >
-                <Text style={{ color: 'white' }}>{t('home.share_trade')}</Text>
+                <Text style={styles.tradeBtnText} numberOfLines={1}>{t('home.share_trade')}</Text>
               </TouchableOpacity>
             </View>
-          {!localState.isPro &&  <View style={styles.createtradeAds}>
-  <TouchableOpacity
-    style={styles.removeAdsButton}
-    activeOpacity={0.9}
-    onPress={()=>setShowofferwall(true)}
-  >
-    <View style={styles.removeAdsContent}>
-      {/* Crown icon / image */}
-      <View style={styles.crownWrapper}>
-        {/* <Icon name="trophy" size={18} color="#3b2500" /> */}
-       
-        <Image
-          source={require('../../assets/pro.png')}
-          style={{ width: 20, height: 20 }}
-          resizeMode="contain"
-        />
-        
-      </View>
+            {!localState.isPro && <View style={styles.createtradeAds}>
+              <TouchableOpacity
+                style={styles.removeAdsButton}
+                activeOpacity={0.9}
+                onPress={() => setShowofferwall(true)}
+              >
+                <View style={styles.removeAdsContent}>
+                  {/* Crown icon / image */}
+                  <View style={styles.crownWrapper}>
+                    {/* <Icon name="trophy" size={18} color="#3b2500" /> */}
 
-      <View style={styles.removeAdsTextWrapper}>
-        <Text style={styles.removeAdsTitle}>Remove Ads</Text>
-        {/* <Text style={styles.removeAdsSubtitle}>Unlock a clean experience</Text> */}
-      </View>
-    </View>
-  </TouchableOpacity>
-</View>}
+                    <Image
+                      source={require('../../assets/pro.png')}
+                      style={{ width: 20, height: 20 }}
+                      resizeMode="contain"
+                    />
+
+                  </View>
+
+                  <View style={styles.removeAdsTextWrapper}>
+                    <Text style={styles.removeAdsTitle}>{t('home.remove_ads')}</Text>
+                    {/* <Text style={styles.removeAdsSubtitle}>Unlock a clean experience</Text> */}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            </View>}
+
+            {/* ✅ Last Updated / Refresh Button */}
+            <TouchableOpacity
+              style={styles.lastUpdatedContainer}
+              onPress={handleRefresh}
+              disabled={refreshing}
+              activeOpacity={0.7}
+            >
+              <View style={styles.lastUpdatedContent}>
+                {refreshing ? (
+                  <ActivityIndicator size="small" color={config.colors.primary} style={{ marginRight: 6 }} />
+                ) : (
+                  <Icon name="time-outline" size={14} color={isDarkMode ? '#aaa' : '#888'} style={{ marginRight: 6 }} />
+                )}
+                <Text style={[styles.lastUpdatedText, { color: isDarkMode ? '#aaa' : '#666' }]}>
+                  {refreshing ? t('home.updating', { defaultValue: 'Updating...' }) : `${t('home.updated_prefix', { defaultValue: 'Updated ' })}${getLastUpdatedText()}`}
+                </Text>
+                {!refreshing && (
+                  <Icon name="refresh-outline" size={14} color={config.colors.primary} style={{ marginLeft: 6 }} />
+                )}
+              </View>
+            </TouchableOpacity>
 
           </ScrollView>
           <Modal
@@ -1164,7 +1323,7 @@ await addDoc(tradesCollection, newTrade);
               </View>
 
               <View style={styles.drawerContent}>
-                <ScrollView 
+                <ScrollView
                   showsVerticalScrollIndicator={false}
                   style={styles.categoryListScroll}
                   contentContainerStyle={styles.categoryList}
@@ -1225,7 +1384,7 @@ await addDoc(tradesCollection, newTrade);
             <Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)} />
             <ConditionalKeyboardWrapper>
               <View style={{ flexDirection: 'row', flex: 1 }}>
-                <View style={[styles.drawerContainer2, { backgroundColor: isDarkMode ? '#3B404C' : 'white' }]}>
+                <View style={[styles.drawerContainer2, { backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : 'white' }]}>
                   <Text style={styles.modalMessage}>
                     {t("home.trade_description")}
                   </Text>
@@ -1269,9 +1428,13 @@ await addDoc(tradesCollection, newTrade);
             message={t("home.alert.sign_in_required")}
           />
         </View>
-        <SubscriptionScreen visible={showofferwall} onClose={() => setShowofferwall(false)} track='Home' oneWallOnly={single_offer_wall} showoffer={!single_offer_wall}/>
+        <SubscriptionScreen visible={showofferwall} onClose={() => setShowofferwall(false)} track='Home' oneWallOnly={single_offer_wall} showoffer={!single_offer_wall} />
       </GestureHandlerRootView>
-      {!localState.isPro && <BannerAdComponent />}
+      {!localState.isPro && (
+        <View style={{ position: 'absolute', bottom: bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
+          <BannerAdComponent collapsible />
+        </View>
+      )}
       <ShareTradeModal
         visible={isShareModalVisible}
         onClose={() => setIsShareModalVisible(false)}
@@ -1281,11 +1444,22 @@ await addDoc(tradesCollection, newTrade);
         wantsTotal={wantsTotal}
         description={description}
       />
+      <TradeCompletion
+        visible={showTradeCompletion}
+        onClose={handleTradeLogged}
+        db={appdatabase}
+        firestoreDB={firestoreDB}
+        uid={user?.id}
+        hasItems={hasItems}
+        wantsItems={wantsItems}
+        tradeResult={tradeStatus}
+        t={t}
+      />
     </>
   );
 };
 
-const getStyles = (isDarkMode,isGG) =>
+const getStyles = (isDarkMode, isGG) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -1294,13 +1468,13 @@ const getStyles = (isDarkMode,isGG) =>
     },
     summaryContainer: {
       width: '100%',
-      
+
     },
     summaryInner: {
       backgroundColor: isDarkMode ? config.colors.surfaceDark : config.colors.surfaceLight,
       borderRadius: 15,
       marginBottom: 10,
-      
+
       padding: 10,
       shadowColor: config.colors.shadowDark,
       shadowOffset: {
@@ -1316,7 +1490,7 @@ const getStyles = (isDarkMode,isGG) =>
       justifyContent: 'space-between',
       alignItems: 'center',
       // marginBottom: 10,
-      
+
 
     },
     bigNumber: {
@@ -1324,8 +1498,31 @@ const getStyles = (isDarkMode,isGG) =>
       fontWeight: 'bold',
       textAlign: 'center',
       color: isDarkMode ? config.colors.textDark : config.colors.textLight,
-      minWidth: 100
-
+      flex: 1,
+    },
+    // ✅ Aggregate demand summary styles
+    demandSummaryRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 10,
+      marginTop: 4,
+    },
+    demandSummaryPill: {
+      backgroundColor: '#FF6B0020',
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 10,
+    },
+    demandSummaryText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: '#FF6B00',
+    },
+    demandSummaryLabel: {
+      fontSize: 10,
+      fontWeight: '600',
+      color: isDarkMode ? '#888' : '#999',
     },
     bigNumber2: {
       fontSize: 40,
@@ -1382,8 +1579,8 @@ const getStyles = (isDarkMode,isGG) =>
       alignItems: 'center',
       justifyContent: 'space-evenly',
       // marginTop: 5,
-      flex:1,
-      width:'100%',
+      flex: 1,
+      width: '100%',
       // backgroundColor:'red',
 
     },
@@ -1435,8 +1632,8 @@ const getStyles = (isDarkMode,isGG) =>
       overflow: 'hidden',
     },
     addItemBlockNew: {
-      width: '33.33%',
-      height: 60,
+      width: '50%',
+      height: 80,
       backgroundColor: isDarkMode ? config.colors.surfaceDark : config.colors.surfaceLight,
       justifyContent: 'center',
       alignItems: 'center',
@@ -1530,6 +1727,20 @@ const getStyles = (isDarkMode,isGG) =>
     categoryButtonTextActive: {
       color: '#fff',
     },
+    lastUpdatedContainer: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      alignItems: 'center',
+    },
+    lastUpdatedContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    lastUpdatedText: {
+      fontSize: 12,
+      fontWeight: '500',
+    },
     gridContainer: {
       flex: 1,
       flexShrink: 1,
@@ -1542,14 +1753,24 @@ const getStyles = (isDarkMode,isGG) =>
       alignItems: 'center',
     },
     gridItemImage: {
-      width: 60,
-      height: 60,
+      width: 70,
+      height: 70,
       borderRadius: 10,
     },
     gridItemText: {
       fontSize: 11,
       marginTop: 4,
       color: isDarkMode ? '#fff' : '#333',
+    },
+    gridItemValue: {
+      fontSize: 9,
+      color: isDarkMode ? '#aaa' : '#666',
+      fontWeight: '600',
+    },
+    gridItemDemand: {
+      fontSize: 8,
+      color: '#FF6B00',
+      fontWeight: '700',
     },
     badgeContainer: {
       flexDirection: 'row',
@@ -1574,7 +1795,7 @@ const getStyles = (isDarkMode,isGG) =>
       paddingVertical: 8,
       paddingHorizontal: 12,
       borderRadius: 16,
-      backgroundColor: isDarkMode ? '#2A2A2A' : '#f0f0f0',
+      backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#f0f0f0',
     },
     badgeButtonActive: {
       backgroundColor: '#3498db',
@@ -1618,10 +1839,27 @@ const getStyles = (isDarkMode,isGG) =>
       fontSize: 12
     },
     itemImageOverlay: {
-      width: 40,
-      height: 40,
+      width: 65,
+      height: 65,
       borderRadius: 5,
       resizeMode: 'contain',
+    },
+    // ✅ Demand overlay styles for calc grid cells
+    calcDemandOverlay: {
+      position: 'absolute',
+      top: 1,
+      left: 1,
+    },
+    calcDemandPill: {
+      backgroundColor: '#FF6B00CC',
+      paddingHorizontal: 2,
+      paddingVertical: 0.5,
+      borderRadius: 2,
+    },
+    calcDemandPillText: {
+      fontSize: 6,
+      fontWeight: '800',
+      color: 'white',
     },
     screenshotView: {
       padding: 10,
@@ -1629,32 +1867,49 @@ const getStyles = (isDarkMode,isGG) =>
     },
 
 
+    // 3-segment pill: Create | Log | Share. Segments flex so they fit small
+    // screens; only the outer two carry the rounded corners.
     createtrade: {
-      alignSelf: 'center',
+      flexDirection: 'row',
       justifyContent: 'center',
-      flexDirection: 'row'
+      alignSelf: 'stretch',
+      paddingHorizontal: 16,
     },
     createtradeButton: {
       backgroundColor: config.colors.hasBlockGreen,
-      alignSelf: 'center',
+      flex: 1,
       padding: 10,
       justifyContent: 'center',
+      alignItems: 'center',
       flexDirection: 'row',
-      minWidth: 120,
       borderTopStartRadius: 20,
       borderBottomStartRadius: 20,
       marginRight: 1
     },
+    logTradeButton: {
+      backgroundColor: config.colors.primary,
+      flex: 1,
+      padding: 10,
+      justifyContent: 'center',
+      alignItems: 'center',
+      flexDirection: 'row',
+      marginHorizontal: 1,
+    },
     shareTradeButton: {
       backgroundColor: config.colors.wantBlockRed,
-      alignSelf: 'center',
+      flex: 1,
       padding: 10,
       flexDirection: 'row',
       justifyContent: 'center',
-      minWidth: 120,
+      alignItems: 'center',
       borderTopEndRadius: 20,
       borderBottomEndRadius: 20,
       marginLeft: 1
+    },
+    tradeBtnText: {
+      color: 'white',
+      fontSize: 13,
+      fontWeight: '600',
     },
     modalMessage: {
       fontSize: 12,
@@ -1793,7 +2048,7 @@ const getStyles = (isDarkMode,isGG) =>
     },
     // ✅ Favorites row layout styles - matching ValueScreen.js (compact version)
     favoriteRowItem: {
-      backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
+      backgroundColor: isDarkMode ? config.colors.surfaceDark : '#ffffff',
       borderRadius: 6,
       marginHorizontal: 4,
       marginBottom: 4,
@@ -1817,7 +2072,7 @@ const getStyles = (isDarkMode,isGG) =>
       width: 36,
       height: 36,
       borderRadius: 8,
-      backgroundColor: isDarkMode ? '#2a2a2a' : '#f8f9fa',
+      backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#f8f9fa',
     },
     favoriteItemInfo: {
       flex: 1,
@@ -1847,7 +2102,7 @@ const getStyles = (isDarkMode,isGG) =>
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 2,
-      backgroundColor: isDarkMode ? '#2a2a2a' : '#f0f0f0',
+      backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#f0f0f0',
       borderRadius: 8,
       padding: 4,
       marginTop: 2,
@@ -1856,7 +2111,7 @@ const getStyles = (isDarkMode,isGG) =>
       paddingVertical: 4,
       paddingHorizontal: 8,
       borderRadius: 8,
-      backgroundColor: isDarkMode ? '#3a3a3a' : '#ffffff',
+      backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#ffffff',
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.05,
@@ -1909,7 +2164,7 @@ const getStyles = (isDarkMode,isGG) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: isDarkMode ? '#2A2A2A' : '#f0f0f0',
+      backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : '#f0f0f0',
       padding: 10,
       borderRadius: 8,
       margin: 10,
@@ -1932,11 +2187,11 @@ const getStyles = (isDarkMode,isGG) =>
     createtradeAds: {
       paddingHorizontal: 16,
       paddingVertical: 8,
-      flex:1,
-      justifyContent:'center',
-      alignItems:'center',
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
     },
-    
+
     removeAdsButton: {
       borderRadius: 999,
       paddingVertical: 5,
@@ -1948,16 +2203,16 @@ const getStyles = (isDarkMode,isGG) =>
       shadowOffset: { width: 0, height: 3 },
       elevation: 4,
       // minWidth:244
-      marginTop:20
+      marginTop: 20
 
     },
-    
+
     removeAdsContent: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
     },
-    
+
     crownWrapper: {
       width: 25,
       height: 25,
@@ -1967,24 +2222,24 @@ const getStyles = (isDarkMode,isGG) =>
       alignItems: 'center',
       marginRight: 8,
     },
-    
+
     removeAdsTextWrapper: {
       flexDirection: 'column',
     },
-    
+
     removeAdsTitle: {
       color: '#1f2933',
       fontSize: 12,
       fontFamily: 'Lato-Bold',
     },
-    
+
     removeAdsSubtitle: {
-      color: '#374151',
+      color: config.colors.surfaceElevatedDark,
       fontSize: 10,
       fontFamily: 'Lato-Regular',
       opacity: 0.9,
     },
-    
+
   });
 
 export default HomeScreen;

@@ -13,6 +13,7 @@ import { getStyles } from '../Style';
 import PrivateMessageInput from './PrivateMessageInput';
 import PrivateMessageList from './PrivateMessageList';
 import { useGlobalState } from '../../GlobelStats';
+import { chatTypeForRoute, fetchChatAvailability, resolveChatBlock } from '../chatAvailability';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { clearActiveChat, setActiveChat, useOtherLastRead, updateLastRead, useOnlineStatus } from '../utils';
 import { useLocalState } from '../../LocalGlobelStats';
@@ -127,6 +128,30 @@ const bannerBottomPos = noTabBar ? Math.max(insets.bottom, 8) + 12 : 0; // with 
     const banned = Array.isArray(bannedUsers) ? bannedUsers : [];
     return banned.includes(selectedUserId);
   }, [bannedUsers, selectedUserId]);
+
+  // ── Chat availability ────────────────────────────────────────────────────
+  // The door decides which switch applies: the Trades screen pushes
+  // PrivateChatTrade, everything else (inbox, feed, profiles) is general.
+  const navRoute = useRoute();
+  const routeName = route?.name || navRoute?.name;
+  const chatType = useMemo(() => chatTypeForRoute(routeName), [routeName]);
+
+  const [theirAvailability, setTheirAvailability] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!appdatabase || !selectedUserId) { setTheirAvailability(null); return undefined; }
+    fetchChatAvailability(appdatabase, selectedUserId).then((a) => {
+      if (!cancelled) setTheirAvailability(a);
+    });
+    return () => { cancelled = true; };
+  }, [appdatabase, selectedUserId]);
+
+  // Blocks both ways: 'them' = they closed this door, 'me' = I did.
+  const chatBlockedBy = useMemo(
+    () => resolveChatBlock(chatType, user, theirAvailability),
+    [chatType, user, theirAvailability]
+  );
+  const isChatUnavailable = !!chatBlockedBy;
   const isDarkMode = theme === 'dark';
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
 
@@ -475,6 +500,22 @@ showSuccessMessage(
 
   // ✅ Memoize sendMessage
   const sendMessage = useCallback(async (text, image, fruits) => {
+    // Guard for a stale screen — the input is already disabled when this door
+    // is shut, so this only fires if the switch flipped while the chat was open.
+    if (chatBlockedBy) {
+      Alert.alert(
+        t('home.alert.error', { defaultValue: 'Error' }),
+        chatBlockedBy === 'them'
+          ? (chatType === 'trade'
+            ? 'This user has disabled trade chat. You cannot message them from a trade.'
+            : 'This user has disabled chat. You cannot message them right now.')
+          : (chatType === 'trade'
+            ? 'You have disabled trade chat. Turn it back on in Settings.'
+            : 'You have disabled chat. Turn it back on in Settings.')
+      );
+      return;
+    }
+
     const trimmedText = (text || '').trim(); // safe guard
     // Handle both single image (string) and multiple images (array)
     const hasImage = !!image && (typeof image === 'string' || (Array.isArray(image) && image.length > 0));
@@ -518,6 +559,10 @@ showSuccessMessage(
       text: trimmedText,
       senderId: myUserId,
       timestamp,
+      // Which door this came through. The RTDB rule reads it to pick which of
+      // the recipient's two switches applies; absent from older clients, which
+      // the rule treats as 'general'.
+      origin: chatType,
       // flage: user.flage ? user.flage : null,
     };
   
@@ -576,7 +621,7 @@ showSuccessMessage(
       console.error("Error sending message:", error);
       Alert.alert(t('home.alert.error'), t('private_chat.send_failed'));
     }
-  }, [myUserId, selectedUserId, appdatabase, selectedUser, user, t]);
+  }, [myUserId, selectedUserId, appdatabase, selectedUser, user, t, chatBlockedBy, chatType]);
   
   
 
@@ -793,9 +838,24 @@ useEffect(() => {
   />
 )}
 
+              {isChatUnavailable && (
+                <View style={styles.chatUnavailableBanner}>
+                  <Text style={styles.chatUnavailableIcon}>🚫</Text>
+                  <Text style={styles.chatUnavailableText}>
+                    {chatBlockedBy === 'them'
+                      ? (chatType === 'trade'
+                        ? 'This user has disabled trade chat. You cannot message them from a trade.'
+                        : 'This user has disabled chat. You cannot message them right now.')
+                      : (chatType === 'trade'
+                        ? 'You have disabled trade chat. Turn it back on in Settings.'
+                        : 'You have disabled chat. Turn it back on in Settings.')}
+                  </Text>
+                </View>
+              )}
+
               <PrivateMessageInput
                 onSend={sendMessage}
-                isBanned={isBanned}
+                isBanned={isBanned || isChatUnavailable}
                 bannedUsers={bannedUsers}
                 replyTo={replyTo}
                 onCancelReply={() => setReplyTo(null)}

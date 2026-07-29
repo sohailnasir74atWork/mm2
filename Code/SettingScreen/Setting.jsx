@@ -2708,6 +2708,35 @@ const formatPlanName = (plan) => {
           </View>
         </View>)}
 
+        {/* Chat availability — two independent doors. Trade chat opens from the
+            Trades screen; general chat is everywhere else. Each blocks both
+            directions for that door. */}
+        {user?.id && (<View style={styles.option}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
+            <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Icon name="chatbubble-ellipses-outline" size={18} color={'white'} style={{backgroundColor:'#8B5CF6', padding:5, borderRadius:5}} />
+              <Text style={styles.optionText}>{user?.chatOffGeneral ? 'General Chat Off' : 'General Chat On'}</Text>
+            </TouchableOpacity>
+            <Switch
+              value={!user?.chatOffGeneral}
+              onValueChange={(v) => updateLocalStateAndDatabase('chatOffGeneral', !v)}
+            />
+          </View>
+        </View>)}
+
+        {user?.id && (<View style={styles.option}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
+            <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Icon name="swap-horizontal-outline" size={18} color={'white'} style={{backgroundColor:'#F59E0B', padding:5, borderRadius:5}} />
+              <Text style={styles.optionText}>{user?.chatOffTrade ? 'Trade Chat Off' : 'Trade Chat On'}</Text>
+            </TouchableOpacity>
+            <Switch
+              value={!user?.chatOffTrade}
+              onValueChange={(v) => updateLocalStateAndDatabase('chatOffTrade', !v)}
+            />
+          </View>
+        </View>)}
+
         {/* ✅ Read Receipts Toggle */}
         {user?.id && (<View style={styles.option}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>

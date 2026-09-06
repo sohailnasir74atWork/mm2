@@ -12,7 +12,8 @@ import { mixpanel } from '../../AppHelper/MixPenel';
 import { useGlobalState } from '../../GlobelStats';
 import { ref, get, set, remove } from '@react-native-firebase/database';
 import FramedAvatar from '../GroupChat/FramedAvatar';
-import { getCachedProfile, warmProfileCache } from '../../Helper/profileCache';
+import { getCachedProfile, warmProfileCache, getOrFetchFullProfile } from '../../Helper/profileCache';
+import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
 
 const PrivateChatHeader = React.memo(({ selectedUser, selectedTheme, bannedUsers, isDrawerVisible, setIsDrawerVisible }) => {
   const { updateLocalState } = useLocalState();
@@ -61,25 +62,25 @@ const PrivateChatHeader = React.memo(({ selectedUser, selectedTheme, bannedUsers
     const fetchUserData = async () => {
       try {
         // ✅ OPTIMIZED: Fetch only specific fields instead of full user object
-        const [robloxUsernameSnap, robloxUserIdSnap, robloxUsernameVerifiedSnap, 
-               isProSnap, lastGameWinAtSnap] = await Promise.all([
-          get(ref(appdatabase, `users/${selectedUserId}/robloxUsername`)).catch(() => null),
-          get(ref(appdatabase, `users/${selectedUserId}/robloxUserId`)).catch(() => null),
-          get(ref(appdatabase, `users/${selectedUserId}/robloxUsernameVerified`)).catch(() => null),
-          get(ref(appdatabase, `users/${selectedUserId}/isPro`)).catch(() => null),
-          get(ref(appdatabase, `users/${selectedUserId}/lastGameWinAt`)).catch(() => null),
-        ]);
-        
+        // One cached read of users/{uid} instead of five parallel leaf reads
+        // (PLAN_2026-09.md F1); it also carries the role flags the pills need.
+        const record = await getOrFetchFullProfile(appdatabase, selectedUserId);
+
         if (!isMounted) return;
-        
-        // ✅ Extract values only if they exist
-        setUserData({
-          robloxUsername: robloxUsernameSnap?.exists() ? robloxUsernameSnap.val() : null,
-          robloxUserId: robloxUserIdSnap?.exists() ? robloxUserIdSnap.val() : null,
-          robloxUsernameVerified: robloxUsernameVerifiedSnap?.exists() ? robloxUsernameVerifiedSnap.val() : false,
-          isPro: isProSnap?.exists() ? isProSnap.val() : false,
-          lastGameWinAt: lastGameWinAtSnap?.exists() ? lastGameWinAtSnap.val() : null,
-        });
+
+        setUserData(record ? {
+          robloxUsername: record.robloxUsername ?? null,
+          robloxUserId: record.robloxUserId ?? null,
+          robloxUsernameVerified: !!record.robloxUsernameVerified,
+          isPro: !!record.isPro,
+          lastGameWinAt: record.lastGameWinAt ?? null,
+          isAdmin: !!record.admin || !!record.isAdmin,
+          isModerator: !!record.isModerator,
+          isBabyMod: !!record.isBabyMod,
+          isTrusted: !!record.isTrusted,
+          isCMSR: !!record.isCMSR,
+          isHelper: !!record.isHelper,
+        } : null);
       } catch (error) {
         console.error('Error fetching user data in PrivateChatHeader:', error);
         if (isMounted) setUserData(null);
@@ -104,6 +105,13 @@ const PrivateChatHeader = React.memo(({ selectedUser, selectedTheme, bannedUsers
         ? selectedUser.robloxUsernameVerified 
         : userData.robloxUsernameVerified,
       isPro: selectedUser?.isPro !== undefined ? selectedUser.isPro : userData.isPro,
+      // Roles only ever come from the RTDB record.
+      isAdmin: userData.isAdmin,
+      isModerator: userData.isModerator,
+      isBabyMod: userData.isBabyMod,
+      isTrusted: userData.isTrusted,
+      isCMSR: userData.isCMSR,
+      isHelper: userData.isHelper,
       lastGameWinAt: selectedUser?.lastGameWinAt !== undefined 
         ? selectedUser.lastGameWinAt 
         : userData.lastGameWinAt, // ✅ Game win timestamp
@@ -231,6 +239,31 @@ const PrivateChatHeader = React.memo(({ selectedUser, selectedTheme, bannedUsers
               style={{ width: 12, height: 12, marginLeft: 4 }} 
             />
           )}
+          {(() => {
+            const firstBadge = getFirstBadgeType(mergedUser);
+            return (
+              <>
+                {mergedUser?.isAdmin && (
+                  <UserBadgePill type="admin" size="sm" isDarkMode={selectedTheme?.dark ?? false} glow={firstBadge === 'admin'} />
+                )}
+                {!mergedUser?.isAdmin && mergedUser?.isModerator && (
+                  <UserBadgePill type="mod" size="sm" isDarkMode={selectedTheme?.dark ?? false} glow={firstBadge === 'mod'} />
+                )}
+                {!mergedUser?.isAdmin && !mergedUser?.isModerator && mergedUser?.isBabyMod && (
+                  <UserBadgePill type="jmd" size="sm" isDarkMode={selectedTheme?.dark ?? false} glow={firstBadge === 'jmd'} />
+                )}
+                {mergedUser?.isTrusted && (
+                  <UserBadgePill type="trusted" size="sm" isDarkMode={selectedTheme?.dark ?? false} glow={firstBadge === 'trusted'} />
+                )}
+                {mergedUser?.isCMSR && (
+                  <UserBadgePill type="cmsr" size="sm" isDarkMode={selectedTheme?.dark ?? false} glow={firstBadge === 'cmsr'} />
+                )}
+                {mergedUser?.isHelper && (
+                  <UserBadgePill type="helper" size="sm" isDarkMode={selectedTheme?.dark ?? false} glow={firstBadge === 'helper'} />
+                )}
+              </>
+            );
+          })()}
           {(() => {
             const hasRecentWin =
               !!mergedUser?.hasRecentGameWin ||

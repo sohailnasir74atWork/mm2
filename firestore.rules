@@ -1,0 +1,89 @@
+rules_version = '2';
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MM2 Values — Firestore security rules
+//
+//  ⚠️ WHAT IS LIVE RIGHT NOW (ruleset 172c3c69-3d97-44a0-8ca5-c6c6e231ead8,
+//     last changed 2026-03-05):
+//
+//        match /{document=**} {
+//          allow read, write: if request.time < timestamp.date(2029, 3, 5);
+//        }
+//
+//     That is the console's "test mode" default with the expiry pushed out.
+//     Anyone who reads the project ID out of the app bundle can read, rewrite
+//     or delete EVERY document — trades, reviews, posts, profiles, scores —
+//     with no account and no token. See PLAN_2026-09.md S1.
+//
+//  STAGE 1 (this file). Public read stays exactly as it is; every write now
+//  requires a signed-in user. This cannot break a legitimate flow — every
+//  write path in the app already runs behind Firebase Auth — and it removes
+//  anonymous vandalism, which is the actual emergency.
+//
+//  STAGE 2 is drafted at the bottom: per-collection owner checks. It needs
+//  testing against the real client before it goes anywhere near production,
+//  because a wrong ownership field fails silently and looks like a bug in
+//  the app rather than a rules problem.
+//
+//  Deploy stage 1:
+//    firebase deploy --only firestore:rules --project mm2vlaues-ed80c
+//  Roll back: Firebase console → Firestore → Rules → History → the
+//  2026-03-05 ruleset → Restore.
+// ═══════════════════════════════════════════════════════════════════════
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Reads stay open: the app browses trades, posts and leaderboards before
+    // the user signs in, and locking reads here would blank those screens for
+    // every existing build in the field.
+    //
+    // Writes require an account. Nothing in the app writes while signed out.
+    match /{document=**} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  STAGE 2 — DRAFT, NOT ACTIVE.
+//
+//  Replace the catch-all above with per-collection rules once each one has
+//  been exercised in the Rules Playground against a real document. The
+//  ownership field differs per collection, and getting it wrong denies a
+//  write that the app treats as a silent failure.
+//
+//  Collections in use, with the field that identifies the owner:
+//
+//    trades_new             userId
+//    reviews                fromUserId (a review) / doc id == uid (profile doc)
+//    designPosts            userId          + subcollection comments (userId)
+//    statuses               userId
+//    user_profiles          doc id == uid
+//    user_ratings_summary   doc id == uid   ← written ABOUT a user BY a rater,
+//                                             so an owner-only rule breaks it
+//    game_stats, games      doc id == uid
+//    cosmetics_inventory    doc id == uid
+//    following              followerId
+//    notifications          written FOR another user (toUid) — owner-only
+//                                             rules break trade pings
+//    group_invitations      invitedBy
+//    group_join_requests    requesterId
+//    groups                 createdBy, plus member writes
+//    streaks                user1 / user2
+//    polls                  admin-only write, public read
+//    mystery_levels         read-only from the client
+//    leaderboard,
+//    game_leaderboard_cache Cloud Function writes only
+//
+//  Two of those (user_ratings_summary, notifications) are deliberately
+//  written by someone other than the subject. Any "users can only write
+//  their own documents" rule breaks ratings and trade notifications, which
+//  is exactly the kind of regression that is hard to spot in testing and
+//  obvious to users.
+// ═══════════════════════════════════════════════════════════════════════

@@ -8,7 +8,8 @@
     "lint": "eslint .",
     "postinstall": "patch-package",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "fetch:functions": "node scripts/fetch-live-functions.js"
   },
   "dependencies": {
     "@invertase/react-native-apple-authentication": "^2.4.0",

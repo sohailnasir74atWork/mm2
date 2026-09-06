@@ -1,6 +1,9 @@
 import { getDatabase, ref, update, get, set, onDisconnect, onValue, query, orderByChild, equalTo, limitToLast } from '@react-native-firebase/database';
+import { getAuth } from '@react-native-firebase/auth';
 import { Alert } from 'react-native';
 import { useState, useEffect } from 'react';
+import { getServerTime } from '../Helper/serverTime';
+import { invalidateFullProfile, setRoleOverride } from '../Helper/profileCache';
 
 // Initialize the database reference
 const database = getDatabase();
@@ -500,61 +503,110 @@ export const handleDeleteLast300Messages = async (senderId, showAlert = false) =
 };
 
 
-export const banUserwithEmail = async (email, isAdmin = false, senderId = null) => {
-  // ✅ Safety check
+// ═══════════════════════════════════════════════════════════════════════
+//  MODERATION — strikes, mutes, bans, roles
+//  Ported from adoptme-jan7 2026-09-05 (PLAN_2026-09.md P3/P4), rewritten
+//  for RTDB-only. Adopt Me reads roles through a Supabase mirror; MM2 has
+//  no Supabase, so everything below is the RTDB record directly.
+//
+//  Storage: banned_users_by_email/{encodedEmail}
+//    { strikeCount, bannedUntil, reason, bannedAt, userId, displayName,
+//      avatar, email, bannedBy, bannerAvatar }
+//  `bannedUntil` is either a ms timestamp or the string 'permanent'.
+//  A mute is the same record with a short bannedUntil and NO strike bump.
+// ═══════════════════════════════════════════════════════════════════════
+
+// Keys are encoded exactly as every existing reader encodes them
+// (Trader.jsx, UploadModal.js, GlobelStats.js). Do not add a .toLowerCase()
+// here without migrating those readers and the existing rows together —
+// a mismatch silently un-bans everyone.
+export const encodeEmailForBan = (email) => String(email).replace(/\./g, '(dot)');
+
+// Strike ladder. Kept at MM2's existing 3h / 3d / permanent rather than
+// Adopt Me's 12h / 24h — changing it would silently re-sentence users the
+// moderators already warned under the current rules.
+const STRIKE_LADDER = {
+  1: { ms: 3 * 60 * 60 * 1000, label: '3 hours' },
+  2: { ms: 3 * 24 * 60 * 60 * 1000, label: '3 days' },
+};
+const strikeSentence = (strikeCount) =>
+  STRIKE_LADDER[strikeCount]
+    ? { bannedUntil: Date.now() + STRIKE_LADDER[strikeCount].ms, banDuration: STRIKE_LADDER[strikeCount].label }
+    : { bannedUntil: 'permanent', banDuration: 'permanent' };
+
+// Shared record builder so ban / strike / mute rows are the same shape and
+// the Admin Dashboard can render any of them without special-casing.
+const buildBanRecord = ({ strikeCount, bannedUntil, reason, userInfo, bannerInfo, email }) => ({
+  strikeCount,
+  bannedUntil,
+  reason,
+  bannedAt: Date.now(),
+  userId: userInfo?.id || null,
+  displayName: userInfo?.displayName || userInfo?.sender || 'Unknown User',
+  avatar: userInfo?.avatar || null,
+  email,
+  bannedBy: bannerInfo?.id || bannerInfo?.displayName || 'Admin',
+  bannerAvatar: bannerInfo?.avatar || null,
+});
+
+/**
+ * Central gate for moderator ban/mute/strike powers.
+ * Admins are NEVER affected. Moderators and Junior Mods lose ban/mute/strike
+ * when an admin sets RTDB /mod_controls_enabled to false. Default is ON:
+ * only an explicit `false` disables it, so a denied or offline read leaves
+ * staff working exactly as before.
+ * Delete-message powers are deliberately NOT gated by this switch.
+ */
+export const canStaffBanMute = ({ isAdmin, isModerator, isBabyMod, modControlsEnabled } = {}) =>
+  !!isAdmin || ((!!isModerator || !!isBabyMod) && modControlsEnabled !== false);
+
+/**
+ * Ban a user by email, escalating their strike count.
+ * Additive signature — the original (email, isAdmin, senderId) call sites
+ * keep working unchanged.
+ */
+export const banUserwithEmail = async (
+  email,
+  isAdmin = false,
+  senderId = null,
+  userInfo = null,
+  bannerInfo = null,
+  customReason = null,
+) => {
   if (!email || typeof email !== 'string' || email.trim().length === 0) {
     console.error('❌ Invalid email for banUserwithEmail');
     if (isAdmin) Alert.alert('Error', 'Invalid email address.');
     return false;
   }
 
-  const encodeEmail = (em) => em.replace(/\./g, '(dot)');
-
   try {
     const db = getDatabase();
-    const banRef = ref(db, `banned_users_by_email/${encodeEmail(email)}`);
+    const banRef = ref(db, `banned_users_by_email/${encodeEmailForBan(email)}`);
     const snap = await get(banRef);
 
     let strikeCount = 1;
-    let bannedUntil = Date.now() + 3 * 60 * 60 * 1000; // 3 hours
-    let banDuration = '3 hours';
-
     if (snap.exists()) {
       const data = snap.val();
       if (data && typeof data === 'object') {
+        // Admins escalate; a moderator re-applying a ban does not stack it.
         strikeCount = isAdmin ? (data.strikeCount || 0) + 1 : (data.strikeCount || 1);
-
-        if (strikeCount === 2) {
-          bannedUntil = Date.now() + 3 * 24 * 60 * 60 * 1000; // 3 days
-          banDuration = '3 days';
-        } else if (strikeCount >= 3) {
-          bannedUntil = "permanent";
-          banDuration = 'permanent';
-        }
       }
     }
 
-    await set(banRef, {
+    const { bannedUntil, banDuration } = strikeSentence(strikeCount);
+
+    await set(banRef, buildBanRecord({
       strikeCount,
       bannedUntil,
-      reason: `Strike ${strikeCount}`
-    });
+      reason: customReason || `Strike ${strikeCount}`,
+      userInfo: { ...(userInfo || {}), id: senderId || userInfo?.id || null },
+      bannerInfo,
+      email,
+    }));
 
-    // Delete messages if senderId provided
-    let deletedCount = 0;
-    if (senderId) {
-      const deleteResult = await handleDeleteLast300Messages(senderId, false);
-      deletedCount = deleteResult?.count || 0;
-    }
-
-    // ✅ Always show alert to admin who performed the action
     if (isAdmin) {
-      Alert.alert(
-        'User Banned', 
-        `Strike ${strikeCount} applied (${banDuration}).${deletedCount > 0 ? `\n${deletedCount} messages deleted.` : ''}`
-      );
+      Alert.alert('User Banned', `Strike ${strikeCount} applied (${banDuration}).`);
     }
-    
     return true;
   } catch (err) {
     console.error('Ban error:', err);
@@ -563,19 +615,113 @@ export const banUserwithEmail = async (email, isAdmin = false, senderId = null) 
   }
 };
 
+/**
+ * Set an EXACT strike level, rather than escalating from whatever is there.
+ * This is what the Admin Dashboard's Strike 1 / 2 / 3 buttons call.
+ */
+export const setUserStrike = async (
+  email,
+  strikeCount,
+  senderId = null,
+  showAlert = true,
+  bannerInfo = null,
+  userInfo = null,
+  customReason = null,
+) => {
+  if (!email || typeof email !== 'string' || email.trim().length === 0) {
+    if (showAlert) Alert.alert('Error', 'Invalid email address.');
+    return false;
+  }
+  if (!strikeCount || strikeCount < 1) {
+    if (showAlert) Alert.alert('Error', 'Invalid strike count.');
+    return false;
+  }
+
+  try {
+    const db = getDatabase();
+    const { bannedUntil, banDuration } = strikeSentence(strikeCount);
+
+    await set(ref(db, `banned_users_by_email/${encodeEmailForBan(email)}`), buildBanRecord({
+      strikeCount,
+      bannedUntil,
+      reason: customReason || `Strike ${strikeCount}`,
+      userInfo: { ...(userInfo || {}), id: senderId || userInfo?.id || null },
+      bannerInfo,
+      email,
+    }));
+
+    if (showAlert) Alert.alert('Strike Applied', `Strike ${strikeCount} applied (${banDuration}).`);
+    return true;
+  } catch (err) {
+    console.error('Set strike error:', err);
+    if (showAlert) Alert.alert('Error', 'Could not apply strike.');
+    return false;
+  }
+};
+
+/**
+ * Mute for N minutes. Same record shape as a ban with a short bannedUntil,
+ * so every existing ban check enforces it for free — but the strike count is
+ * PRESERVED, not incremented. A mute is a timeout, not a strike.
+ */
+export const muteUser = async (
+  email,
+  minutes,
+  userInfo = null,
+  bannerInfo = null,
+  showAlert = true,
+  customReason = null,
+) => {
+  if (!email || typeof email !== 'string' || email.trim().length === 0) {
+    if (showAlert) Alert.alert('Error', 'Invalid email address.');
+    return false;
+  }
+  if (!minutes || minutes < 1) {
+    if (showAlert) Alert.alert('Error', 'Mute duration must be at least 1 minute.');
+    return false;
+  }
+
+  try {
+    const db = getDatabase();
+    const banRef = ref(db, `banned_users_by_email/${encodeEmailForBan(email)}`);
+    const snap = await get(banRef);
+    const existingStrikeCount = snap.exists() ? (snap.val()?.strikeCount || 0) : 0;
+
+    await set(banRef, buildBanRecord({
+      strikeCount: existingStrikeCount,
+      bannedUntil: Date.now() + minutes * 60 * 1000,
+      reason: customReason || `Muted for ${minutes} min`,
+      userInfo,
+      bannerInfo,
+      email,
+    }));
+
+    if (showAlert) Alert.alert('User Muted', `Muted for ${minutes} minute${minutes !== 1 ? 's' : ''}.`);
+    return true;
+  } catch (err) {
+    console.error('Mute error:', err);
+    if (showAlert) Alert.alert('Error', 'Could not mute user.');
+    return false;
+  }
+};
+
+/** Lift a ban or mute. Clears both key casings, since older rows may differ. */
 export const unbanUserWithEmail = async (email, showAlert = true) => {
-  // ✅ Safety check
   if (!email || typeof email !== 'string' || email.trim().length === 0) {
     console.error('❌ Invalid email for unbanUserWithEmail');
     if (showAlert) Alert.alert('Error', 'Invalid email address.');
     return false;
   }
 
-  const encodeEmail = (em) => em.replace(/\./g, '(dot)');
   try {
     const db = getDatabase();
-    const banRef = ref(db, `banned_users_by_email/${encodeEmail(email)}`);
-    await set(banRef, null);
+    const key = encodeEmailForBan(email);
+    const keyLower = encodeEmailForBan(email.toLowerCase());
+
+    await set(ref(db, `banned_users_by_email/${key}`), null);
+    if (keyLower !== key) {
+      await set(ref(db, `banned_users_by_email/${keyLower}`), null);
+    }
 
     if (showAlert) Alert.alert('User Unbanned', 'Ban has been lifted.');
     return true;
@@ -585,6 +731,113 @@ export const unbanUserWithEmail = async (email, showAlert = true) => {
     return false;
   }
 };
+
+/**
+ * Is this email currently banned or muted?
+ *
+ * Compares against SERVER time, not Date.now(). A device clock rolled
+ * forward is the standard way users escape a timed ban, and it works
+ * against any check that trusts the local clock.
+ */
+export const checkBanStatus = async (email) => {
+  if (!email || typeof email !== 'string') return { isBanned: false, message: null };
+
+  const db = getDatabase();
+  try {
+    const snap = await get(ref(db, `banned_users_by_email/${encodeEmailForBan(email)}`));
+    if (!snap.exists()) return { isBanned: false, message: null };
+
+    const { bannedUntil, strikeCount } = snap.val() || {};
+
+    if (bannedUntil === 'permanent') {
+      return { isBanned: true, message: `You are permanently banned (Strike ${strikeCount}).` };
+    }
+    if (typeof bannedUntil !== 'number') return { isBanned: false, message: null };
+
+    const probeUid = getAuth()?.currentUser?.uid || encodeEmailForBan(email);
+    const now = (await getServerTime(db, probeUid)).getTime();
+    if (bannedUntil <= now) return { isBanned: false, message: null };
+
+    const diff = bannedUntil - now;
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const parts = [];
+    if (days) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+    if (hours) parts.push(`${hours} hour${hours === 1 ? '' : 's'}`);
+    if (minutes) parts.push(`${minutes} minute${minutes === 1 ? '' : 's'}`);
+
+    return {
+      isBanned: true,
+      message: `You are banned for ${parts.join(' ') || 'less than a minute'} (Strike ${strikeCount}).`,
+    };
+  } catch (error) {
+    console.error('Error checking ban status:', error);
+    // Fail open: a database hiccup must not lock out the whole user base.
+    return { isBanned: false, message: null };
+  }
+};
+
+// ── Role grants ────────────────────────────────────────────────────────
+//
+// One writer for every role flag, so the cache invalidation and the
+// optimistic override can never be forgotten at a call site. The roster
+// Cloud Functions trigger on these individual leaves.
+//
+// ⚠️ These are UI-level grants only until the RTDB rules in
+// database.rules.json are deployed — `users/$uid` is currently
+// world-writable, so a client can set its own `admin` flag over REST.
+const writeRoleFlag = async (userId, flag, value, { successMsg, errorMsg } = {}) => {
+  if (!userId) {
+    Alert.alert('Error', 'Invalid user ID.');
+    return false;
+  }
+  try {
+    const db = getDatabase();
+    await update(ref(db, `users/${userId}`), {
+      [flag]: value ? true : null, // null deletes the key rather than storing false
+      rolesUpdatedAt: Date.now(),
+    });
+    invalidateFullProfile(userId);
+    setRoleOverride(userId, { [flag]: !!value });
+    if (successMsg) Alert.alert('Success', successMsg);
+    return true;
+  } catch (error) {
+    console.error(`Error writing role ${flag}:`, error);
+    Alert.alert('Error', errorMsg || 'Failed to update role.');
+    return false;
+  }
+};
+
+export const makeModerator = (userId) =>
+  writeRoleFlag(userId, 'isModerator', true, { successMsg: 'User is now a moderator.', errorMsg: 'Failed to promote user.' });
+
+export const removeModerator = (userId) =>
+  writeRoleFlag(userId, 'isModerator', false, { successMsg: 'Moderator privileges removed.', errorMsg: 'Failed to demote user.' });
+
+export const makeBabyMod = (userId) =>
+  writeRoleFlag(userId, 'isBabyMod', true, { successMsg: 'User is now a Junior Mod.', errorMsg: 'Failed to set Junior Mod.' });
+
+export const removeBabyMod = (userId) =>
+  writeRoleFlag(userId, 'isBabyMod', false, { successMsg: 'Junior Mod removed.', errorMsg: 'Failed to remove Junior Mod.' });
+
+export const makeTrusted = (userId) =>
+  writeRoleFlag(userId, 'isTrusted', true, { successMsg: 'Trusted badge granted.', errorMsg: 'Failed to set Trusted badge.' });
+
+export const removeTrusted = (userId) =>
+  writeRoleFlag(userId, 'isTrusted', false, { successMsg: 'Trusted badge removed.', errorMsg: 'Failed to remove Trusted badge.' });
+
+export const makeCMSR = (userId) =>
+  writeRoleFlag(userId, 'isCMSR', true, { successMsg: 'CMSR badge granted.', errorMsg: 'Failed to set CMSR badge.' });
+
+export const removeCMSR = (userId) =>
+  writeRoleFlag(userId, 'isCMSR', false, { successMsg: 'CMSR badge removed.', errorMsg: 'Failed to remove CMSR badge.' });
+
+export const makeHelper = (userId) =>
+  writeRoleFlag(userId, 'isHelper', true, { successMsg: 'Helper badge granted.', errorMsg: 'Failed to set Helper badge.' });
+
+export const removeHelper = (userId) =>
+  writeRoleFlag(userId, 'isHelper', false, { successMsg: 'Helper badge removed.', errorMsg: 'Failed to remove Helper badge.' });
 
 // ========== Real-time Online Status ==========
 

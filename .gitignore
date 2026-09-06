@@ -72,3 +72,5 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+docs/deployed-sources-2026-09-06/*.zip
+docs/deployed-sources-2026-09-06/*/node_modules/

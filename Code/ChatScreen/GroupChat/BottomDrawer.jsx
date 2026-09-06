@@ -12,6 +12,9 @@ import {
   Linking,
   Platform,
   Dimensions,
+  TextInput,
+  KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { useGlobalState } from '../../GlobelStats';
 import config from '../../Helper/Environment';
@@ -46,11 +49,15 @@ import {
   getCountFromServer, // ✅ Added for follower count
 } from '@react-native-firebase/firestore';
 import { ref, get, set } from '@react-native-firebase/database';
-import { useOnlineStatus } from '../utils';
+import { useOnlineStatus, canStaffBanMute, checkBanStatus, setUserStrike, muteUser,
+  unbanUserWithEmail, makeModerator, removeModerator, makeBabyMod, removeBabyMod,
+  makeTrusted, removeTrusted, makeCMSR, removeCMSR, makeHelper, removeHelper } from '../utils';
+import ProfileAdminActions from './ProfileAdminActions';
+import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import FramedAvatar from './FramedAvatar';
-import { getCachedProfile, warmProfileCache } from '../../Helper/profileCache';
+import { getCachedProfile, warmProfileCache, invalidateFullProfile, getRoleOverride, getOrFetchFullProfile } from '../../Helper/profileCache';
 
 dayjs.extend(relativeTime);
 
@@ -138,7 +145,7 @@ const ProfileBottomDrawer = ({
   bannedUsers,
   fromPvtChat,
 }) => {
-  const { theme, firestoreDB, appdatabase, user } = useGlobalState();
+  const { theme, firestoreDB, appdatabase, user, isAdmin, modControlsEnabled, canGrantJmd } = useGlobalState();
   const { updateLocalState, localState } = useLocalState();
   const { t } = useTranslation();
   const { triggerHapticFeedback } = useHaptic();
@@ -217,6 +224,17 @@ const ProfileBottomDrawer = ({
 
   // ✅ State for fetched user data (roblox username, verified status, etc.)
   const [userData, setUserData] = useState(null);
+
+  // ── Mod tools (PLAN_2026-09.md P5) ──
+  const [showModTools, setShowModTools] = useState(false);
+  const [isBanned, setIsBanned] = useState(false);
+  // A ban/mute/strike always asks for a reason first. The reason modal is a
+  // SIBLING of the drawer, not a child: opening it closes the drawer, so the
+  // two never fight over the screen or the keyboard.
+  const [showReasonModal, setShowReasonModal] = useState(false);
+  const [reasonActionType, setReasonActionType] = useState(null); // {type, value, email}
+  const [adminReason, setAdminReason] = useState('');
+
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
 
@@ -257,36 +275,52 @@ const ProfileBottomDrawer = ({
     // opened — which is the common case.
     if (!isVisible || !selectedUserId || !appdatabase) return;
 
-    // Only fetch if robloxUsername is not already in selectedUser
-    if (selectedUser?.robloxUsername || selectedUser?.robloxUserId) {
-      setUserData(null); // Clear fetched data if already in selectedUser
-      return;
-    }
+    // No early return on a known roblox username any more: this effect now
+    // also supplies role flags, the email the mod actions need, and ban
+    // state, none of which selectedUser carries.
 
     let isMounted = true;
 
     const fetchUserData = async () => {
       try {
-        // ✅ OPTIMIZED: Fetch only specific fields instead of full user object
-        const [robloxUsernameSnap, robloxUserIdSnap, robloxUsernameVerifiedSnap, 
-               isProSnap, lastGameWinAtSnap] = await Promise.all([
-          get(ref(appdatabase, `users/${selectedUserId}/robloxUsername`)).catch(() => null),
-          get(ref(appdatabase, `users/${selectedUserId}/robloxUserId`)).catch(() => null),
-          get(ref(appdatabase, `users/${selectedUserId}/robloxUsernameVerified`)).catch(() => null),
-          get(ref(appdatabase, `users/${selectedUserId}/isPro`)).catch(() => null),
-          get(ref(appdatabase, `users/${selectedUserId}/lastGameWinAt`)).catch(() => null),
-        ]);
-        
+        // ONE read of users/{uid}, shared with the chat/online-list cache
+        // (PLAN_2026-09.md F1). This used to be 5 parallel leaf reads, and it
+        // could not see the role flags or the email at all — which is why the
+        // mod tools below need the whole record anyway.
+        const record = await getOrFetchFullProfile(appdatabase, selectedUserId);
         if (!isMounted) return;
-        
-        // ✅ Extract values only if they exist
+
+        if (!record) { setUserData(null); return; }
+
+        // Roles we granted seconds ago beat the cached record, so a freshly
+        // awarded badge shows up without waiting out the cache TTL.
+        const roleOv = getRoleOverride(selectedUserId) || {};
+
         setUserData({
-          robloxUsername: robloxUsernameSnap?.exists() ? robloxUsernameSnap.val() : null,
-          robloxUserId: robloxUserIdSnap?.exists() ? robloxUserIdSnap.val() : null,
-          robloxUsernameVerified: robloxUsernameVerifiedSnap?.exists() ? robloxUsernameVerifiedSnap.val() : false,
-          isPro: isProSnap?.exists() ? isProSnap.val() : false,
-          lastGameWinAt: lastGameWinAtSnap?.exists() ? lastGameWinAtSnap.val() : null,
+          robloxUsername: record.robloxUsername ?? null,
+          robloxUserId: record.robloxUserId ?? null,
+          robloxUsernameVerified: !!record.robloxUsernameVerified,
+          isPro: !!record.isPro,
+          lastGameWinAt: record.lastGameWinAt ?? null,
+          email: record.email ?? record.decodedEmail ?? null,
+          // RTDB stores the owner flag as `admin`; the app reads `isAdmin`.
+          isAdmin: !!record.admin || !!record.isAdmin,
+          isModerator: roleOv.isModerator ?? !!record.isModerator,
+          isBabyMod: roleOv.isBabyMod ?? !!record.isBabyMod,
+          isTrusted: roleOv.isTrusted ?? !!record.isTrusted,
+          isCMSR: roleOv.isCMSR ?? !!record.isCMSR,
+          isHelper: roleOv.isHelper ?? !!record.isHelper,
         });
+
+        // Ban state for the Unban chip. checkBanStatus validates against
+        // server time, so an expired ban does not keep showing as active.
+        const emailToCheck = record.email || record.decodedEmail || selectedUser?.email;
+        if (emailToCheck) {
+          const banStatus = await checkBanStatus(emailToCheck);
+          if (isMounted) setIsBanned(banStatus.isBanned);
+        } else if (isMounted) {
+          setIsBanned(false);
+        }
       } catch (error) {
         console.error('Error fetching user data in BottomDrawer:', error);
         if (isMounted) setUserData(null);
@@ -299,7 +333,7 @@ const ProfileBottomDrawer = ({
     return () => {
       isMounted = false;
     };
-  }, [isVisible, selectedUserId, selectedUser?.robloxUsername, selectedUser?.robloxUserId, appdatabase]);
+  }, [isVisible, selectedUserId, selectedUser?.email, appdatabase]);
 
   // ✅ Check if current user is following this user (Firestore)
   useEffect(() => {
@@ -405,6 +439,15 @@ const ProfileBottomDrawer = ({
     if (!userData) return selectedUser;
     return {
       ...selectedUser,
+      // Roles and email come only from the RTDB record — selectedUser is
+      // built from a chat message, which never carries them.
+      email: userData.email ?? selectedUser?.email ?? null,
+      isAdmin: userData.isAdmin,
+      isModerator: userData.isModerator,
+      isBabyMod: userData.isBabyMod,
+      isTrusted: userData.isTrusted,
+      isCMSR: userData.isCMSR,
+      isHelper: userData.isHelper,
       robloxUsername: selectedUser?.robloxUsername || userData.robloxUsername,
       robloxUserId: selectedUser?.robloxUserId || userData.robloxUserId,
       robloxUsernameVerified: selectedUser?.robloxUsernameVerified !== undefined 
@@ -573,6 +616,114 @@ const ProfileBottomDrawer = ({
   };
 
   // ─────────────────────────────────────────────
+  // Mod tools (PLAN_2026-09.md P3/P5)
+  //
+  // Who can do what. Admins qualify for everything. A user holding ONLY the
+  // delegated Junior-Mod grant is not staff — they get the Junior Mod chip
+  // and nothing else.
+  const canManageBabyMod = isAdmin || !!canGrantJmd;
+  const canManageBadges = isAdmin || !!user?.isModerator;
+  const isStaff = isAdmin || !!user?.isModerator || !!user?.isBabyMod;
+
+  // Strike / mute / ban all route through the reason modal, so every entry in
+  // the Admin Dashboard's ban list says WHY it happened.
+  const openReasonModal = useCallback((action) => {
+    const targetEmail = mergedUser?.email;
+    if (!targetEmail) {
+      Alert.alert('Error', 'This user has no email on record, so they cannot be sanctioned.');
+      return;
+    }
+    setReasonActionType({ ...action, email: targetEmail });
+    setAdminReason('');
+    toggleModal();            // close the drawer; the modal is its sibling
+    setShowReasonModal(true);
+  }, [mergedUser?.email, toggleModal]);
+
+  const handleApplyStrike = useCallback((strikeCount) => {
+    openReasonModal({ type: 'strike', value: strikeCount });
+  }, [openReasonModal]);
+
+  const handleMuteUser = useCallback((minutes) => {
+    openReasonModal({ type: 'mute', value: minutes });
+  }, [openReasonModal]);
+
+  const confirmAdminAction = useCallback(async () => {
+    if (!reasonActionType) return;
+    Keyboard.dismiss();
+
+    // Re-check the kill switch at commit time, not just when the panel
+    // rendered — an admin may have turned moderator powers off in between.
+    if (!canStaffBanMute({ isAdmin, isModerator: user?.isModerator, isBabyMod: user?.isBabyMod, modControlsEnabled })) {
+      setShowReasonModal(false);
+      setReasonActionType(null);
+      Alert.alert('Disabled', 'Moderator ban & mute are currently turned off by an admin.');
+      return;
+    }
+
+    setShowReasonModal(false);
+
+    const bannerInfo = { id: user?.id, displayName: user?.displayName || 'Admin', avatar: user?.avatar };
+    const reason = adminReason.trim() || undefined;
+    const { type, value, email } = reasonActionType;
+
+    let ok = false;
+    if (type === 'strike') {
+      ok = await setUserStrike(email, value, selectedUserId, true, bannerInfo, mergedUser, reason);
+    } else if (type === 'mute') {
+      ok = await muteUser(email, value, mergedUser, bannerInfo, true, reason);
+    }
+
+    if (ok) {
+      invalidateFullProfile(selectedUserId);
+      setIsBanned(true);
+    }
+    setReasonActionType(null);
+  }, [reasonActionType, adminReason, isAdmin, user, modControlsEnabled, mergedUser, selectedUserId]);
+
+  const handleUnbanUser = useCallback(async () => {
+    if (!mergedUser?.email) return;
+    const confirmed = await new Promise((resolve) => {
+      Alert.alert('Unban User', `Lift the ban on ${userName}?`, [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Unban', onPress: () => resolve(true) },
+      ]);
+    });
+    if (!confirmed) return;
+    if (await unbanUserWithEmail(mergedUser.email)) {
+      invalidateFullProfile(selectedUserId);
+      setIsBanned(false);
+    }
+  }, [mergedUser?.email, userName, selectedUserId]);
+
+  // Role grants. One confirm dialog, one writer (utils.writeRoleFlag handles
+  // the cache invalidation), one local state patch so the pill updates without
+  // a re-open.
+  const applyRole = useCallback(async (fn, field, value, title, message) => {
+    if (!selectedUserId) return;
+    const confirmed = await new Promise((resolve) => {
+      Alert.alert(title, message, [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: value ? 'Confirm' : 'Remove', style: value ? 'default' : 'destructive', onPress: () => resolve(true) },
+      ]);
+    });
+    if (!confirmed) return;
+    if (await fn(selectedUserId)) {
+      setUserData((prev) => (prev ? { ...prev, [field]: value } : prev));
+    }
+  }, [selectedUserId]);
+
+  const handlePromoteModerator = () => applyRole(makeModerator, 'isModerator', true, 'Promote to Moderator', `Make ${userName} a Moderator?`);
+  const handleDemoteModerator  = () => applyRole(removeModerator, 'isModerator', false, 'Remove Moderator', `Remove Moderator from ${userName}?`);
+  const handleMakeBabyMod      = () => applyRole(makeBabyMod, 'isBabyMod', true, 'Make Junior Mod', `Make ${userName} a Junior Mod? They can only mute for up to 2 hours.`);
+  const handleRemoveBabyMod    = () => applyRole(removeBabyMod, 'isBabyMod', false, 'Remove Junior Mod', `Remove Junior Mod from ${userName}?`);
+  const handleMakeTrusted      = () => applyRole(makeTrusted, 'isTrusted', true, 'Make Trusted', `Give ${userName} the Trusted badge?`);
+  const handleRemoveTrusted    = () => applyRole(removeTrusted, 'isTrusted', false, 'Remove Trusted', `Remove the Trusted badge from ${userName}?`);
+  const handleMakeCMSR         = () => applyRole(makeCMSR, 'isCMSR', true, 'Make Commissioner', `Give ${userName} the CMSR badge?`);
+  const handleRemoveCMSR       = () => applyRole(removeCMSR, 'isCMSR', false, 'Remove Commissioner', `Remove the CMSR badge from ${userName}?`);
+  const handleMakeHelper       = () => applyRole(makeHelper, 'isHelper', true, 'Make Helper', `Give ${userName} the Helper badge?`);
+  const handleRemoveHelper     = () => applyRole(removeHelper, 'isHelper', false, 'Remove Helper', `Remove the Helper badge from ${userName}?`);
+
+  // ─────────────────────────────────────────────
   // Start chat
   const handleStartChat = () => {
     if (startChat) startChat();
@@ -580,7 +731,10 @@ const ProfileBottomDrawer = ({
 
   // Reset when drawer closes
   useEffect(() => {
-    if (!isVisible) {
+    // showReasonModal guard: the reason modal deliberately closes the drawer,
+    // and without this the reset wiped the target user mid-action.
+    if (!isVisible && !showReasonModal) {
+      setShowModTools(false);
       setLoadDetails(false);
       setRatingSummary(null);
       setUserBio(null);
@@ -599,7 +753,7 @@ const ProfileBottomDrawer = ({
       setLastTradeDoc(null);
       setHasMoreTrades(false);
     }
-  }, [isVisible]);
+  }, [isVisible, showReasonModal]);
 
   // ─────────────────────────────────────────────
   // Load rating summary + joined
@@ -1811,18 +1965,34 @@ const ProfileBottomDrawer = ({
 
                 {/* Badge pills */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 5 }}>
-                  {mergedUser?.isAdmin && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EF4444', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, gap: 3 }}>
-                      <Icon name="shield" size={10} color="#fff" />
-                      <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8 }}>Admin</Text>
-                    </View>
-                  )}
-                  {!mergedUser?.isAdmin && mergedUser?.isModerator && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#8B5CF6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, gap: 3 }}>
-                      <Icon name="shield-checkmark" size={10} color="#fff" />
-                      <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8 }}>Mod</Text>
-                    </View>
-                  )}
+                  {/* Role pills — one component for every surface, so a rank
+                      looks identical here, in chat, on trades and in the feed.
+                      Only the highest-priority badge a user holds shimmers. */}
+                  {(() => {
+                    const firstBadge = getFirstBadgeType(mergedUser);
+                    return (
+                      <>
+                        {mergedUser?.isAdmin && (
+                          <UserBadgePill type="admin" size="md" isDarkMode={isDarkMode} labelOverride={t('chat.admin')} glow={firstBadge === 'admin'} />
+                        )}
+                        {!mergedUser?.isAdmin && mergedUser?.isModerator && (
+                          <UserBadgePill type="mod" size="md" isDarkMode={isDarkMode} glow={firstBadge === 'mod'} />
+                        )}
+                        {!mergedUser?.isAdmin && !mergedUser?.isModerator && mergedUser?.isBabyMod && (
+                          <UserBadgePill type="jmd" size="md" isDarkMode={isDarkMode} glow={firstBadge === 'jmd'} />
+                        )}
+                        {mergedUser?.isTrusted && (
+                          <UserBadgePill type="trusted" size="md" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
+                        )}
+                        {mergedUser?.isCMSR && (
+                          <UserBadgePill type="cmsr" size="md" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
+                        )}
+                        {mergedUser?.isHelper && (
+                          <UserBadgePill type="helper" size="md" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
+                        )}
+                      </>
+                    );
+                  })()}
                   {mergedUser?.robloxUsernameVerified && (
                     <View style={{
                       flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -2179,10 +2349,117 @@ const ProfileBottomDrawer = ({
                 </View>
               </View>
 
+              {/* ═══ MOD TOOLS ═══
+                  Collapsed by default so the panel never gets in the way of
+                  an ordinary profile view. A user holding only the delegated
+                  Junior-Mod grant is not staff, but still needs the toggle to
+                  reach their one chip — ProfileAdminActions hides the rest. */}
+              {!loadDetails && user?.id !== selectedUserId && (isStaff || canManageBabyMod) && (
+                <View style={{ paddingHorizontal: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => setShowModTools((prev) => !prev)}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                      paddingVertical: 8, marginTop: 4, gap: 6, borderRadius: 10,
+                      backgroundColor: showModTools
+                        ? (isDarkMode ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.08)')
+                        : (isDarkMode ? 'rgba(100,116,139,0.15)' : 'rgba(100,116,139,0.08)'),
+                    }}
+                  >
+                    <Icon name={showModTools ? 'shield' : 'shield-outline'} size={16}
+                      color={showModTools ? '#EF4444' : c.textSecondary} />
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: showModTools ? '#EF4444' : c.textSecondary }}>
+                      {showModTools ? 'Hide Mod Tools' : 'Mod Tools'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {showModTools && (
+                    <ProfileAdminActions
+                      isAdmin={isAdmin}
+                      isDarkMode={isDarkMode}
+                      isBanned={isBanned}
+                      mergedUser={mergedUser}
+                      handleApplyStrike={handleApplyStrike}
+                      handleMuteUser={handleMuteUser}
+                      handleUnbanUser={handleUnbanUser}
+                      handlePromoteModerator={handlePromoteModerator}
+                      handleDemoteModerator={handleDemoteModerator}
+                      isBabyMod={!!user?.isBabyMod}
+                      isModerator={!!user?.isModerator}
+                      isStaff={isStaff}
+                      canManageBabyMod={canManageBabyMod}
+                      targetIsBabyMod={!!mergedUser?.isBabyMod}
+                      handleMakeBabyMod={handleMakeBabyMod}
+                      handleRemoveBabyMod={handleRemoveBabyMod}
+                      canManageBadges={canManageBadges}
+                      targetIsTrusted={!!mergedUser?.isTrusted}
+                      targetIsCMSR={!!mergedUser?.isCMSR}
+                      targetIsHelper={!!mergedUser?.isHelper}
+                      handleMakeTrusted={handleMakeTrusted}
+                      handleRemoveTrusted={handleRemoveTrusted}
+                      handleMakeCMSR={handleMakeCMSR}
+                      handleRemoveCMSR={handleRemoveCMSR}
+                      handleMakeHelper={handleMakeHelper}
+                      handleRemoveHelper={handleRemoveHelper}
+                    />
+                  )}
+                </View>
+              )}
+
             </View>{/* end content area */}
           </ScrollView>
         </SwipeableBottomDrawer>
       </View>
+    </Modal>
+
+    {/* Reason modal — a SIBLING of the drawer, shown after it closes, so the
+        two modals never stack and the keyboard has the screen to itself.
+        KeyboardAvoidingView on iOS only: Android already resizes via
+        adjustResize, and doubling up makes the modal jump when the keyboard
+        dismisses, which lands taps on the wrong button. */}
+    <Modal visible={showReasonModal} transparent animationType="fade" onRequestClose={() => setShowReasonModal(false)}>
+      <KeyboardAvoidingView behavior="padding" enabled={Platform.OS === 'ios'} style={{ flex: 1 }}>
+        <Pressable
+          onPress={() => setShowReasonModal(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()} style={{ width: '100%', backgroundColor: c.bg, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: c.border }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 10 }}>
+              {reasonActionType?.type === 'strike' && `Apply Strike ${reasonActionType.value}`}
+              {reasonActionType?.type === 'mute' && `Mute for ${reasonActionType.value} min`}
+            </Text>
+            <Text style={{ fontSize: 12, color: c.textMuted, marginBottom: 15 }}>
+              Give a reason. It is stored with the ban and shown in the Admin Dashboard.
+            </Text>
+            <TextInput
+              style={{
+                backgroundColor: c.bgAlt, color: c.text, borderRadius: 10, padding: 12,
+                minHeight: 80, borderWidth: 1, borderColor: c.border, textAlignVertical: 'top',
+              }}
+              placeholder="e.g. scamming, abusive language, spam..."
+              placeholderTextColor={c.textMuted}
+              multiline
+              value={adminReason}
+              onChangeText={setAdminReason}
+              autoFocus
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+              <TouchableOpacity
+                onPress={() => { setShowReasonModal(false); setReasonActionType(null); }}
+                style={{ paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: isDarkMode ? '#334155' : '#e2e8f0' }}
+              >
+                <Text style={{ color: c.text, fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={confirmAdminAction}
+                style={{ paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#ef4444' }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
     </>
   );

@@ -9,6 +9,8 @@ import { useLocalState } from './LocalGlobelStats';
 import { requestPermission } from './Helper/PermissionCheck';
 import { useColorScheme, AppState } from 'react-native';
 import { getFlag } from './Helper/CountryCheck';
+import { getConfigNodes } from './Helper/configCache';
+import { getServerTime } from './Helper/serverTime';
 import { generateOnePieceUsername } from './Helper/RendomNamegen';
 
 
@@ -40,6 +42,22 @@ export const GlobalStateProvider = ({ children }) => {
 
 
   const [isAdmin, setIsAdmin] = useState(false);
+
+  // ── Moderation state (PLAN_2026-09.md P4/P6/P7) ──
+  // Ban payload from banned_users_by_email — drives the ban card and the
+  // "Strike N, Xh left" copy in chat.
+  const [strikeInfo, setStrikeInfo] = useState(null);
+  // Canonical gate. Every send/post path should read THIS, not strikeInfo,
+  // because it is validated against server time rather than the device clock.
+  const [isUserBlocked, setIsUserBlocked] = useState(false);
+  // Admin kill switch for moderator ban/mute (RTDB /mod_controls_enabled).
+  // Default ON: only an explicit `false` disables it, so a denied or offline
+  // read leaves moderators working.
+  const [modControlsEnabled, setModControlsEnabled] = useState(true);
+  // Delegated "can grant Junior Mod" permission (RTDB /jmd_granters/{uid}).
+  // Fails CLOSED — a denied read means no permission.
+  const [canGrantJmd, setCanGrantJmd] = useState(false);
+
   const [isInActiveGame, setIsInActiveGame] = useState(false); // ✅ Track if user is in active game
   const [acceptedInviteRoom, setAcceptedInviteRoom] = useState(null); // ✅ { roomId, gameType } from toast accept
   const [user, setUser] = useState({
@@ -224,8 +242,15 @@ export const GlobalStateProvider = ({ children }) => {
       const snapshot = await get(userRef);
       let userData;
 
+      // Admin comes from the real RTDB role flag (`users/{uid}/admin`) — the
+      // same field the badge pills and the roster functions read. The founder
+      // emails stay ONLY as a bootstrap, so the first admin can always sign in
+      // and grant the flag to others, and can never be locked out by a bad
+      // write. Assigned unconditionally so a REVOKED flag actually clears
+      // instead of surviving until the app is killed.
       const makeadmin = loggedInUser.email === 'thesolanalabs@gmail.com' || loggedInUser.email === 'sohailnasir74business@gmail.com' || loggedInUser.email === 'sohailnasir74@gmail.com';
-      if (makeadmin) { setIsAdmin(makeadmin) }
+      const existingSnap = snapshot.exists() ? snapshot.val() : null;
+      setIsAdmin(makeadmin || existingSnap?.admin === true || existingSnap?.isAdmin === true);
       setCurrentuserEmail(loggedInUser.email)
 
       if (snapshot.exists()) {
@@ -327,48 +352,32 @@ export const GlobalStateProvider = ({ children }) => {
 
 
 
+  // Launch config. Four root nodes that used to be read fresh on every cold
+  // start; now served from a 6-hour MMKV cache (PLAN_2026-09.md F2). Values
+  // change only when someone edits them in the Firebase console.
   useEffect(() => {
+    let cancelled = false;
+
     const fetchAPIKeys = async () => {
       try {
-        const apiRef = ref(appdatabase, 'api');
-        const paywallSecondOnlyFlagRef = ref(appdatabase, 'single_offer_wall');
-        const freeRef = ref(appdatabase, 'free_translation');
-
-        const [snapshotApi, paywallSecondOnlyFlag, snapshotFree] = await Promise.all([
-          get(apiRef),
-          get(paywallSecondOnlyFlagRef),
-          get(freeRef),
+        const cfg = await getConfigNodes(appdatabase, [
+          'api',
+          'free_translation',
+          'single_offer_wall',
         ]);
+        if (cancelled) return;
 
-        if (snapshotApi.exists()) {
-          const value = snapshotApi.val();
-          setApi(value);
-        } else {
-          // console.warn('⚠️ No Google Translate API key found at /api');
-        }
-
-        if (snapshotFree.exists()) {
-          const value = snapshotFree.val();
-          setFreeTranslation(value);
-        } else {
-          // console.warn('⚠️ No free translation key found at /free_translation');
-        }
-        if (paywallSecondOnlyFlag.exists()) {
-          const value = paywallSecondOnlyFlag.val();
-          // console.log('chec', value)
-          setSingle_offer_wall(value);
-          // console.log('🔑 [Firebase] Free Translation Key from /free_translation:', value);
-        } else {
-          console.warn('⚠️ No free translation key found at /free_translation');
-        }
-
-
+        if (cfg.api != null) setApi(cfg.api);
+        if (cfg.free_translation != null) setFreeTranslation(cfg.free_translation);
+        if (cfg.single_offer_wall != null) setSingle_offer_wall(cfg.single_offer_wall);
       } catch (error) {
-        // console.error('🔥 Error fetching API keys from Firebase:', error);
+        // Offline launch — screens fall back to their own defaults, and the
+        // cache is deliberately not poisoned, so the next launch retries.
       }
     };
 
     fetchAPIKeys();
+    return () => { cancelled = true; };
   }, []);
 
   // Fetch trading server link with 3 hour caching
@@ -583,13 +592,14 @@ export const GlobalStateProvider = ({ children }) => {
           suprime = suprimeSnapshot.exists() ? suprimeSnapshot.val() : {};
         }
 
-        // ✅ Try to fetch `image_url` from Firebase (may not exist in MM2)
-        // ✅ Try to fetch `image_url` from Firebase (may not exist in MM2)
+        // `image_url` may not exist in MM2 at all. Cached for 6 hours with the
+        // other config nodes so a stock refresh (every 6 min) stops re-reading
+        // a node that changes a few times a year.
         try {
-          const imageSnapShot = await get(ref(appdatabase, 'image_url'));
-          image = imageSnapShot.exists() ? imageSnapShot.val() : '';
+          const cfg = await getConfigNodes(appdatabase, ['image_url']);
+          image = cfg.image_url || '';
         } catch (imgErr) {
-          // image_url node may not exist — use empty string
+          // absent or unreachable — empty string, same as before
         }
 
         // ✅ Store in local state
@@ -624,6 +634,110 @@ export const GlobalStateProvider = ({ children }) => {
   }, [fetchStockData]);
 
   
+
+  // ── Moderator ban/mute kill switch ──
+  // One root listener for the whole session. Denied or offline → stays ON,
+  // matching the documented default.
+  useEffect(() => {
+    if (!appdatabase) return;
+    const unsub = onValue(
+      ref(appdatabase, 'mod_controls_enabled'),
+      (snap) => setModControlsEnabled(snap.val() !== false),
+      () => { /* denied / offline → leave ON */ },
+    );
+    return () => { try { unsub(); } catch (e) { /* noop */ } };
+    // appdatabase is a module-level constant, not a reactive value.
+  }, []);
+
+  // ── Delegated Junior-Mod grant permission ──
+  // A single leaf listener, so a revoke reaches the device immediately rather
+  // than at next login. Fails closed.
+  useEffect(() => {
+    if (!appdatabase || !user?.id) { setCanGrantJmd(false); return; }
+    const unsub = onValue(
+      ref(appdatabase, `jmd_granters/${user.id}`),
+      (snap) => setCanGrantJmd(snap.exists() && snap.val() !== false),
+      () => setCanGrantJmd(false),
+    );
+    return () => { try { unsub(); } catch (e) { /* noop */ } };
+  }, [user?.id]);
+
+  // ── Live role flags for the signed-in user ──
+  // Two leaf listeners for the session, so a demoted moderator loses their
+  // powers immediately instead of at next launch.
+  useEffect(() => {
+    if (!appdatabase || !user?.id) return;
+    const uid = user.id;
+    const unsubs = ['isModerator', 'isBabyMod'].map((flag) => onValue(
+      ref(appdatabase, `users/${uid}/${flag}`),
+      (snap) => {
+        const v = !!(snap && snap.exists() && snap.val() === true);
+        setUser((prev) => (prev && prev.id === uid && prev[flag] !== v ? { ...prev, [flag]: v } : prev));
+      },
+      () => { /* denied / offline → keep current value */ },
+    ));
+    return () => unsubs.forEach((u) => { try { u(); } catch (e) { /* noop */ } });
+  }, [user?.id]);
+
+  // ── Ban / mute enforcement, validated against SERVER time ──
+  //
+  // The device clock is not trusted anywhere here. Rolling it forward is the
+  // standard way out of a timed ban and it defeats any Date.now() comparison.
+  // `bannedUntil` is checked against a server-time probe, and the auto-clear
+  // uses setTimeout (monotonic, immune to wall-clock changes). Returning to
+  // the foreground re-probes, so a clock changed while backgrounded is caught.
+  useEffect(() => {
+    if (!currentUserEmail || !appdatabase) {
+      setIsUserBlocked(false);
+      setStrikeInfo(null);
+      return;
+    }
+
+    const banRef = ref(appdatabase, `banned_users_by_email/${currentUserEmail.replace(/\./g, '(dot)')}`);
+
+    let currentBan = null;
+    let expiryTimer = null;
+    let cancelled = false;
+
+    const evaluate = async () => {
+      if (cancelled) return;
+      if (expiryTimer) { clearTimeout(expiryTimer); expiryTimer = null; }
+
+      const banData = currentBan;
+      if (!banData) { setIsUserBlocked(false); return; }
+
+      const { bannedUntil } = banData;
+      if (bannedUntil === 'permanent') { setIsUserBlocked(true); return; }
+      if (typeof bannedUntil !== 'number') { setIsUserBlocked(false); return; }
+
+      const serverNow = (await getServerTime(appdatabase, user?.id || currentUserEmail)).getTime();
+      if (cancelled) return;
+
+      const remaining = bannedUntil - serverNow;
+      if (remaining <= 0) { setIsUserBlocked(false); return; }
+
+      setIsUserBlocked(true);
+      // Cap at ~24h so a long ban never sits on a stale offset.
+      expiryTimer = setTimeout(evaluate, Math.min(remaining, 24 * 60 * 60 * 1000));
+    };
+
+    const unsubscribe = onValue(banRef, (snapshot) => {
+      currentBan = snapshot.val() || null;
+      setStrikeInfo(currentBan);
+      evaluate();
+    });
+
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') evaluate();
+    });
+
+    return () => {
+      cancelled = true;
+      if (expiryTimer) clearTimeout(expiryTimer);
+      appStateSub.remove();
+      unsubscribe();
+    };
+  }, [currentUserEmail, user?.id]);
 
   // ✅ Set up online status tracking using separate presence node (RTDB-only, optimized for scale)
   // ✅ Foreground-only presence (ACTIVE = online, background/inactive = offline)
@@ -766,8 +880,12 @@ export const GlobalStateProvider = ({ children }) => {
       setIsInActiveGame, // ✅ Set game state
       acceptedInviteRoom, // ✅ Accepted invite from toast
       setAcceptedInviteRoom, // ✅ Set accepted invite
+      strikeInfo,          // raw ban payload — reason, strike count, expiry
+      isUserBlocked,       // canonical gate, server-time validated
+      modControlsEnabled,  // moderator ban/mute kill switch
+      canGrantJmd,         // delegated Junior-Mod grant permission
     }),
-    [user, theme, loading, api, freeTranslation, currentUserEmail, tradingServerLink, isInActiveGame, acceptedInviteRoom, isAdmin, single_offer_wall, fetchStockData, reload, updateLocalStateAndDatabase]
+    [user, theme, loading, api, freeTranslation, currentUserEmail, tradingServerLink, isInActiveGame, acceptedInviteRoom, isAdmin, single_offer_wall, fetchStockData, reload, updateLocalStateAndDatabase, strikeInfo, isUserBlocked, modControlsEnabled, canGrantJmd]
   );
 
   return (

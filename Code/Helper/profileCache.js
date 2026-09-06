@@ -3,42 +3,29 @@
  * MMKV-based profile cache for user display data.
  *
  * Purpose: Reduce RTDB bandwidth by caching sender profiles locally.
- * When rendering chat messages, avatar/isPro/badges are fetched from cache
+ * When rendering chat messages, avatar/isPro/badges come from this cache
  * instead of being embedded in every message payload.
  *
- * Cache TTL: 30 minutes
- * Storage: react-native-mmkv (already a dependency)
+ * Source of truth: RTDB `users/{uid}` — one record, read once, cached twice:
+ *   - `full_<uid>`  the raw record          (getOrFetchFullProfile)
+ *   - `p_<uid>`     the slim render subset  (getCachedProfile)
+ * Both entries share a 6-hour TTL and are cleared together by
+ * invalidateFullProfile(uid), which every role/profile write calls.
  *
  * ⚠️ BACKWARDS COMPATIBLE:
- *   - Old messages still have avatar/isPro/sender fields → used first
- *   - New slim messages miss these fields → cache fills in
- *   - If cache misses too → sensible defaults (no crash)
+ *   - Old messages still carry avatar/isPro/sender fields → used first
+ *   - New slim messages miss these fields → cache fills them in
+ *   - If the cache misses too → sensible defaults (no crash)
  *
- * 🚀 WAVE 1+2 — moved to Supabase via userBackend:
- *   - displayName, avatar              → user_identity
- *   - isAdmin/isModerator/isBabyMod
- *     /isTrusted/isCMSR/isHelper       → user_roles
- *   - isPro, topBadge                  → user_cosmetics
- *   RTDB falls back per-field if Supabase has no row (mirror lag, brand-new
- *   user, or backfill miss). Game state (hasRecentGameWin, lastGameWinAt,
- *   robloxUsernameVerified) and shop subtree still read from RTDB —
- *   they migrate in later waves (or stay on RTDB; shop deferred).
+ * 📅 2026-09-05: collapsed 16 RTDB reads per profile into 1. See the comment
+ *    above fetchUserRecord, and PLAN_2026-09.md F1 for the measurements.
  */
 
 
 import { ref, get } from '@react-native-firebase/database';
-// MM2 is Firebase-only — no Supabase userBackend here. These stubs make every
-// "Supabase row" come back empty, so assembleAndCacheProfile's built-in
-// per-field RTDB fallback (users/{uid}/...) supplies ALL profile fields —
-// the file's own docs state empty rows degrade to exactly that path.
-const getIdentity = async () => null;
-const getRoles = async () => null;
-const getCosmetics = async () => null;
-const getRoblox = async () => null;
-const getIdentityBatch = async () => new Map();
-const getRolesBatch = async () => new Map();
-const getCosmeticsBatch = async () => new Map();
-const getRobloxBatch = async () => new Map();
+// MM2 is Firebase-only. Every profile field lives in one RTDB record at
+// users/{uid}, so this file reads that record ONCE and picks the fields off
+// it — see fetchUserRecord below.
 
 let cache;
 try {
@@ -52,7 +39,11 @@ try {
     delete: () => {},
   };
 }
-const TTL = 30 * 60 * 1000; // 30 minutes
+// 6 hours. Was 30 minutes, which is what a Supabase-backed build needed to
+// pick up mirror lag. Nothing here drifts on its own: display name, avatar,
+// role flags and cosmetics only change through a write that also calls
+// invalidateFullProfile(uid), which clears BOTH cache keys for that user.
+const TTL = 6 * 60 * 60 * 1000;
 
 // ── Negative cache ──
 // uids with no users/{uid} record at all. In-memory only (see the comment at
@@ -113,169 +104,90 @@ export const setCachedProfile = (uid, data) => {
 // ────────────────────────────────────────────────────────
 export const getOrFetchProfile = async (db, uid) => {
   if (!uid || !db) return null;
-
-  // 1. Check cache first
   const cached = getCachedProfile(uid);
   if (cached) return cached;
-
-  // Fetch strategy:
-  //   - identity / roles / cosmetics / roblox  → Supabase (always)
-  //   - cosmetics row also carries active shop items (profileFrame, etc.)
-  //     since 016_user_cosmetics_active migration — was 1 RTDB read here
-  //   - hasRecentGameWin + lastGameWinAt       → RTDB (not mirrored)
-  //   - RTDB fallback for mirrored fields fires ONLY if the corresponding
-  //     Supabase table returned null (mirror lag / not-yet-backfilled user).
-  //     Common case: 0 RTDB reads for the mirrored fields.
-  const [identityRow, rolesRow, cosmeticsRow, robloxRow] = await Promise.all([
-    getIdentity(uid),
-    getRoles(uid),
-    getCosmetics(uid),
-    getRoblox(uid),
-  ]);
-  return assembleAndCacheProfile(db, uid, { identityRow, rolesRow, cosmeticsRow, robloxRow });
+  const record = await fetchUserRecord(db, uid);
+  return buildAndCacheProfile(uid, record);
 };
 
-// Assemble + cache a profile from pre-fetched Supabase rows. Shared by
-// getOrFetchProfile (single, 4 point queries) and warmProfileCache
-// (bulk, 4 batch queries for the whole set) so the two paths can't
-// drift. Does the RTDB game-win leaf reads + per-field RTDB fallback
-// for whichever Supabase rows came back null.
-const assembleAndCacheProfile = async (db, uid, { identityRow, rolesRow, cosmeticsRow, robloxRow }) => {
+// ────────────────────────────────────────────────────────
+//  ONE read per user, shared with the full-record cache
+// ────────────────────────────────────────────────────────
+//
+// 2026-09-05 (PLAN_2026-09.md F1). This used to issue 16 RTDB reads for a
+// single profile: 3 leaves for game/shop state, then one leaf per field for
+// every "missing Supabase row" — and in MM2 every Supabase row is missing by
+// definition, because there is no Supabase. A 10-minute production profile
+// showed those 13 leaves accounting for ~8,000 of 10,165 total database
+// reads, i.e. 79% of ALL RTDB traffic came from this one function.
+//
+// users/{uid} is a single small record (~2.9 KB average across 81k users), so
+// reading it whole costs about the same bytes as the leaves did and 1/16th of
+// the operations. RTDB bills per byte, but two thirds of MM2's egress is
+// per-operation overhead rather than payload, which is why the op count is
+// the number that matters here.
+//
+// It routes through getOrFetchFullProfile so the drawer (which needs the raw
+// record) and chat rendering (which needs the slim projection) share ONE
+// read and ONE cache entry per user.
+const fetchUserRecord = async (db, uid) => {
   try {
-    const base = `users/${uid}`;
-
-    const [hasRecentGameWinSnap, lastGameWinAtSnap, activeItemsSnap] = await Promise.all([
-      get(ref(db, `${base}/hasRecentGameWin`)),
-      get(ref(db, `${base}/lastGameWinAt`)),
-      // ⚠️ Without this, OTHER users' cosmetics can never resolve.
-      // `shopItems` below is built only from cosmeticsRow (the Supabase
-      // mirror), which is hard-stubbed to null in MM2 — and the per-field
-      // fallback list further down never included the shop subtree. Net
-      // effect: profileFrame / chatTextColor were permanently null for
-      // everyone except yourself (seedCurrentUser reads this path directly,
-      // which is exactly why your own frame worked and nobody else's did).
-      // Reading `shop/activeItems` — NOT the whole `shop` node, which also
-      // holds inventory/ownedItems — keeps this one small leaf.
-      get(ref(db, `${base}/shop/activeItems`)),
-    ]);
-
-    const hasRecentGameWin = hasRecentGameWinSnap.exists() ? hasRecentGameWinSnap.val() : null;
-    const lastGameWinAt    = lastGameWinAtSnap.exists()    ? lastGameWinAtSnap.val()    : null;
-    const activeItems      = activeItemsSnap.exists()      ? activeItemsSnap.val()      : null;
-    // Build a shopItems-shaped object from cosmeticsRow so the existing
-    // expiresAt filter below works without a code shape change. Cold
-    // cosmeticsRow (mirror lag) → null → no frame/bubble until mirror
-    // catches up; same graceful degradation as identity/roles fallback.
-    // Prefer the Supabase mirror when present; otherwise use the RTDB
-    // activeItems node read above. `activeItems` is already in the
-    // { profileFrame: {..., expiresAt}, ... } shape the filter below expects,
-    // so it can be used as-is.
-    const shopItems = cosmeticsRow ? {
-      profileFrame:  cosmeticsRow.profileFrame,
-      chatTextColor: cosmeticsRow.chatTextColor,
-      tradeCardBg:   cosmeticsRow.tradeCardBg,
-      profileBanner: cosmeticsRow.profileBanner,
-      chatBubbleBg:  cosmeticsRow.chatBubbleBg,
-    } : activeItems;
-
-    // Selective RTDB fallback — only for Supabase tables that returned null.
-    // This handles brand-new users and any backfill misses without paying
-    // the per-cache-miss RTDB tax for everyone else.
-    let fb = null;
-    const missingFields = [];
-    if (!identityRow)  missingFields.push('displayName', 'avatar');
-    // RTDB leaf for admin is `admin` (not `isAdmin`); Supabase exposes it
-    // as `isAdmin` via fromRolesRow. Use the correct RTDB name here so the
-    // fallback works when the mirror row is missing.
-    if (!rolesRow)     missingFields.push('admin', 'isModerator', 'isTrusted', 'isCMSR', 'isHelper');
-    if (!cosmeticsRow) missingFields.push('isPro', 'topBadge');
-    if (!robloxRow)    missingFields.push('robloxUsernameVerified');
-    if (missingFields.length > 0) {
-      const snaps = await Promise.all(
-        missingFields.map((p) => get(ref(db, `${base}/${p}`)).catch(() => null))
-      );
-      fb = {};
-      missingFields.forEach((p, i) => {
-        if (snaps[i] && snaps[i].exists()) fb[p] = snaps[i].val();
-      });
-    }
-
-    const displayName             = identityRow?.displayName          ?? fb?.displayName;
-    const avatar                  = identityRow?.avatar               ?? fb?.avatar;
-    const isPro                   = cosmeticsRow?.isPro               ?? fb?.isPro;
-    const topBadge                = cosmeticsRow?.topBadge            ?? fb?.topBadge;
-    const isAdmin                 = rolesRow?.isAdmin                 ?? fb?.admin;
-    const isModerator             = rolesRow?.isModerator             ?? fb?.isModerator;
-    const isTrusted               = rolesRow?.isTrusted               ?? fb?.isTrusted;
-    const isCMSR                  = rolesRow?.isCMSR                  ?? fb?.isCMSR;
-    const isHelper                = rolesRow?.isHelper                ?? fb?.isHelper;
-    const robloxUsernameVerified  = robloxRow?.robloxUsernameVerified ?? fb?.robloxUsernameVerified;
-
-    if (
-      identityRow == null && rolesRow == null && cosmeticsRow == null && robloxRow == null &&
-      hasRecentGameWin == null && lastGameWinAt == null && shopItems == null &&
-      (!fb || Object.keys(fb).length === 0)
-    ) {
-      // Nothing exists at users/{uid} — a deleted/purged account, or a system
-      // sender. Record the miss so we stop re-fetching it.
-      //
-      // Callers filter with `!getCachedProfile(id)`, and nothing was ever
-      // cached here, so such a uid passed the filter on EVERY pass. In a live
-      // chat the warm effect re-runs per incoming message, so one ghost sender
-      // in view cost a full profile fetch per message, forever.
-      //
-      // Deliberately an in-memory set rather than an MMKV entry:
-      // getCachedProfile is called synchronously in render across several
-      // screens and every caller treats "truthy" as "usable profile", so
-      // persisting a null-shaped record risks blanking names and avatars.
-      markProfileMiss(uid);
-      return null;
-    }
-
-    let chatTextColor = null;
-    let profileFrame = null;
-    let tradeCardBg = null;
-    let chatBubbleBg = null;
-    if (shopItems) {
-      const now = Date.now();
-      if (shopItems.chatTextColor && (shopItems.chatTextColor.expiresAt === -1 || shopItems.chatTextColor.expiresAt > now)) {
-        chatTextColor = shopItems.chatTextColor.color || null;
-      }
-      if (shopItems.profileFrame && (shopItems.profileFrame.expiresAt === -1 || shopItems.profileFrame.expiresAt > now)) {
-        profileFrame = shopItems.profileFrame;
-      }
-      if (shopItems.tradeCardBg && (shopItems.tradeCardBg.expiresAt === -1 || shopItems.tradeCardBg.expiresAt > now)) {
-        tradeCardBg = shopItems.tradeCardBg;
-      }
-      if (shopItems.chatBubbleBg && (shopItems.chatBubbleBg.expiresAt === -1 || shopItems.chatBubbleBg.expiresAt > now)) {
-        chatBubbleBg = shopItems.chatBubbleBg;
-      }
-    }
-
-    const profile = {
-      displayName: displayName || 'Anonymous',
-      avatar: avatar || null,
-      isPro: !!isPro,
-      robloxUsernameVerified: !!robloxUsernameVerified,
-      hasRecentGameWin: !!hasRecentGameWin,
-      lastGameWinAt: lastGameWinAt || null,
-      isAdmin: !!isAdmin,
-      isModerator: !!isModerator,
-      isTrusted: !!isTrusted,
-      isCMSR: !!isCMSR,
-      isHelper: !!isHelper,
-      chatTextColor,
-      profileFrame,
-      tradeCardBg,
-      chatBubbleBg: chatBubbleBg || null,
-      topBadge: topBadge || null,
-    };
-    setCachedProfile(uid, profile);
-    return profile;
+    return await getOrFetchFullProfile(db, uid);
   } catch (err) {
-    console.warn('[profileCache] Fetch error:', err?.message);
+    console.warn('[profileCache] fetchUserRecord error:', err?.message);
     return null;
   }
+};
+
+// Pick the active cosmetic off a shop entry, honouring its expiry.
+// expiresAt === -1 means permanent.
+const activeCosmetic = (entry, now) =>
+  entry && (entry.expiresAt === -1 || entry.expiresAt > now) ? entry : null;
+
+// Build the slim render-time profile from a raw users/{uid} record and cache
+// it. Pure apart from the cache write — no database access.
+const buildAndCacheProfile = (uid, record) => {
+  if (!record || typeof record !== 'object') {
+    // Nothing at users/{uid} — deleted account, or a system sender. Record
+    // the miss so callers (which filter on `!getCachedProfile(id)`) stop
+    // re-fetching it on every pass. In-memory only: getCachedProfile is read
+    // synchronously during render and every caller treats truthy as "usable
+    // profile", so a persisted null-shaped record would blank names/avatars.
+    markProfileMiss(uid);
+    return null;
+  }
+
+  const now = Date.now();
+  const shop = record.shop?.activeItems || null;
+  const textColor = shop ? activeCosmetic(shop.chatTextColor, now) : null;
+
+  const profile = {
+    displayName: record.displayName || 'Anonymous',
+    avatar: record.avatar || null,
+    isPro: !!record.isPro,
+    robloxUsernameVerified: !!record.robloxUsernameVerified,
+    // Stored flag first; fall back to deriving it from the timestamp so a
+    // stale hasRecentGameWin cannot keep a trophy lit past 24h.
+    hasRecentGameWin: !!record.hasRecentGameWin || (
+      typeof record.lastGameWinAt === 'number' &&
+      now - record.lastGameWinAt <= 24 * 60 * 60 * 1000
+    ),
+    lastGameWinAt: record.lastGameWinAt || null,
+    // RTDB stores the owner flag as `admin`; the app reads it as `isAdmin`.
+    isAdmin: !!record.admin || !!record.isAdmin,
+    isModerator: !!record.isModerator,
+    isBabyMod: !!record.isBabyMod,
+    isTrusted: !!record.isTrusted,
+    isCMSR: !!record.isCMSR,
+    isHelper: !!record.isHelper,
+    chatTextColor: textColor?.color || null,
+    profileFrame: shop ? activeCosmetic(shop.profileFrame, now) : null,
+    tradeCardBg: shop ? activeCosmetic(shop.tradeCardBg, now) : null,
+    chatBubbleBg: shop ? activeCosmetic(shop.chatBubbleBg, now) : null,
+    topBadge: record.topBadge || null,
+  };
+  setCachedProfile(uid, profile);
+  return profile;
 };
 
 // ────────────────────────────────────────────────────────
@@ -285,35 +197,23 @@ const assembleAndCacheProfile = async (db, uid, { identityRow, rolesRow, cosmeti
 export const warmProfileCache = async (db, uids) => {
   if (!db || !Array.isArray(uids) || uids.length === 0) return;
 
-  // Skip uids we already know have no record — otherwise they are "uncached"
-  // forever and get re-fetched on every pass.
-  const uncached = [...new Set(uids)].filter(uid => !getCachedProfile(uid) && !isRecentProfileMiss(uid));
+  // Skip uids already cached, and uids we know have no record — otherwise
+  // the latter stay "uncached" forever and are re-fetched on every pass.
+  const uncached = [...new Set(uids)].filter(
+    (uid) => uid && !getCachedProfile(uid) && !isRecentProfileMiss(uid),
+  );
   if (uncached.length === 0) return;
 
-  // 4 batched .in() queries for the WHOLE uncached set (chunked at 200
-  // inside _batchByUid) instead of 4 single-row queries per uid — a
-  // fresh chat page with 15 unknown senders is 4 Supabase round-trips,
-  // not 60. Batch failure degrades to empty maps; assembleAndCacheProfile
-  // then hits its per-field RTDB fallback exactly as a null row would.
-  const [idMap, rolesMap, cosMap, rbxMap] = await Promise.all([
-    getIdentityBatch(uncached).catch(() => new Map()),
-    getRolesBatch(uncached).catch(() => new Map()),
-    getCosmeticsBatch(uncached).catch(() => new Map()),
-    getRobloxBatch(uncached).catch(() => new Map()),
-  ]);
-
-  // Assembly still runs in waves — it does 2 RTDB game-win leaf reads
-  // per uid (plus fallback reads for rows missing above), and 10-wide
-  // keeps that RTDB concurrency bounded.
+  // One read per user, 10 at a time. A fresh chat page with 15 unknown
+  // senders is now 15 reads; before this it was 15 x 16 = 240.
   const WAVE = 10;
   for (let i = 0; i < uncached.length; i += WAVE) {
     const wave = uncached.slice(i, i + WAVE);
-    await Promise.allSettled(wave.map(uid => assembleAndCacheProfile(db, uid, {
-      identityRow: idMap.get(uid) ?? null,
-      rolesRow: rolesMap.get(uid) ?? null,
-      cosmeticsRow: cosMap.get(uid) ?? null,
-      robloxRow: rbxMap.get(uid) ?? null,
-    })));
+    const records = await Promise.allSettled(wave.map((uid) => fetchUserRecord(db, uid)));
+    wave.forEach((uid, idx) => {
+      const r = records[idx];
+      buildAndCacheProfile(uid, r.status === 'fulfilled' ? r.value : null);
+    });
   }
 };
 
@@ -340,6 +240,7 @@ export const seedFromMessage = (msg) => {
     lastGameWinAt: msg.lastGameWinAt || null,
     isAdmin: !!msg.isAdmin,
     isModerator: !!msg.isModerator,
+    isBabyMod: !!msg.isBabyMod,
     isTrusted: !!msg.isTrusted,
     isCMSR: !!msg.isCMSR,
     isHelper: !!msg.isHelper,
@@ -355,7 +256,7 @@ export const seedFromMessage = (msg) => {
 //  This is the key "backwards compatible" resolver
 // ────────────────────────────────────────────────────────
 export const resolveProfile = (msg) => {
-  if (!msg) return { displayName: 'Anonymous', avatar: null, isPro: false, robloxUsernameVerified: false, hasRecentGameWin: false, chatTextColor: null, profileFrame: null, tradeCardBg: null, chatBubbleBg: null, topBadge: null, isTrusted: false, isCMSR: false, isHelper: false };
+  if (!msg) return { displayName: 'Anonymous', avatar: null, isPro: false, robloxUsernameVerified: false, hasRecentGameWin: false, chatTextColor: null, profileFrame: null, tradeCardBg: null, chatBubbleBg: null, topBadge: null, isAdmin: false, isModerator: false, isBabyMod: false, isTrusted: false, isCMSR: false, isHelper: false };
 
   const cached = getCachedProfile(msg.senderId);
 
@@ -370,6 +271,7 @@ export const resolveProfile = (msg) => {
     ),
     isAdmin: msg.isAdmin ?? cached?.isAdmin ?? false,
     isModerator: msg.isModerator ?? cached?.isModerator ?? false,
+    isBabyMod: msg.isBabyMod ?? cached?.isBabyMod ?? false,
     isTrusted: msg.isTrusted ?? cached?.isTrusted ?? false,
     isCMSR: msg.isCMSR ?? cached?.isCMSR ?? false,
     isHelper: msg.isHelper ?? cached?.isHelper ?? false,
@@ -414,9 +316,35 @@ export const setCachedFullProfile = (uid, record) => {
   }
 };
 
+// Short-lived optimistic overrides for role flags we JUST wrote. RTDB is
+// consistent immediately, but the drawer re-reads through the cache we are
+// about to clear, and a slow round-trip made a freshly-granted badge appear
+// only on the next open. In-memory, 5-minute TTL, cleared naturally.
+const ROLE_OVERRIDE_TTL = 5 * 60 * 1000;
+const roleOverrides = new Map(); // uid -> { flags, t }
+
+export const setRoleOverride = (uid, flags) => {
+  if (!uid || !flags) return;
+  const prev = roleOverrides.get(uid);
+  const fresh = prev && Date.now() - prev.t < ROLE_OVERRIDE_TTL ? prev.flags : {};
+  roleOverrides.set(uid, { flags: { ...fresh, ...flags }, t: Date.now() });
+};
+
+export const getRoleOverride = (uid) => {
+  if (!uid) return null;
+  const entry = roleOverrides.get(uid);
+  if (!entry) return null;
+  if (Date.now() - entry.t > ROLE_OVERRIDE_TTL) { roleOverrides.delete(uid); return null; }
+  return entry.flags;
+};
+
 export const invalidateFullProfile = (uid) => {
   if (!uid) return;
+  // BOTH keys. They are two projections of the same record, so clearing only
+  // the raw one left the chat rows and online list showing a removed role
+  // badge for up to the full TTL.
   try { cache.delete(FULL_KEY(uid)); } catch {}
+  try { cache.delete(`p_${uid}`); } catch {}
 };
 
 // Read the raw /users/{uid} once, cache it, return it. Returns null on missing.
@@ -452,6 +380,7 @@ export const seedCurrentUser = async (user, localState, db) => {
     lastGameWinAt: user.lastGameWinAt || null,
     isAdmin: !!user.isAdmin,
     isModerator: !!user.isModerator,
+    isBabyMod: !!user.isBabyMod,
     isTrusted: !!user.isTrusted,
     isCMSR: !!user.isCMSR,
     isHelper: !!user.isHelper,

@@ -19,6 +19,7 @@ import ProfileBottomDrawer from '../../ChatScreen/GroupChat/BottomDrawer';
 import { isUserOnline } from '../../ChatScreen/utils';
 import FramedAvatar from '../../ChatScreen/GroupChat/FramedAvatar';
 import { getCachedProfile } from '../../Helper/profileCache';
+import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
 
 const REACTION_EMOJIS = ['❤️', '🔥', '😍', '💀', '🎯'];
 
@@ -208,6 +209,24 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
             {item.robloxUsernameVerified && (
               <Image source={require('../../../assets/verification.png')} style={s.badge} />
             )}
+
+            {/* Role pills, resolved from the profile cache — trade and post
+                documents predate the role fields, so stamping them on the
+                document would leave older rows badge-less. */}
+            {(() => {
+              const rp = getCachedProfile(item.userId) || {};
+              const firstBadge = getFirstBadgeType(rp);
+              return (
+                <>
+                  {rp.isAdmin && <UserBadgePill type="admin" size="sm" isDarkMode={isDark} glow={firstBadge === 'admin'} />}
+                  {!rp.isAdmin && rp.isModerator && <UserBadgePill type="mod" size="sm" isDarkMode={isDark} glow={firstBadge === 'mod'} />}
+                  {!rp.isAdmin && !rp.isModerator && rp.isBabyMod && <UserBadgePill type="jmd" size="sm" isDarkMode={isDark} glow={firstBadge === 'jmd'} />}
+                  {rp.isTrusted && <UserBadgePill type="trusted" size="sm" isDarkMode={isDark} glow={firstBadge === 'trusted'} />}
+                  {rp.isCMSR && <UserBadgePill type="cmsr" size="sm" isDarkMode={isDark} glow={firstBadge === 'cmsr'} />}
+                  {rp.isHelper && <UserBadgePill type="helper" size="sm" isDarkMode={isDark} glow={firstBadge === 'helper'} />}
+                </>
+              );
+            })()}
             {(() => {
               const hasRecentWin =
                 !!item?.hasRecentGameWin ||

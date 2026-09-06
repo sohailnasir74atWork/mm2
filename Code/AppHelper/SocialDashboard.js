@@ -313,36 +313,12 @@ const SocialDashboard = () => {
                 }
             }
 
-            // Fallback: client-side contains match for symbol names
-            if (results.length < 10 && lower.length >= 2) {
-                try {
-                    const broadQ = query(ref(db, 'users'), orderByChild('displayName'), limitToFirst(500));
-                    const broadSnap = await get(broadQ);
-                    if (!isMounted.current) return;
-                    if (broadSnap.exists()) {
-                        broadSnap.forEach((child) => {
-                            if (seen.size >= 50) return;
-                            const id = child.key;
-                            const u = child.val();
-                            if (!friendIdSet.has(id) || seen.has(id)) return;
-                            const name = (u.displayName || u.userName || '').toLowerCase();
-                            if (name.includes(lower)) {
-                                seen.add(id);
-                                results.push({
-                                    id,
-                                    displayName: u.displayName || u.userName || 'Unknown',
-                                    avatar: u.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
-                                    robloxUsername: u.robloxUsername,
-                                    robloxUsernameVerified: u.robloxUsernameVerified,
-                                });
-                            }
-                        });
-                    }
-                } catch (broadErr) {
-                    Alert.alert("Firebase Error", broadErr.message);
-                    console.warn('Broad friend search failed:', broadErr.message);
-                }
-            }
+            // 2026-09-05 (PLAN_2026-09.md F5): the substring fallback that used
+            // to live here read 500 COMPLETE user records — emails, FCM tokens
+            // and all — and filtered them on the device, on every search that
+            // returned fewer than 10 prefix matches. The indexed startAt/endAt
+            // query above covers the real case; a contains-match is not worth
+            // downloading a megabyte of other people's profiles.
 
             setFriendSearchResults(results);
         } catch (err) {
@@ -408,36 +384,12 @@ const SocialDashboard = () => {
                 }
             }
 
-            // Fallback: client-side contains match for symbol names
-            if (results.length < 10 && lower.length >= 2) {
-                try {
-                    const broadQ = query(ref(db, 'users'), orderByChild('displayName'), limitToFirst(500));
-                    const broadSnap = await get(broadQ);
-                    if (!isMounted.current) return;
-                    if (broadSnap.exists()) {
-                        broadSnap.forEach((child) => {
-                            if (seen.size >= 50) return;
-                            const id = child.key;
-                            const u = child.val();
-                            if (id === currentUser?.id || seen.has(id)) return;
-                            const name = (u.displayName || u.userName || '').toLowerCase();
-                            if (name.includes(lower)) {
-                                seen.add(id);
-                                results.push({
-                                    id,
-                                    displayName: u.displayName || u.userName || 'Unknown',
-                                    avatar: u.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
-                                    robloxUsername: u.robloxUsername,
-                                    robloxUsernameVerified: u.robloxUsernameVerified,
-                                });
-                            }
-                        });
-                    }
-                } catch (broadErr) {
-                    Alert.alert("Firebase Error", broadErr.message);
-                    console.warn('Broad search failed:', broadErr.message);
-                }
-            }
+            // 2026-09-05 (PLAN_2026-09.md F5): the substring fallback that used
+            // to live here read 500 COMPLETE user records — emails, FCM tokens
+            // and all — and filtered them on the device, on every search that
+            // returned fewer than 10 prefix matches. The indexed startAt/endAt
+            // query above covers the real case; a contains-match is not worth
+            // downloading a megabyte of other people's profiles.
 
             setSearchResults(results.slice(0, 50));
         } catch (err) {

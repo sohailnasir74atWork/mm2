@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import ViewShot from 'react-native-view-shot';
 import { useGlobalState } from '../GlobelStats';
+import { buildSearchTokens } from '../Trades/tradeSearchIndex';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import config from '../Helper/Environment';
 import ConditionalKeyboardWrapper from '../Helper/keyboardAvoidingContainer';
@@ -837,14 +838,22 @@ const HomeScreen = ({ selectedTheme }) => {
       const tradeStatus = getTradeStatus(hasTotal, wantsTotal);
       const statusLetter = tradeStatus === 'win' ? 'w' : tradeStatus === 'lose' ? 'l' : 'f';
 
+      const mappedHasItems = hasItems.filter(item => item && (item.name || item.Name)).map(mapTradeItem);
+      const mappedWantsItems = wantsItems.filter(item => item && (item.name || item.Name)).map(mapTradeItem);
+
       const newTrade = {
         userId: user?.id || "Anonymous",
         traderName: user?.displayName || "Anonymous",
         avatar: user?.avatar || null,
         isPro: localState.isPro,
         isFeatured: false,
-        hasItems: hasItems.filter(item => item && (item.name || item.Name)).map(mapTradeItem),
-        wantsItems: wantsItems.filter(item => item && (item.name || item.Name)).map(mapTradeItem),
+        hasItems: mappedHasItems,
+        wantsItems: mappedWantsItems,
+        // Search index. The trade screen queries these with array-contains;
+        // until 2026-09-06 nothing wrote them, so every search matched nothing.
+        // See Code/Trades/tradeSearchIndex.js.
+        hasItemNames: buildSearchTokens(mappedHasItems),
+        wantsItemNames: buildSearchTokens(mappedWantsItems),
         // ✅ Migration: Save in old format { value: number } for backward compatibility with old apps
         hasTotal: { value: hasTotal || 0 },
         wantsTotal: { value: wantsTotal || 0 },

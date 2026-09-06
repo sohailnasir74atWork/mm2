@@ -14,6 +14,8 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../../GlobelStats';
 import { ref, get, query, orderByValue, equalTo, limitToFirst, startAfter } from '@react-native-firebase/database';
+import { getOrFetchFullProfile } from '../../Helper/profileCache';
+import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import InterstitialAdManager from '../../Ads/IntAd';
@@ -117,42 +119,37 @@ const OnlineUsersList = ({
     try {
       // ✅ Fetch only specific fields by querying child paths in parallel
       // This reduces data transfer significantly (from ~100KB to ~2-5KB per user)
+      // One read per user, through the shared profile cache
+      // (PLAN_2026-09.md F1). This used to fire EIGHT parallel leaf reads per
+      // user — displayName, avatar, isPro, robloxUsernameVerified,
+      // lastGameWinAt, isAdmin, OS, isPlaying — so opening the online list
+      // with 20 users cost 160 database round-trips. The cached record has
+      // all of it, plus the role flags the badges below need.
       const userPromises = userIds.map(async (userId) => {
         if (alreadyLoaded.has(userId)) return null;
 
         try {
-          // ✅ Fetch only the fields we need (parallel requests to specific child paths)
-          const [displayNameSnap, avatarSnap, isProSnap, robloxUsernameVerifiedSnap, 
-                 lastGameWinAtSnap, isAdminSnap, OSSnap, isPlayingSnap] = await Promise.all([
-            get(ref(appdatabase, `users/${userId}/displayName`)).catch(() => null),
-            get(ref(appdatabase, `users/${userId}/avatar`)).catch(() => null),
-            get(ref(appdatabase, `users/${userId}/isPro`)).catch(() => null),
-            get(ref(appdatabase, `users/${userId}/robloxUsernameVerified`)).catch(() => null),
-            get(ref(appdatabase, `users/${userId}/lastGameWinAt`)).catch(() => null),
-            get(ref(appdatabase, `users/${userId}/isAdmin`)).catch(() => null),
-            get(ref(appdatabase, `users/${userId}/OS`)).catch(() => null),
-            get(ref(appdatabase, `users/${userId}/isPlaying`)).catch(() => null),
-          ]);
-
-          // ✅ Extract values (only if snapshots exist)
-          const displayName = displayNameSnap?.exists() ? displayNameSnap.val() : null;
-          
-          // If no displayName found, user might not exist - return null
-          if (!displayNameSnap || (!displayNameSnap.exists() && !avatarSnap?.exists())) {
-            return null;
-          }
+          const record = await getOrFetchFullProfile(appdatabase, userId);
+          // No record at all — a deleted account still sitting in /presence.
+          if (!record || (!record.displayName && !record.avatar)) return null;
 
           return {
             id: userId,
-            displayName: displayName || 'Anonymous',
-            avatar: avatarSnap?.exists() ? avatarSnap.val() : 
-                   'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
-            isPro: isProSnap?.exists() ? isProSnap.val() : false,
-            robloxUsernameVerified: robloxUsernameVerifiedSnap?.exists() ? robloxUsernameVerifiedSnap.val() : false,
-            lastGameWinAt: lastGameWinAtSnap?.exists() ? lastGameWinAtSnap.val() : null,
-            isAdmin: isAdminSnap?.exists() ? isAdminSnap.val() : false,
-            OS: OSSnap?.exists() ? OSSnap.val() : null,
-            isPlaying: isPlayingSnap?.exists() ? isPlayingSnap.val() : false,
+            displayName: record.displayName || 'Anonymous',
+            avatar: record.avatar
+              || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
+            isPro: !!record.isPro,
+            robloxUsernameVerified: !!record.robloxUsernameVerified,
+            lastGameWinAt: record.lastGameWinAt ?? null,
+            // RTDB stores the owner flag as `admin`; older rows used `isAdmin`.
+            isAdmin: !!record.admin || !!record.isAdmin,
+            isModerator: !!record.isModerator,
+            isBabyMod: !!record.isBabyMod,
+            isTrusted: !!record.isTrusted,
+            isCMSR: !!record.isCMSR,
+            isHelper: !!record.isHelper,
+            OS: record.OS ?? null,
+            isPlaying: !!record.isPlaying,
           };
         } catch (error) {
           console.error(`Error fetching user ${userId}:`, error);
@@ -525,6 +522,33 @@ const OnlineUsersList = ({
                 style={{ width: 10, height: 10, marginLeft: 4 }}
               />
             )}
+
+            {/* Role pills */}
+            {(() => {
+              const firstBadge = getFirstBadgeType(item);
+              return (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 4 }}>
+                  {item?.isAdmin && (
+                    <UserBadgePill type="admin" size="sm" isDarkMode={isDarkMode} labelOverride={t('chat.admin')} glow={firstBadge === 'admin'} />
+                  )}
+                  {!item?.isAdmin && item?.isModerator && (
+                    <UserBadgePill type="mod" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'mod'} />
+                  )}
+                  {!item?.isAdmin && !item?.isModerator && item?.isBabyMod && (
+                    <UserBadgePill type="jmd" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'jmd'} />
+                  )}
+                  {item?.isTrusted && (
+                    <UserBadgePill type="trusted" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
+                  )}
+                  {item?.isCMSR && (
+                    <UserBadgePill type="cmsr" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
+                  )}
+                  {item?.isHelper && (
+                    <UserBadgePill type="helper" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
+                  )}
+                </View>
+              );
+            })()}
 
             {/* Platform badge (for admins) */}
             {item?.isAdmin && item?.OS && (

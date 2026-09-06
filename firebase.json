@@ -1,17 +1,24 @@
 {
-    "react-native": {
-      "analytics_auto_collection_enabled": true,
-      "messaging_auto_init_enabled": true,
-      "crashlytics_debug_enabled": true
-    },
-    "functions": {
-      "source": "functions",
-      "ignore": [
-        "node_modules",
-        ".git",
-        "firebase-debug.log",
-        "firebase-debug.*.log",
-        "*.local.js"
-      ]
-    }
+  "react-native": {
+    "analytics_auto_collection_enabled": true,
+    "messaging_auto_init_enabled": true,
+    "crashlytics_debug_enabled": true
+  },
+  "database": {
+    "rules": "database.rules.json"
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      "*.local.js"
+    ]
   }
+}

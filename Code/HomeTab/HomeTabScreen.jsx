@@ -254,6 +254,7 @@ const HomeTabScreen = ({ selectedTheme }) => {
             { emoji: '🏷️', label: t('home.values'), onPress: () => nav.navigate('Values') },
 
             { emoji: '🏆', label: t('home.top_rated'), onPress: () => nav.navigate('Leaderboard') },
+            { emoji: '🛡️', label: t('home.our_team', { defaultValue: 'Our Team' }), onPress: () => nav.navigate('ModsScreen') },
             { emoji: '📩', label: t('home.invite'), onPress: async () => {
               const link = Platform.OS === 'ios' ? config.IOsShareLink : config.andriodShareLink;
               try { await Share.share({ message: `${t('home.share_message')} ${link}` }); } catch {}

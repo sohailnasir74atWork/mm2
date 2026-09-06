@@ -25,6 +25,7 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import { showSuccessMessage } from '../../Helper/MessageHelper';
 import FramedAvatar from './FramedAvatar';
 import { resolveProfile, warmProfileCache, getCachedProfile } from '../../Helper/profileCache';
+import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
 import { getSafeTextColor, RainbowText, isMultiColorText, getMultiColorPalette } from '../../Helper/contrastHelper';
 import axios from 'axios';
 import { useLocalState } from '../../LocalGlobelStats';
@@ -443,11 +444,37 @@ const MessagesList = ({
     />
   )}
 
-  {!!item.isAdmin && (
-    <View style={styles.adminContainer}>
-      <Text style={[styles.userNameAdmin, {color:'white'}]}>{t("chat.admin")}</Text>
-    </View>
-  )}
+  {/* Role pills. Authority ranks are stamped on the message itself;
+      community badges come from the profile cache, because older messages
+      predate those fields entirely. */}
+  {(() => {
+    const firstBadge = getFirstBadgeType({
+      isAdmin: item.isAdmin, isModerator: item.isModerator, isBabyMod: item.isBabyMod,
+      isTrusted: msgProfile.isTrusted, isCMSR: msgProfile.isCMSR, isHelper: msgProfile.isHelper,
+    });
+    return (
+      <>
+        {!!item.isAdmin && (
+          <UserBadgePill type="admin" size="sm" isDarkMode={isDarkMode} labelOverride={t('chat.admin')} glow={firstBadge === 'admin'} />
+        )}
+        {!item.isAdmin && item.isModerator && (
+          <UserBadgePill type="mod" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'mod'} />
+        )}
+        {!item.isAdmin && !item.isModerator && item.isBabyMod && (
+          <UserBadgePill type="jmd" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'jmd'} />
+        )}
+        {msgProfile.isTrusted && (
+          <UserBadgePill type="trusted" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
+        )}
+        {msgProfile.isCMSR && (
+          <UserBadgePill type="cmsr" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
+        )}
+        {msgProfile.isHelper && (
+          <UserBadgePill type="helper" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
+        )}
+      </>
+    );
+  })()}
 
   {item?.robloxUsernameVerified && (
     <Image

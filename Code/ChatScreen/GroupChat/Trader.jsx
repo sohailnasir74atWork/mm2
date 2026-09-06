@@ -15,6 +15,7 @@ import MessagesList from './MessagesList';
 import MessageInput from './MessageInput';
 import { getStyles } from '../Style';
 import { banUser, handleDeleteLast300Messages, isUserOnline, unbanUser } from '../utils';
+import { serverNowMs } from '../../Helper/serverTime';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProfileBottomDrawer from './BottomDrawer';
@@ -41,7 +42,7 @@ leoProfanity.loadDictionary('en');
 
 const ChatScreen = ({ selectedTheme, bannedUsers, modalVisibleChatinfo, setChatFocused,
   setModalVisibleChatinfo, unreadMessagesCount, fetchChats, unreadcount, setunreadcount, onlineUsersVisible, setOnlineUsersVisible }) => {
-  const { user, theme, appdatabase, setUser, isAdmin, currentUserEmail } = useGlobalState();
+  const { user, theme, appdatabase, setUser, isAdmin, currentUserEmail, strikeInfo, isUserBlocked } = useGlobalState();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [replyTo, setReplyTo] = useState(null);
@@ -74,7 +75,6 @@ const ChatScreen = ({ selectedTheme, bannedUsers, modalVisibleChatinfo, setChatF
   const [pendingMessages, setPendingMessages] = useState([]);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const isFocused = useIsFocused();
-  const [strikeInfo, setStrikeInfo] = useState(null);
   const [petModalVisible, setPetModalVisible] = useState(false);
 const [selectedFruits, setSelectedFruits] = useState([]); 
 const [device, setDevice] = useState(null)
@@ -449,19 +449,9 @@ const startPrivateChat = useCallback(() => {
 
 
 
-  useEffect(() => {
-    if (!currentUserEmail || !appdatabase) return;
-
-    const encodedEmail = currentUserEmail.replace(/\./g, '(dot)');
-    const banRef = ref(appdatabase, `banned_users_by_email/${encodedEmail}`);
-
-    const unsubscribe = onValue(banRef, (snapshot) => {
-      const banData = snapshot.val();
-      setStrikeInfo(banData && typeof banData === 'object' ? banData : null);
-    });
-
-    return () => unsubscribe();
-  }, [currentUserEmail, appdatabase]);
+  // Ban state comes from GlobelStats now — one listener for the whole app,
+  // validated against server time. The private copy that used to live here
+  // duplicated the read and compared against the device clock.
 
 
   const handleRefresh = async () => {
@@ -495,9 +485,21 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
   }
 
   // ---- Strike / ban checks ----
+  // isUserBlocked is the authoritative gate: GlobelStats validates the ban
+  // against a server-time probe, so a user who rolls their device clock
+  // forward is still stopped here. The block below only formats the message.
+  if (isUserBlocked) {
+    showMessage({
+      message: t('chat.access_denied', { defaultValue: 'Access Denied' }),
+      description: t('chat.banned_message', { defaultValue: 'You are banned from sending messages.' }),
+      type: 'danger',
+    });
+    return;
+  }
+
   if (strikeInfo) {
     const { strikeCount, bannedUntil } = strikeInfo;
-    const now = Date.now();
+    const now = serverNowMs();
 
     // Permanent ban
     if (bannedUntil === 'permanent') {

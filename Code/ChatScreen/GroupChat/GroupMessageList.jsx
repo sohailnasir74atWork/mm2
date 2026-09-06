@@ -24,6 +24,7 @@ import config from '../../Helper/Environment';
 import { parseMessageText } from '../ChatHelper';
 import { getSafeTextColor, RainbowText, isMultiColorText, getMultiColorPalette } from '../../Helper/contrastHelper';
 import { resolveProfile, warmProfileCache, getCachedProfile } from '../../Helper/profileCache';
+import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
 import FramedAvatar from './FramedAvatar';
 
 const GroupMessageList = ({
@@ -263,6 +264,29 @@ const GroupMessageList = ({
                     style={{ width: 16, height: 16, marginLeft: 4 }}
                   />
                 )}
+
+                {/* Community badges. Group messages never stamped the
+                    authority ranks, so those are resolved from the cache
+                    too rather than shown inconsistently. */}
+                {(() => {
+                  const firstBadge = getFirstBadgeType(
+                    { isTrusted: profile.isTrusted, isCMSR: profile.isCMSR, isHelper: profile.isHelper },
+                    ['trusted', 'cmsr', 'helper'],
+                  );
+                  return (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 4 }}>
+                      {profile.isTrusted && (
+                        <UserBadgePill type="trusted" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
+                      )}
+                      {profile.isCMSR && (
+                        <UserBadgePill type="cmsr" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
+                      )}
+                      {profile.isHelper && (
+                        <UserBadgePill type="helper" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
+                      )}
+                    </View>
+                  );
+                })()}
 
                 {/* Trophy badge (recent win) */}
                 {hasRecentWin && (

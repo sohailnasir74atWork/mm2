@@ -24,6 +24,8 @@ import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 import ProfileBottomDrawer from '../ChatScreen/GroupChat/BottomDrawer';
 import FramedAvatar from '../ChatScreen/GroupChat/FramedAvatar';
 import { getCachedProfile, warmProfileCache } from '../Helper/profileCache';
+import { normalizeSearchTerm, tradeMatchesLocally } from './tradeSearchIndex';
+import UserBadgePill, { getFirstBadgeType } from '../Helper/UserBadgePill';
 import { isUserOnline } from '../ChatScreen/utils';
 import { useHaptic } from '../Helper/HepticFeedBack';
 import {
@@ -52,7 +54,10 @@ const TradeList = ({ route }) => {
   const [searchInWants, setSearchInWants] = useState(true); // ✅ Search in "YOU" side (wantsItems)
   const [isSearching, setIsSearching] = useState(false); // ✅ Loading state for search
   const [isSearchMode, setIsSearchMode] = useState(false); // ✅ Track if we're in search mode
-  const [searchLastDoc, setSearchLastDoc] = useState(null); // ✅ Pagination cursor for search
+  // One cursor PER SIDE. A single shared cursor was passed as startAfter to
+  // both queries, and a document's position is only meaningful within the
+  // query that produced it.
+  const [searchCursors, setSearchCursors] = useState({ has: null, wants: null });
   const [searchHasMore, setSearchHasMore] = useState(true); // ✅ More results available for search
   const SEARCH_PAGE_SIZE = 5; // ✅ Fetch 5 items at a time for search
   // const [isAdVisible, setIsAdVisible] = useState(true);
@@ -60,6 +65,12 @@ const TradeList = ({ route }) => {
   const { user, analytics, updateLocalStateAndDatabase, appdatabase } = useGlobalState()
   const [trades, setTrades] = useState([]);
   const [filteredTrades, setFilteredTrades] = useState([]);
+  // Read inside handleSearchTrades for the instant local pass. A ref, not a
+  // dependency, so typing does not rebuild the callback on every keystroke.
+  const tradesRef = useRef([]);
+  // fetchInitialTrades is defined below this callback; going through a ref
+  // avoids both the use-before-define and the stale closure.
+  const fetchInitialTradesRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastDoc, setLastDoc] = useState(null);
@@ -180,6 +191,9 @@ const TradeList = ({ route }) => {
     setIsProStatus(localState.isPro); // ✅ Force update state and trigger re-render
   }, [localState.isPro]);
 
+  // Mirror `trades` into a ref for the search callback's instant local pass.
+  useEffect(() => { tradesRef.current = trades; }, [trades]);
+
   // ✅ Client-side filtering for non-search scenarios (banned users, my trades)
   useEffect(() => {
     const bannedUsersList = Array.isArray(bannedUsers) ? bannedUsers : [];
@@ -272,6 +286,8 @@ const TradeList = ({ route }) => {
           style: "destructive",
           onPress: async () => {
             try {
+              // Ids are no longer prefixed, but a list rendered before this
+              // build's fix may still hold one. Cheap to stay defensive.
               const tradeId = item.id.startsWith("featured-") ? item.id.replace("featured-", "") : item.id;
 
               await deleteDoc(doc(firestoreDB, "trades_new", tradeId));
@@ -442,7 +458,7 @@ const TradeList = ({ route }) => {
         [
           { text: t("trade.cancel"), style: "cancel" },
           {
-            text: t("feature"),
+            text: t("trade.feature") || "Feature",
             onPress: async () => {
               try {
                 await updateDoc(
@@ -536,7 +552,7 @@ const TradeList = ({ route }) => {
           "You don't have permission to feature trades. Please check your account status."
         );
       } else {
-        Alert.alert("Error", errorMessage);
+        Alert.alert(t("home.alert.error") || "Error", errorMessage);
       }
     }
   };
@@ -676,131 +692,173 @@ const TradeList = ({ route }) => {
 
   // import firestore from '@react-native-firebase/firestore'; // Ensure this import
 
-  // ✅ Firestore search - uses indexed fields (hasItemNames/wantsItemNames) for new trades
+  // ── Trade search ─────────────────────────────────────────────────────
+  //
+  // Rewritten 2026-09-06. Four separate bugs, which together made search look
+  // like it simply found nothing:
+  //
+  //  1. `hasItemNames` / `wantsItemNames` were queried but NEVER written by
+  //     any code path. Verified against production: zero documents had them.
+  //     Fixed at the write site (HomeScreen) and by the backfill script in
+  //     scripts/backfill-trade-search-index.js.
+  //  2. ONE cursor was shared by two different queries. A document from the
+  //     hasItemNames query was passed as startAfter to the wantsItemNames
+  //     query, where its ordering is meaningless, so page two was wrong.
+  //     Each side now keeps its own cursor.
+  //  3. Both catch blocks swallowed the error, so a missing composite index —
+  //     which is real, `wantsItemNames` had no index — was indistinguishable
+  //     from an empty result set.
+  //  4. searchHasMore compared the MERGED count against the page size, so
+  //     with both sides on it could never settle correctly.
+  //
+  // The local pass over already-loaded trades is new. It costs no reads, it
+  // answers instantly, and it is the only thing here that can match a partial
+  // word, because array-contains is exact-match per element.
   const handleSearchTrades = useCallback(async (isLoadMore = false) => {
     const searchTerm = searchQuery.trim();
     if (!searchTerm) {
       setIsSearchMode(false);
-      setSearchLastDoc(null);
+      setSearchCursors({ has: null, wants: null });
       setSearchHasMore(true);
-      fetchInitialTrades();
+      fetchInitialTradesRef.current?.();
       return;
     }
 
     if (!searchInHas && !searchInWants) {
-      Alert.alert(t("trade.search_error_title") || "Search Error", "You must select at least one side to search");
+      Alert.alert(
+        t('trade.search_error_title') || 'Search Error',
+        t('trade.search_error_no_side') || 'Pick at least one side to search.',
+      );
       return;
     }
 
     setIsSearching(true);
+
+    // Instant local matches from what is already on screen, so the first page
+    // is never blank while the query is in flight. These are kept and merged
+    // with the server results below rather than replaced: they are the only
+    // thing that can match a PARTIAL word, and on trades that predate the
+    // backfill they may be the only match at all.
+    let localMatches = [];
+    if (!isLoadMore) {
+      localMatches = tradesRef.current.filter((tr) =>
+        tr && !tr.__type && tradeMatchesLocally(tr, searchTerm, { searchInHas, searchInWants }),
+      );
+      if (localMatches.length > 0) {
+        setTrades(localMatches);
+        setIsSearchMode(true);
+      }
+    }
+
     try {
-      const searchTermLower = searchTerm.toLowerCase().trim();
+      const needle = normalizeSearchTerm(searchTerm);
+      const cursors = isLoadMore ? searchCursors : { has: null, wants: null };
 
-      const allResults = new Map();
-      let lastDocSnapshot = isLoadMore ? searchLastDoc : null;
+      // One query per side, each with its OWN cursor.
+      const runSide = async (field, cursor) => {
+        const clauses = [
+          collection(firestoreDB, 'trades_new'),
+          where(field, 'array-contains', needle),
+          orderBy('timestamp', 'desc'),
+        ];
+        if (cursor) clauses.push(startAfter(cursor));
+        clauses.push(limit(SEARCH_PAGE_SIZE));
 
-      // ✅ Search in ME side (hasItemNames) - SERVER-SIDE filtering
-      if (searchInHas) {
-        try {
-          const hasQuery = lastDocSnapshot
-            ? query(
-              collection(firestoreDB, 'trades_new'),
-              where('hasItemNames', 'array-contains', searchTermLower),
-              orderBy('timestamp', 'desc'),
-              startAfter(lastDocSnapshot),
-              limit(SEARCH_PAGE_SIZE)
-            )
-            : query(
-              collection(firestoreDB, 'trades_new'),
-              where('hasItemNames', 'array-contains', searchTermLower),
-              orderBy('timestamp', 'desc'),
-              limit(SEARCH_PAGE_SIZE)
-            );
+        const snap = await getDocs(query(...clauses));
+        return {
+          docs: snap.docs || [],
+          // The cursor for the NEXT page of this side specifically.
+          next: snap.docs?.length ? snap.docs[snap.docs.length - 1] : null,
+          exhausted: (snap.docs?.length || 0) < SEARCH_PAGE_SIZE,
+        };
+      };
 
-          const hasSnapshot = await getDocs(hasQuery);
-          hasSnapshot.docs?.forEach((docSnap) => {
-            if (!allResults.has(docSnap.id)) {
-              allResults.set(docSnap.id, { id: docSnap.id, ...docSnap.data(), _doc: docSnap });
-            }
-          });
-        } catch (error) {
-          console.error('❌ hasItemNames search error:', error.message);
+      const sides = [];
+      if (searchInHas) sides.push(['hasItemNames', 'has']);
+      if (searchInWants) sides.push(['wantsItemNames', 'wants']);
+
+      const settled = await Promise.allSettled(
+        sides.map(([field, key]) => runSide(field, cursors[key])),
+      );
+
+      const nextCursors = { ...cursors };
+      const merged = new Map();
+      let anySucceeded = false;
+      let allExhausted = true;
+      let indexError = null;
+
+      settled.forEach((result, i) => {
+        const [field, key] = sides[i];
+
+        if (result.status === 'rejected') {
+          const err = result.reason;
+          console.error(`[TradeSearch] ${field} query failed:`, err?.message);
+          // A missing composite index is a deployment problem, not an empty
+          // result. Surfacing it is the whole point — this is what hid the
+          // wantsItemNames index being absent.
+          if (err?.code === 'firestore/failed-precondition' || err?.code === 'failed-precondition') {
+            indexError = field;
+          }
+          return;
         }
-      }
 
-      // ✅ Search in YOU side (wantsItemNames) - SERVER-SIDE filtering
-      if (searchInWants) {
-        try {
-          const wantsQuery = lastDocSnapshot
-            ? query(
-              collection(firestoreDB, 'trades_new'),
-              where('wantsItemNames', 'array-contains', searchTermLower),
-              orderBy('timestamp', 'desc'),
-              startAfter(lastDocSnapshot),
-              limit(SEARCH_PAGE_SIZE)
-            )
-            : query(
-              collection(firestoreDB, 'trades_new'),
-              where('wantsItemNames', 'array-contains', searchTermLower),
-              orderBy('timestamp', 'desc'),
-              limit(SEARCH_PAGE_SIZE)
-            );
+        anySucceeded = true;
+        const { docs, next, exhausted } = result.value;
+        if (!exhausted) allExhausted = false;
+        if (next) nextCursors[key] = next;
 
-          const wantsSnapshot = await getDocs(wantsQuery);
-          wantsSnapshot.docs?.forEach((docSnap) => {
-            if (!allResults.has(docSnap.id)) {
-              allResults.set(docSnap.id, { id: docSnap.id, ...docSnap.data(), _doc: docSnap });
-            }
-          });
-        } catch (error) {
-          console.error('❌ wantsItemNames search error:', error.message);
-        }
-      }
-
-      // ✅ Convert to array and sort by timestamp
-      let searchedTrades = Array.from(allResults.values())
-        .sort((a, b) => {
-          const aTime = a.timestamp?.toMillis() || 0;
-          const bTime = b.timestamp?.toMillis() || 0;
-          return bTime - aTime;
+        docs.forEach((docSnap) => {
+          if (!merged.has(docSnap.id)) {
+            merged.set(docSnap.id, { id: docSnap.id, ...docSnap.data() });
+          }
         });
+      });
 
-      // ✅ Get last doc for pagination
-      if (searchedTrades.length > 0) {
-        const lastTrade = searchedTrades[searchedTrades.length - 1];
-        lastDocSnapshot = lastTrade._doc || null;
+      if (indexError) {
+        Alert.alert(
+          t('trade.search_error_title') || 'Search Error',
+          `Search is missing a database index for "${indexError}". Deploy firestore.indexes.json.`,
+        );
       }
 
-      // ✅ Remove _doc from trades before setting state
-      searchedTrades = searchedTrades.map(({ _doc, ...trade }) => trade);
+      if (!anySucceeded) {
+        // Every side errored. Keep whatever matched locally rather than
+        // blanking the list, and stop paginating into a broken query.
+        setSearchHasMore(false);
+        return;
+      }
 
-      // ✅ Update state
+      const byNewest = (x, y) => (y.timestamp?.toMillis?.() || 0) - (x.timestamp?.toMillis?.() || 0);
+
+      // Union, server results winning on id collisions since they are fresher.
+      localMatches.forEach((tr) => { if (!merged.has(tr.id)) merged.set(tr.id, tr); });
+      const searchedTrades = Array.from(merged.values()).sort(byNewest);
+
       if (isLoadMore) {
         setTrades((prev) => {
-          const combined = [...prev, ...searchedTrades];
-          const unique = Array.from(new Map(combined.map(t => [t.id, t])).values());
-          return unique.sort((a, b) => {
-            const aTime = a.timestamp?.toMillis() || 0;
-            const bTime = b.timestamp?.toMillis() || 0;
-            return bTime - aTime;
-          });
+          const combined = new Map(prev.filter((tr) => tr && !tr.__type).map((tr) => [tr.id, tr]));
+          searchedTrades.forEach((tr) => combined.set(tr.id, tr));
+          return Array.from(combined.values()).sort(byNewest);
         });
       } else {
         setTrades(searchedTrades);
         setIsSearchMode(true);
       }
 
-      // ✅ Update pagination state
-      setSearchLastDoc(lastDocSnapshot);
-      setSearchHasMore(searchedTrades.length >= SEARCH_PAGE_SIZE);
-
+      setSearchCursors(nextCursors);
+      // "More pages" means at least one side returned a full page — not the
+      // merged total, which can be up to two full pages.
+      setSearchHasMore(!allExhausted);
     } catch (error) {
-      console.error('❌ Error searching trades:', error);
-      Alert.alert("Search Error", "Search Failed");
+      console.error('[TradeSearch] unexpected failure:', error);
+      Alert.alert(
+        t('trade.search_error_title') || 'Search Error',
+        t('trade.search_failed') || 'Could not complete the search. Try again.',
+      );
     } finally {
       setIsSearching(false);
     }
-  }, [searchQuery, searchInHas, searchInWants, firestoreDB, searchLastDoc]);
+  }, [searchQuery, searchInHas, searchInWants, firestoreDB, searchCursors, t]);
 
   const fetchInitialTrades = useCallback(async () => {
     setLoading(true);
@@ -835,8 +893,11 @@ const TradeList = ({ route }) => {
       const featuredQuerySnapshot = await getDocs(featuredQuery);
   
       if (!featuredQuerySnapshot.empty) {
+        // Real document id. The list key is prefixed in keyExtractor instead —
+        // see the note there. A featured trade cannot collide with the normal
+        // list because that query filters isFeatured == false.
         featuredTrades = featuredQuerySnapshot.docs.map((docSnap) => ({
-          id: `featured-${docSnap.id}`,
+          id: docSnap.id,
           ...docSnap.data(),
         }));
         }
@@ -889,7 +950,7 @@ const TradeList = ({ route }) => {
                 return bTime - aTime; // Descending order
               })
               .map((docSnap) => ({
-                id: `featured-${docSnap.id}`,
+                id: docSnap.id,
                 ...docSnap.data(),
               }));
             
@@ -1026,6 +1087,11 @@ const TradeList = ({ route }) => {
       setLoading(false);
     }
   }, [firestoreDB, appdatabase]);
+
+  // handleSearchTrades is defined ABOVE this function and needs to call it
+  // when the query is cleared. Going through a ref avoids both the
+  // use-before-define and the stale closure a direct reference would create.
+  useEffect(() => { fetchInitialTradesRef.current = fetchInitialTrades; }, [fetchInitialTrades]);
 
 
   // const captureAndSave = async () => {
@@ -1308,6 +1374,16 @@ const TradeList = ({ route }) => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    // Refreshing during a search used to run fetchInitialTrades while leaving
+    // isSearchMode true: the list filled with unfiltered trades, and scrolling
+    // to the end then ran "load more search results" and replaced them again.
+    if (isSearchMode) {
+      setSearchCursors({ has: null, wants: null });
+      setSearchHasMore(true);
+      await handleSearchTrades(false);
+      setRefreshing(false);
+      return;
+    }
     // ✅ Respect the active filter mode when refreshing
     if (isSavedActive) {
       savedCacheRef.current = { sig: '', rows: [] }; // pull-to-refresh must hit the server
@@ -1452,6 +1528,24 @@ const TradeList = ({ route }) => {
                 {item.robloxUsernameVerified && (
                   <Image source={require('../../assets/verification.png')} style={{ width: 11, height: 11 }} />
                 )}
+
+            {/* Role pills, resolved from the profile cache — trade and post
+                documents predate the role fields, so stamping them on the
+                document would leave older rows badge-less. */}
+            {(() => {
+              const rp = getCachedProfile(item.userId) || {};
+              const firstBadge = getFirstBadgeType(rp);
+              return (
+                <>
+                  {rp.isAdmin && <UserBadgePill type="admin" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'admin'} />}
+                  {!rp.isAdmin && rp.isModerator && <UserBadgePill type="mod" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'mod'} />}
+                  {!rp.isAdmin && !rp.isModerator && rp.isBabyMod && <UserBadgePill type="jmd" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'jmd'} />}
+                  {rp.isTrusted && <UserBadgePill type="trusted" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />}
+                  {rp.isCMSR && <UserBadgePill type="cmsr" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />}
+                  {rp.isHelper && <UserBadgePill type="helper" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />}
+                </>
+              );
+            })()}
                 {(() => {
                   const hasRecentWin =
                     !!item?.hasRecentGameWin ||
@@ -1755,7 +1849,7 @@ const TradeList = ({ route }) => {
           value={searchQuery}
           onChangeText={setSearchQuery}
           onSubmitEditing={() => {
-            setSearchLastDoc(null);
+            setSearchCursors({ has: null, wants: null });
             setSearchHasMore(true);
             if (searchQuery.trim()) {
               handleSearchTrades(false);
@@ -1774,7 +1868,7 @@ const TradeList = ({ route }) => {
             alignItems: 'center'
           }}
           onPress={() => {
-            setSearchLastDoc(null);
+            setSearchCursors({ has: null, wants: null });
             setSearchHasMore(true);
             if (searchQuery.trim()) {
               handleSearchTrades(false);
@@ -1803,7 +1897,11 @@ const TradeList = ({ route }) => {
             }]}
             onPress={() => {
               triggerHapticFeedback('impactLight');
-              if (!searchInHas && !searchInWants) setSearchInWants(true);
+              // Refuse to switch off the last active side. The old guard tested
+              // the state BEFORE the toggle, so turning off the only enabled
+              // side left both false and every later search was rejected with
+              // "You must select at least one side to search".
+              if (searchInHas && !searchInWants) return;
               setSearchInHas(!searchInHas);
             }}
             activeOpacity={0.7}
@@ -1824,7 +1922,7 @@ const TradeList = ({ route }) => {
             }]}
             onPress={() => {
               triggerHapticFeedback('impactLight');
-              if (!searchInHas && !searchInWants) setSearchInHas(true);
+              if (searchInWants && !searchInHas) return;
               setSearchInWants(!searchInWants);
             }}
             activeOpacity={0.7}
@@ -1839,7 +1937,7 @@ const TradeList = ({ route }) => {
             onPress={() => {
               setSearchQuery('');
               setIsSearchMode(false);
-              setSearchLastDoc(null);
+              setSearchCursors({ has: null, wants: null });
               setSearchHasMore(true);
               fetchInitialTrades();
             }}
@@ -1863,6 +1961,9 @@ const TradeList = ({ route }) => {
         ref={flatListRef}
         data={tradesWithAds}
         renderItem={renderTrade}
+        // The `featured-` prefix exists ONLY to key the list. It is deliberately
+        // not part of item.id, which must stay the real Firestore document id
+        // so save, delete and open all address the right document.
         keyExtractor={(item) => item?.__type === 'ad' ? item.id : (item.isFeatured ? `featured-${item.id}` : item.id)}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 180 }}

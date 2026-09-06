@@ -57,13 +57,42 @@ export const unsaveTrade = async (appdatabase, myUid, tradeId) => {
 
 /**
  * @returns {Promise<Object>} { [tradeId]: { type, traderId, traderName, ... } }
+ *
+ * Keys are normalised on the way out. Until 2026-09-06 the feed gave featured
+ * trades a synthetic `featured-<docId>` id, so saving one wrote that string
+ * here — and the Saved tab then looked up trades_new/featured-<docId>, which
+ * does not exist. The trade looked saved and never appeared again. Stripping
+ * the prefix on read repairs those rows without a migration.
  */
 export const fetchSavedTradeRefs = async (appdatabase, myUid) => {
   try {
     const snap = await get(ref(appdatabase, `savedTrades/${myUid}`));
-    return snap.exists() ? (snap.val() || {}) : {};
+    if (!snap.exists()) return {};
+
+    const raw = snap.val() || {};
+    const normalised = {};
+    for (const [key, value] of Object.entries(raw)) {
+      const id = key.startsWith('featured-') ? key.slice('featured-'.length) : key;
+      // If both the prefixed and clean key exist, keep the clean one.
+      if (!normalised[id] || key === id) normalised[id] = value;
+    }
+    return normalised;
   } catch (e) {
     console.warn('[tradeHelpers] Failed to fetch saved trades:', e?.message);
     return {};
+  }
+};
+
+/**
+ * Remove a legacy `featured-<docId>` pointer. The feed calls this after it
+ * successfully renders the same trade under its real id, so the stale row does
+ * not keep occupying one of the MAX_SAVED slots.
+ */
+export const cleanupLegacySavedKey = async (appdatabase, myUid, tradeId) => {
+  if (!appdatabase || !myUid || !tradeId) return;
+  try {
+    await remove(ref(appdatabase, `savedTrades/${myUid}/featured-${tradeId}`));
+  } catch {
+    // best effort — the pointer is harmless, just untidy
   }
 };

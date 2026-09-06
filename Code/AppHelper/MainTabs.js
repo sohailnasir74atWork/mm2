@@ -33,7 +33,12 @@ const AnimatedTabIcon = React.memo(({ iconName, color, size, focused }) => {
 
 const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modalVisibleChatinfo, setModalVisibleChatinfo }) => {
   const { t } = useTranslation();
-  const { isAdmin, user, theme } = useGlobalState();
+  const { isAdmin, user, theme, canGrantJmd } = useGlobalState();
+  // Moderators and Junior Mods need the console too, not just admins — the
+  // dashboard shows each of them only what their rank allows. Someone holding
+  // just the delegated Junior-Mod grant gets in as well, since that is the
+  // only place they can use it.
+  const canOpenModeration = isAdmin || !!user?.isModerator || !!user?.isBabyMod || !!canGrantJmd;
   const insets = useSafeAreaInsets();
 
   // ✅ Memoize icons object to avoid recreation
@@ -53,7 +58,7 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
   // ✅ Memoize headerRight component to prevent re-renders
   const headerRight = useCallback((navigation) => (
     <>
-      {isAdmin && (
+      {canOpenModeration && (
         <TouchableOpacity onPress={() => navigation.navigate('Admin')}>
           <Image
             source={require('../../assets/trophy.webp')}
@@ -62,7 +67,7 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
         </TouchableOpacity>
       )}
     </>
-  ), [isAdmin]);
+  ), [canOpenModeration]);
 
   // ✅ Memoize isDarkMode to avoid recalculation
   const isDarkMode = useMemo(() => theme === 'dark', [theme]);

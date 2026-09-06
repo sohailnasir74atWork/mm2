@@ -61,6 +61,7 @@ exports.syncModRole_Moderator = rosters.syncModRole_Moderator;
 exports.syncModRole_BabyMod = rosters.syncModRole_BabyMod;
 exports.syncRoleTrusted = rosters.syncRoleTrusted;
 exports.syncRoleCMSR = rosters.syncRoleCMSR;
+exports.syncRoleHelper = rosters.syncRoleHelper;
 exports.refreshAllRosters = rosters.refreshAllRosters;
 
 // ── Presence hygiene ───────────────────────────────────────────────────

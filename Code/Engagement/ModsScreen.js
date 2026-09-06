@@ -8,6 +8,7 @@
  *   mods/{uid}    → { displayName, avatar, role: 'mod' | 'jmod', updatedAt }
  *   trusted/{uid} → { displayName, avatar, role: 'trusted',      updatedAt }
  *   cmsr/{uid}    → { displayName, avatar, role: 'cmsr',         updatedAt }
+ *   helper/{uid}  → { displayName, avatar, role: 'helper',       updatedAt }
  *
  * Rosters are read through the 6-hour config cache, so opening this screen
  * repeatedly costs nothing. Staff changes are rare; pull-to-refresh forces a
@@ -34,7 +35,7 @@ import UserBadgePill from '../Helper/UserBadgePill';
 import ProfileBottomDrawer from '../ChatScreen/GroupChat/BottomDrawer';
 
 const DEFAULT_AVATAR = 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
-const ROSTER_NODES = ['mods', 'trusted', 'cmsr'];
+const ROSTER_NODES = ['mods', 'trusted', 'cmsr', 'helper'];
 
 // role → the pill type it maps to, and the section it belongs in.
 const ROLE_META = {
@@ -42,6 +43,7 @@ const ROLE_META = {
   jmod:    { pill: 'jmd',     section: 'staff' },
   trusted: { pill: 'trusted', section: 'community' },
   cmsr:    { pill: 'cmsr',    section: 'community' },
+  helper:  { pill: 'helper',  section: 'community' },
 };
 
 const MemberRow = React.memo(({ member, onPress, isDarkMode, c }) => (
@@ -124,7 +126,7 @@ const ModsScreen = () => {
 
   // Staff first, then community. Within a section: rank, then name.
   const sections = useMemo(() => {
-    const rank = { mod: 0, jmod: 1, cmsr: 0, trusted: 1 };
+    const rank = { mod: 0, jmod: 1, cmsr: 0, trusted: 1, helper: 2 };
     const byName = (a, b) =>
       (rank[a.role] - rank[b.role]) || a.displayName.localeCompare(b.displayName);
 

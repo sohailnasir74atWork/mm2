@@ -335,6 +335,10 @@
     "jmd_granters": {
       ".read": true,
       ".write": "auth != null && (root.child('users').child(auth.uid).child('admin').val() === true || root.child('users').child(auth.uid).child('isAdmin').val() === true || (auth.token.email_verified === true && (auth.token.email === 'thesolanalabs@gmail.com' || auth.token.email === 'sohailnasir74business@gmail.com' || auth.token.email === 'sohailnasir74@gmail.com')))"
+    },
+    "helper": {
+      ".read": true,
+      ".write": false
     }
   }
 }

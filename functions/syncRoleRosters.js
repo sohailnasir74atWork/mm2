@@ -10,6 +10,7 @@
  *   mods/{uid}    { displayName, avatar, role: 'mod' | 'jmod', updatedAt }
  *   trusted/{uid} { displayName, avatar, role: 'trusted',      updatedAt }
  *   cmsr/{uid}    { displayName, avatar, role: 'cmsr',         updatedAt }
+ *   helper/{uid}  { displayName, avatar, role: 'helper',       updatedAt }
  *
  * Every trigger is on a DEEP path — users/{uid}/isModerator, not users/{uid} —
  * so a routine profile write does not wake them. That distinction is what
@@ -111,6 +112,10 @@ exports.syncModRole_BabyMod = functions
 // ─── community badges ──────────────────────────────────────────────────
 exports.syncRoleTrusted = simpleRosterTrigger('isTrusted', 'trusted', 'trusted');
 exports.syncRoleCMSR = simpleRosterTrigger('isCMSR', 'cmsr', 'cmsr');
+// Helper was the odd one out: it had a pill, grant/revoke writers and a chip
+// in the Mod Tools panel, but no roster — so a Helper was invisible on the
+// Our Team screen while Trusted and CMSR appeared.
+exports.syncRoleHelper = simpleRosterTrigger('isHelper', 'helper', 'helper');
 
 // ─── keep names and avatars current ────────────────────────────────────
 //
@@ -125,7 +130,7 @@ exports.refreshAllRosters = functions
     const updates = {};
     let touched = 0;
 
-    for (const node of ['mods', 'trusted', 'cmsr']) {
+    for (const node of ['mods', 'trusted', 'cmsr', 'helper']) {
       const rosterSnap = await db().ref(node).once('value');
       if (!rosterSnap.exists()) continue;
 

@@ -201,6 +201,18 @@ function App() {
             <Stack.Screen name="MysteryEggScreen" options={{ headerShown: false }} getComponent={() => require('./Code/Engagement/MysteryEgg').default} />
             {/* Draws its own header, so the native one stays off. */}
             <Stack.Screen name="ModsScreen" options={{ headerShown: false }} getComponent={() => require('./Code/Engagement/ModsScreen').default} />
+            {/* Moderation console. Draws its own tab bar; the native header
+                carries the title and back button. Lazily required so the
+                bundle cost lands only on staff who actually open it. */}
+            <Stack.Screen
+              name="Admin"
+              options={{
+                title: 'Moderation',
+                headerStyle: { backgroundColor: selectedTheme.colors.background },
+                headerTintColor: selectedTheme.colors.text,
+              }}
+              getComponent={() => require('./Code/AppHelper/AdminDashboard').default}
+            />
             <Stack.Screen name="MyCosmeticsScreen" options={{ headerShown: false }} getComponent={() => require('./Code/Engagement/MyCosmeticsScreen').default} />
 
             <Stack.Screen

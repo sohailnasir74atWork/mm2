@@ -45,6 +45,10 @@ import {
   makeTrusted, removeTrusted, makeCMSR, removeCMSR, makeHelper, removeHelper,
   encodeEmailForBan,
 } from '../ChatScreen/utils';
+import {
+  getFirestore, collection, addDoc, deleteDoc, updateDoc, doc as fsDoc,
+  getDocs, query as fsQuery, orderBy as fsOrderBy, limit as fsLimit, Timestamp,
+} from '@react-native-firebase/firestore';
 import { getOrFetchFullProfile, invalidateFullProfile } from '../Helper/profileCache';
 import UserBadgePill from '../Helper/UserBadgePill';
 
@@ -86,6 +90,7 @@ const banRemaining = (bannedUntil) => {
 const TABS = [
   { key: 'banned', label: 'Banned', adminOnly: false },
   { key: 'search', label: 'Users', adminOnly: false },
+  { key: 'polls', label: 'Polls', adminOnly: false },
   { key: 'chats', label: 'Chats', adminOnly: true },
   { key: 'access', label: 'Access', adminOnly: true },
 ];
@@ -355,6 +360,103 @@ const AdminDashboard = () => {
     if (await fn(merged.id)) afterModAction();
   }, [merged, afterModAction]);
 
+  // ── Polls ────────────────────────────────────────────────────────────
+  //
+  // Firestore polls/{id}: { question, options:[{text,votes}], totalVotes,
+  // voters:{uid:index}, active, createdAt, createdBy }. The shape is dictated
+  // by Code/Engagement/PollCard.jsx, which reads and writes it directly and
+  // already existed in the repo — it had simply never been wired to anything,
+  // and there was no way to create a poll.
+  //
+  // `active` is the switch the feed filters on, so retiring a poll hides it
+  // everywhere without deleting the votes.
+  const [polls, setPolls] = useState([]);
+  const [pollsLoading, setPollsLoading] = useState(false);
+  const [pollQ, setPollQ] = useState('');
+  const [pollOpts, setPollOpts] = useState(['', '']);
+  const [creatingPoll, setCreatingPoll] = useState(false);
+
+  const fs = useMemo(() => getFirestore(), []);
+
+  const loadPolls = useCallback(async () => {
+    setPollsLoading(true);
+    try {
+      const snap = await getDocs(fsQuery(collection(fs, 'polls'), fsOrderBy('createdAt', 'desc'), fsLimit(20)));
+      setPolls(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (e) {
+      Alert.alert('Error', 'Could not load polls.');
+    } finally {
+      setPollsLoading(false);
+    }
+  }, [fs]);
+
+  useEffect(() => { if (tab === 'polls') loadPolls(); }, [tab, loadPolls]);
+
+  const createPoll = useCallback(async () => {
+    const question = pollQ.trim();
+    const options = pollOpts.map((o) => o.trim()).filter(Boolean);
+    if (!question) { Alert.alert('Error', 'Enter a question.'); return; }
+    if (options.length < 2) { Alert.alert('Error', 'Add at least two options.'); return; }
+    if (new Set(options.map((o) => o.toLowerCase())).size !== options.length) {
+      Alert.alert('Error', 'Options must be different from each other.'); return;
+    }
+    // Three at once is plenty in a feed; more just pushes posts off screen.
+    if (polls.filter((p) => p.active).length >= 3) {
+      Alert.alert('Limit reached', 'Three active polls at a time. Deactivate one first.');
+      return;
+    }
+
+    setCreatingPoll(true);
+    try {
+      await addDoc(collection(fs, 'polls'), {
+        question,
+        options: options.map((text) => ({ text, votes: 0 })),
+        totalVotes: 0,
+        voters: {},
+        active: true,
+        createdAt: Timestamp.now(),
+        createdBy: user?.id || null,
+      });
+      setPollQ(''); setPollOpts(['', '']);
+      Keyboard.dismiss();
+      loadPolls();
+      Alert.alert('Published', 'The poll is now live in the feed.');
+    } catch (e) {
+      Alert.alert('Error', 'Could not create the poll.');
+    } finally {
+      setCreatingPoll(false);
+    }
+  }, [fs, pollQ, pollOpts, polls, user, loadPolls]);
+
+  const togglePoll = useCallback(async (p) => {
+    if (!p.active && polls.filter((x) => x.active).length >= 3) {
+      Alert.alert('Limit reached', 'Three active polls at a time.');
+      return;
+    }
+    try {
+      await updateDoc(fsDoc(fs, 'polls', p.id), { active: !p.active });
+      setPolls((prev) => prev.map((x) => (x.id === p.id ? { ...x, active: !x.active } : x)));
+    } catch (e) {
+      Alert.alert('Error', 'Could not update the poll.');
+    }
+  }, [fs, polls]);
+
+  const deletePoll = useCallback(async (p) => {
+    const ok = await new Promise((res) => Alert.alert(
+      'Delete poll',
+      `Delete "${p.question}"? Its ${p.totalVotes || 0} vote(s) go with it. This cannot be undone.`,
+      [{ text: 'Cancel', style: 'cancel', onPress: () => res(false) },
+       { text: 'Delete', style: 'destructive', onPress: () => res(true) }],
+    ));
+    if (!ok) return;
+    try {
+      await deleteDoc(fsDoc(fs, 'polls', p.id));
+      setPolls((prev) => prev.filter((x) => x.id !== p.id));
+    } catch (e) {
+      Alert.alert('Error', 'Could not delete the poll.');
+    }
+  }, [fs]);
+
   // ── Chat viewer ──────────────────────────────────────────────────────
   const [p1, setP1] = useState(''); const [p2, setP2] = useState('');
   const [chatMsgs, setChatMsgs] = useState(null);
@@ -571,6 +673,108 @@ const AdminDashboard = () => {
             />
           )}
         </View>
+      )}
+
+      {/* ── POLLS ── */}
+      {tab === 'polls' && (
+        <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+          <View style={s.pollForm}>
+            <Text style={[s.name, { marginBottom: 10 }]}>New poll</Text>
+
+            <TextInput value={pollQ} onChangeText={setPollQ}
+              placeholder="Question — e.g. Which is worth more?"
+              placeholderTextColor={c.textMuted} multiline
+              style={[s.input, { height: 64, paddingTop: 10, textAlignVertical: 'top' }]} />
+
+            <Text style={s.sectionLabel}>Options</Text>
+            {pollOpts.map((opt, i) => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                <TextInput
+                  value={opt}
+                  onChangeText={(t) => setPollOpts((prev) => prev.map((v, ix) => (ix === i ? t : v)))}
+                  placeholder={`Option ${i + 1}`} placeholderTextColor={c.textMuted}
+                  style={[s.input, { flex: 1 }]} />
+                {pollOpts.length > 2 && (
+                  <TouchableOpacity onPress={() => setPollOpts((prev) => prev.filter((_, ix) => ix !== i))}>
+                    <Icon name="close-circle" size={22} color="#FF3B30" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+
+            {/* Six is PollCard's colour palette length; a seventh bar would
+                reuse a colour and read as a duplicate option. */}
+            {pollOpts.length < 6 && (
+              <TouchableOpacity onPress={() => setPollOpts((prev) => [...prev, ''])}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 }}>
+                <Icon name="add-circle" size={20} color={c.primary} />
+                <Text style={{ color: c.primary, fontSize: 13, fontWeight: '600' }}>Add option</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity onPress={createPoll} disabled={creatingPoll}
+              style={[s.primaryBtn, { marginTop: 10, opacity: creatingPoll ? 0.6 : 1 }]}>
+              {creatingPoll ? <ActivityIndicator color="#fff" /> : (
+                <>
+                  <Icon name="megaphone" size={17} color="#fff" />
+                  <Text style={s.primaryBtnText}>Publish to feed</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <Text style={s.sectionLabel}>{`Polls · ${polls.length}`}</Text>
+          {pollsLoading && <ActivityIndicator color={c.primary} style={{ marginTop: 12 }} />}
+          {!pollsLoading && polls.length === 0 && (
+            <Text style={[s.sub, { textAlign: 'center', paddingVertical: 20 }]}>No polls yet.</Text>
+          )}
+
+          {polls.map((p) => (
+            <View key={p.id} style={s.pollRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                <View style={[s.statusDot, { backgroundColor: p.active ? '#34C759' : '#8E8E93' }]} />
+                <Text style={[s.sub, { fontWeight: '700', color: p.active ? '#34C759' : c.textMuted }]}>
+                  {p.active ? 'LIVE IN FEED' : 'HIDDEN'}
+                </Text>
+                <Text style={[s.sub, { marginLeft: 'auto' }]}>{`${p.totalVotes || 0} vote(s)`}</Text>
+              </View>
+
+              <Text style={s.name} numberOfLines={2}>{p.question}</Text>
+
+              {/* Result bars, so you can read the outcome without leaving. */}
+              <View style={{ marginTop: 8, gap: 5 }}>
+                {(p.options || []).map((o, i) => {
+                  const pct = p.totalVotes > 0 ? Math.round(((o.votes || 0) / p.totalVotes) * 100) : 0;
+                  return (
+                    <View key={i}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={s.sub} numberOfLines={1}>{o.text}</Text>
+                        <Text style={s.sub}>{`${pct}%`}</Text>
+                      </View>
+                      <View style={s.barTrack}>
+                        <View style={[s.barFill, { width: `${pct}%` }]} />
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                <TouchableOpacity onPress={() => togglePoll(p)}
+                  style={[s.pollBtn, { backgroundColor: p.active ? '#FF950018' : '#34C75918' }]}>
+                  <Icon name={p.active ? 'eye-off' : 'eye'} size={15} color={p.active ? '#FF9500' : '#34C759'} />
+                  <Text style={[s.pollBtnText, { color: p.active ? '#FF9500' : '#34C759' }]}>
+                    {p.active ? 'Hide' : 'Show'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => deletePoll(p)} style={[s.pollBtn, { backgroundColor: '#FF3B3018' }]}>
+                  <Icon name="trash-outline" size={15} color="#FF3B30" />
+                  <Text style={[s.pollBtnText, { color: '#FF3B30' }]}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
       )}
 
       {/* ── CHATS ── */}
@@ -833,6 +1037,13 @@ const makeStyles = (c, isDark) => StyleSheet.create({
   roleChipText: { fontSize: 12, fontWeight: '700' },
   revokeBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: '#FF3B3015', borderWidth: 1, borderColor: '#FF3B3040' },
   revokeText: { fontSize: 12, fontWeight: '700', color: '#FF3B30' },
+  pollForm: { padding: 14, borderRadius: 14, backgroundColor: c.bgAlt, borderWidth: 1, borderColor: c.border },
+  pollRow: { padding: 14, borderRadius: 14, backgroundColor: c.bgAlt, borderWidth: 1, borderColor: c.border, marginBottom: 10 },
+  statusDot: { width: 7, height: 7, borderRadius: 4, marginRight: 6 },
+  barTrack: { height: 6, borderRadius: 3, backgroundColor: c.border, marginTop: 3, overflow: 'hidden' },
+  barFill: { height: 6, borderRadius: 3, backgroundColor: c.primary },
+  pollBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9 },
+  pollBtnText: { fontSize: 12, fontWeight: '700' },
   bubble: { maxWidth: '85%', padding: 10, borderRadius: 12, marginTop: 8, borderWidth: 1, borderColor: c.border },
   bubbleA: { alignSelf: 'flex-end', backgroundColor: isDark ? '#0A3D62' : '#DCF8C6' },
   bubbleB: { alignSelf: 'flex-start', backgroundColor: c.bgAlt },

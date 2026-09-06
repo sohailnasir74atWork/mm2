@@ -25,6 +25,7 @@ import {
   addDoc,
   writeBatch,
   deleteField,
+  onSnapshot,
 } from '@react-native-firebase/firestore';
 import { ref as dbRef, get } from '@react-native-firebase/database';
 
@@ -39,6 +40,7 @@ import { getMyCosmetics } from '../Helper/cosmeticsCache';
 import { Platform } from 'react-native';
 import { showMessage } from 'react-native-flash-message';
 import NativeAdCard from '../Ads/NativeAdCard';
+import PollCard from '../Engagement/PollCard';
 import { releaseByPrefix as releaseNativeAds } from '../Ads/NativeAdManager';
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
@@ -79,6 +81,34 @@ const DesignFeedScreen = ({ route }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isSigninDrawerVisible, setSigninDrawerVisible] = useState(false);
   const [posts, setPosts] = useState([]);
+
+  // ── Community polls (PLAN_2026-09.md §9) ──
+  // Created by staff in the Admin Dashboard, shown at the top of the feed.
+  // A live listener rather than a one-shot read so a vote from another device,
+  // or a poll an admin just published, appears without a pull-to-refresh.
+  // Bounded to the 3 newest active polls; `active` is the admin's on/off
+  // switch, so retiring a poll hides it everywhere at once.
+  const [polls, setPolls] = useState([]);
+  useEffect(() => {
+    if (!firestoreDB) return;
+    const q = query(
+      collection(firestoreDB, 'polls'),
+      where('active', '==', true),
+      orderBy('createdAt', 'desc'),
+      limit(3),
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => setPolls(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err) => {
+        // A missing composite index shows up here. Failing quiet keeps the
+        // feed usable; the poll strip just does not appear.
+        console.warn('[Feed] polls listener:', err?.message);
+        setPolls([]);
+      },
+    );
+    return () => unsub();
+  }, [firestoreDB]);
   const [lastVisibleDoc, setLastVisibleDoc] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -500,6 +530,18 @@ const DesignFeedScreen = ({ route }) => {
       return <NativeAdCard adKey={item.id} isDarkMode={isDarkMode} />;
     }
 
+    if (item?.__type === 'poll') {
+      return (
+        <PollCard
+          poll={item.poll}
+          user={user}
+          firestoreDB={firestoreDB}
+          isDarkMode={isDarkMode}
+          onRequireSignIn={() => setSigninDrawerVisible(true)}
+        />
+      );
+    }
+
     return (
       <PostCard
         item={item}
@@ -537,10 +579,15 @@ const DesignFeedScreen = ({ route }) => {
   
   // Memoized so FlatList gets a stable `data` reference (the interleave used to
   // run and allocate a new array on every render, defeating list bail-out).
-  const dataToRender = useMemo(
-    () => (initialLoading ? skeletonArray : interleaveAds(filteredBase, !localState?.isPro)),
-    [initialLoading, filteredBase, localState?.isPro, skeletonArray]
-  );
+  const dataToRender = useMemo(() => {
+    if (initialLoading) return skeletonArray;
+    const withAds = interleaveAds(filteredBase, !localState?.isPro);
+    if (polls.length === 0) return withAds;
+    // Polls ride at the top of the list rather than in ListHeaderComponent,
+    // because the header is sticky (stickyHeaderIndices={[0]}) and a pinned
+    // poll would sit over the feed permanently.
+    return [...polls.map((poll) => ({ __type: 'poll', id: `poll-${poll.id}`, poll })), ...withAds];
+  }, [initialLoading, filteredBase, localState?.isPro, skeletonArray, polls]);
 
   // Stable keys: drop `index` from real-item keys so pagination/reorder doesn't
   // remount rows (which previously also forced native ad cards to reload).
@@ -548,7 +595,7 @@ const DesignFeedScreen = ({ route }) => {
     (item, index) =>
       initialLoading
         ? `skeleton-${index}`
-        : item?.__type === 'ad'
+        : (item?.__type === 'ad' || item?.__type === 'poll')
           ? item.id
           : (item?.id != null ? String(item.id) : `post-${index}`),
     [initialLoading]

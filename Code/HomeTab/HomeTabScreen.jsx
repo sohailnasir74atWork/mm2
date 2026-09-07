@@ -65,7 +65,12 @@ const getMiniGames = (t) => [
 ];
 
 const HomeTabScreen = ({ selectedTheme }) => {
-  const { theme, user, appdatabase, firestoreDB } = useGlobalState();
+  const { theme, user, appdatabase, firestoreDB, isAdmin, canGrantJmd } = useGlobalState();
+  // Same gate MainTabs uses for the moderation trophy. That one lives on the
+  // Calculator tab's headerRight, which is the ONLY header in the tab navigator
+  // (Home / Trade / Designs / Chat all set headerShown: false), so staff who
+  // stay on Home never saw an entry point to the dashboard.
+  const canOpenModeration = isAdmin || !!user?.isModerator || !!user?.isBabyMod || !!canGrantJmd;
   const { localState } = useLocalState();
   const { t, i18n } = useTranslation();
   const { changeLanguage: setLang } = useLanguage();
@@ -203,6 +208,16 @@ const HomeTabScreen = ({ selectedTheme }) => {
               {user?.displayName || t('home.trader')}
             </Text>
           </View>
+          {canOpenModeration && (
+            <TouchableOpacity
+              onPress={() => nav.navigate('Admin')}
+              style={[$.iconBtn, { backgroundColor: C.bgAlt, marginRight: 8 }]}
+              activeOpacity={0.8}
+              accessibilityLabel="Open moderation dashboard"
+            >
+              <FontAwesome name="shield-halved" size={16} color={C.text} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={() => setShowLangPicker(true)} style={[$.iconBtn, { backgroundColor: C.bgAlt }]}>
             <Text style={{ fontSize: 16 }}>{curLang.flag}</Text>
           </TouchableOpacity>

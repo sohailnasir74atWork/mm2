@@ -545,9 +545,19 @@ export const GlobalStateProvider = ({ children }) => {
       setLoading(true);
       const ls = localStateRef.current;
 
-      const lastActivity = ls.lastActivity ? new Date(ls.lastActivity).getTime() : 0;
+      // Own key, not lastActivity. lastActivity is re-stamped on every launch
+      // by the effect above, so it could never be older than a few ms -- which
+      // made `timeElapsed > CACHE_TTL` unreachable and pinned every updated
+      // install to whatever catalogue it had cached. A fresh install fetched
+      // (no cache at all), an updated one never did, which is exactly why
+      // Halloween showed on a clean emulator and not on a real update.
+      //
+      // Installs that predate this key have no value here, so they read as
+      // epoch 0 and refetch once on next launch. That is the intended
+      // migration: it is how they pick up the items they are missing.
+      const fetchedAt = ls.valuesFetchedAt ? new Date(ls.valuesFetchedAt).getTime() : 0;
       const now = Date.now();
-      const timeElapsed = now - lastActivity;
+      const timeElapsed = now - fetchedAt;
 
       // Bunny is billed per GB served. The two catalogues are ~1.5 MB together
       // on every fetch, and they only change when the scraper runs — a few
@@ -648,7 +658,9 @@ export const GlobalStateProvider = ({ children }) => {
         await updateLocalStateRef.current('data', JSON.stringify(data));
         await updateLocalStateRef.current('suprime', JSON.stringify(suprime));
         if (image) await updateLocalStateRef.current('imgurl', JSON.stringify(image));
-        await updateLocalStateRef.current('lastActivity', new Date().toISOString());
+        // Stamp the catalogue's own clock. lastActivity is left to the launch
+        // effect that owns it (and mirrors it to RTDB for presence).
+        await updateLocalStateRef.current('valuesFetchedAt', new Date().toISOString());
       }
     } catch (error) {
       console.error("❌ Error fetching stock data:", error);

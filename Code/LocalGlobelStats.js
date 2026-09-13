@@ -72,6 +72,12 @@ export const LocalStateProvider = ({ children }) => {
     postsCache: safeParseJSON('postsCache', []),
     tradingServerLink: storage.getString('tradingServerLink') || null,
     lastServerFetch: storage.getString('lastServerFetch') || null,
+    // When the value catalogues were last pulled. Deliberately NOT lastActivity:
+    // that key is stamped on every app launch (and mirrored to RTDB), so using
+    // it as the catalogue's TTL clock meant timeElapsed was always ~0 and a
+    // cached catalogue was never refreshed. MUST be rehydrated here -- left
+    // undefined it reads as epoch 0 and every launch refetches both feeds.
+    valuesFetchedAt: storage.getString('valuesFetchedAt') || null,
     showFlag: storage.getBoolean('showFlag') ?? true, // ✅ Default true (show flag), user can hide to save data
     showOnlineStatus: storage.getBoolean('showOnlineStatus') ?? true, // ✅ Default true (show online), user can hide to save Firebase costs
     gameMusicEnabled: storage.getBoolean('gameMusicEnabled') ?? true, // ✅ Default true (music on), user can toggle off/on

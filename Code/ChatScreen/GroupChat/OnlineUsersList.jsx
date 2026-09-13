@@ -86,9 +86,13 @@ const OnlineUsersList = ({
     setCheckingGroup(true);
     const checkUserGroup = async () => {
       try {
-        // Note: getUserAdminGroup might need to be updated to use RTDB instead of Firestore
-        // For now, keeping the original call but you may need to update groupUtils.js
-        const result = await getUserAdminGroup(null, user.id); // Pass null for firestoreDB if using RTDB
+        // Was `getUserAdminGroup(null, user.id)`. That function's first line is
+        // `if (!firestoreDB || !userId) return { success: false }`, so passing
+        // null made it bail before running -- userGroup stayed permanently
+        // null, the button never said "Add", and the addMembersToGroup branch
+        // below was unreachable. Adding members to an existing group could not
+        // work from this sheet at all. firestoreDB is already in scope.
+        const result = await getUserAdminGroup(firestoreDB, user.id);
         if (result.success) {
           setUserGroup({ groupId: result.groupId, groupData: result.groupData });
         } else {
@@ -103,7 +107,7 @@ const OnlineUsersList = ({
     };
 
     checkUserGroup();
-  }, [mode, visible, appdatabase, user?.id]);
+  }, [mode, visible, appdatabase, firestoreDB, user?.id]);
 
   // ✅ Reset game invitation state when modal closes
   useEffect(() => {
@@ -692,7 +696,9 @@ const OnlineUsersList = ({
                       disabled={loading}
                     >
                       <Text style={styles.createGroupText}>
-                        {userGroup ? `Add (${selectedUserIds.size})` : `Create (${selectedUserIds.size})`}
+                        {userGroup
+                          ? `Add to ${userGroup.groupData?.name || userGroup.groupData?.groupName || 'group'} (${selectedUserIds.size})`
+                          : `Create (${selectedUserIds.size})`}
                       </Text>
                     </TouchableOpacity>
                   )}

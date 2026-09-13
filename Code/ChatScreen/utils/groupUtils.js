@@ -31,10 +31,28 @@ export const getUserAdminGroup = async (firestoreDB, userId) => {
   }
 
   try {
+    // limit(1) is a pure cost win: without it this downloaded EVERY group the
+    // user has ever created, just to look at one of them -- a document read
+    // per owned group, every time the member picker opened.
+    //
+    // Deliberately NO orderBy. Two equality filters can be served by merging
+    // single-field indexes, but adding orderBy on a third field would require
+    // a composite (createdBy, isActive, createdAt) index that does not exist
+    // in firestore.indexes.json -- the query would throw "requires an index"
+    // until someone deployed it, breaking the picker outright. So ordering
+    // stays Firestore's document-id default, which for `group_${Date.now()}_..`
+    // ids means the user's OLDEST group. That is arbitrary rather than wrong,
+    // and the picker now names the group so nobody has to guess which one.
+    //
+    // To make it the newest instead: add
+    //   { createdBy ASC, isActive ASC, createdAt DESC }
+    // to firestore.indexes.json, `firebase deploy --only firestore:indexes`,
+    // and only then add orderBy('createdAt', 'desc') here.
     const groupsQuery = query(
       collection(firestoreDB, 'groups'),
       where('createdBy', '==', userId),
-      where('isActive', '==', true)
+      where('isActive', '==', true),
+      limit(1),
     );
     const snapshot = await getDocs(groupsQuery);
 
@@ -260,7 +278,14 @@ export const createGroup = async (firestoreDB, appdatabase, creatorData, memberI
  * @param {Object} invitedUserData - { displayName, avatar } (optional, will be fetched if not provided)
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export const sendGroupInvite = async (firestoreDB, groupId, invitedUserId, inviterData, invitedUserData = null) => {
+// `appdatabase` was referenced in the body but never declared as a parameter,
+// so `if (appdatabase)` threw ReferenceError rather than evaluating falsy. The
+// surrounding try swallowed it, meaning the RTDB fallback silently degraded
+// every invited user to 'Anonymous' with no avatar. It went unnoticed because
+// this function has no call sites at all -- addMembersToGroup builds its own
+// invitedUsersMap and writes group_invitations directly. Second position
+// matches acceptGroupInvite / leaveGroup / addMembersToGroup.
+export const sendGroupInvite = async (firestoreDB, appdatabase, groupId, invitedUserId, inviterData, invitedUserData = null) => {
   if (!firestoreDB || !groupId || !invitedUserId || !inviterData?.id) {
     return { success: false, error: 'Missing required parameters' };
   }

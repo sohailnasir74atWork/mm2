@@ -46,6 +46,10 @@ export const LocalStateProvider = ({ children }) => {
     // disagree on 70% of the items they share, so this is a real preference,
     // not a display option. See Code/Helper/valueSources.js.
     valueSource: storage.getString('valueSource') || 'supreme',
+    // Seasonal-event config, mirrored from RTDB /events. Empty until the first
+    // fetch; the event screen falls back to its built-in estimates until then,
+    // so a cold start with no network still shows a sensible countdown.
+    events: safeParseJSON('events', {}),
     ggData: safeParseJSON('ggData', {}),
     codes: safeParseJSON('codes', {}),
     normalStock: safeParseJSON('normalStock', []),

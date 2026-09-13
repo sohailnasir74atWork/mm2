@@ -41,6 +41,7 @@ import { Platform } from 'react-native';
 import { showMessage } from 'react-native-flash-message';
 import NativeAdCard from '../Ads/NativeAdCard';
 import PollCard from '../Engagement/PollCard';
+import EventCard from '../Engagement/EventScreen';
 import { releaseByPrefix as releaseNativeAds } from '../Ads/NativeAdManager';
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
@@ -530,6 +531,11 @@ const DesignFeedScreen = ({ route }) => {
       return <NativeAdCard adKey={item.id} isDarkMode={isDarkMode} />;
     }
 
+    // Seasonal event. Renders nothing when no event is running or near.
+    if (item?.__type === 'event') {
+      return <EventCard isDarkMode={isDarkMode} />;
+    }
+
     if (item?.__type === 'poll') {
       return (
         <PollCard
@@ -582,11 +588,18 @@ const DesignFeedScreen = ({ route }) => {
   const dataToRender = useMemo(() => {
     if (initialLoading) return skeletonArray;
     const withAds = interleaveAds(filteredBase, !localState?.isPro);
-    if (polls.length === 0) return withAds;
-    // Polls ride at the top of the list rather than in ListHeaderComponent,
-    // because the header is sticky (stickyHeaderIndices={[0]}) and a pinned
-    // poll would sit over the feed permanently.
-    return [...polls.map((poll) => ({ __type: 'poll', id: `poll-${poll.id}`, poll })), ...withAds];
+    // Polls and the seasonal event ride at the top of the list rather than in
+    // ListHeaderComponent, because the header is sticky
+    // (stickyHeaderIndices={[0]}) and anything pinned there would sit over the
+    // feed permanently.
+    //
+    // The event row renders null outside an event window, so this costs an
+    // empty row for most of the year and nothing else.
+    const head = [
+      { __type: 'event', id: 'seasonal-event' },
+      ...polls.map((poll) => ({ __type: 'poll', id: `poll-${poll.id}`, poll })),
+    ];
+    return [...head, ...withAds];
   }, [initialLoading, filteredBase, localState?.isPro, skeletonArray, polls]);
 
   // Stable keys: drop `index` from real-item keys so pagination/reorder doesn't
@@ -595,7 +608,7 @@ const DesignFeedScreen = ({ route }) => {
     (item, index) =>
       initialLoading
         ? `skeleton-${index}`
-        : (item?.__type === 'ad' || item?.__type === 'poll')
+        : (item?.__type === 'ad' || item?.__type === 'poll' || item?.__type === 'event')
           ? item.id
           : (item?.id != null ? String(item.id) : `post-${index}`),
     [initialLoading]

@@ -86,6 +86,33 @@ export const unwrapFeed = (raw) =>
     ? raw.data
     : raw;
 
+/**
+ * The `meta` block the dist build carries: generatedAt, source, and the
+ * observed/modeled/none counts. Null for an older raw upload that has none.
+ *
+ * generatedAt is when the SCRAPER last ran — not when the app last fetched.
+ * The difference is the whole point. Supreme's own staff put their cadence at
+ * "twice every 5 days", yet players believe it is every 2-3 weeks, because no
+ * tool has ever shown them the real figure. Showing the fetch time instead
+ * (which is what "Updated just now" used to mean) actively feeds that.
+ */
+export const feedMeta = (raw) =>
+  raw && typeof raw === 'object' && raw.meta && typeof raw.meta === 'object'
+    ? raw.meta
+    : null;
+
+/** Newest generatedAt across the feeds, as a Date, or null if none carry one. */
+export const newestGeneratedAt = (...raws) => {
+  let newest = null;
+  for (const raw of raws) {
+    const at = feedMeta(raw)?.generatedAt;
+    if (!at) continue;
+    const d = new Date(at);
+    if (!Number.isNaN(d.getTime()) && (!newest || d > newest)) newest = d;
+  }
+  return newest;
+};
+
 const isSupremeAsset = (image) => !image || image.startsWith(SUPREME_MEDIA_PREFIX);
 
 // ── Name normalization ─────────────────────────────────────────────────────
@@ -546,6 +573,16 @@ const poolEntry = (item, category, tier, inMM2) => ({
   valueConfidence: inMM2 ? (item.valueConfidence || null) : null,
   valueText: inMM2 ? (item.valueText || '') : '',
   inMM2,
+  // Supreme-only, and the reason the event screen needs no new pipeline:
+  // `origin` tags 92% of items with the event that produced them
+  // ("Halloween 2025 (Tier 24)"), and change/changePct already carry the
+  // movement since the site's last update for 460 of them. MM2 publishes
+  // neither, so these stay null on an MM2-only row.
+  origin: item.origin || null,
+  change: item.change ?? null,
+  changePct: item.changePct || null,
+  stability: item.stability || null,
+  range: item.range || null,
 });
 
 const eachItem = (data, fn) => {
@@ -571,9 +608,26 @@ export const buildItemPool = (mm2Data, supremeData) => {
   });
 
   eachItem(supremeData, (item, category, tier) => {
-    if (category === 'Untradables') return;
     const key = normalizeName(item.name);
-    if (!pool.has(key)) pool.set(key, poolEntry(item, category, tier, false));
+    const held = pool.get(key);
+
+    if (held) {
+      // Already held by MM2, which owns the artwork and the baseline value.
+      // But origin / change / stability are Supreme-only fields, and 787 items
+      // are in BOTH catalogues — without this they would keep MM2's row and
+      // silently lose their event tag, so the event screen would miss most of
+      // what it is supposed to list.
+      if (held.origin == null) held.origin = item.origin || null;
+      if (held.change == null) held.change = item.change ?? null;
+      if (held.changePct == null) held.changePct = item.changePct || null;
+      if (held.stability == null) held.stability = item.stability || null;
+      return;
+    }
+
+    // Untradables cannot be traded, so they have no business in a calculator —
+    // but only skip them when they are not already held by a tradable MM2 row.
+    if (category === 'Untradables') return;
+    pool.set(key, poolEntry(item, category, tier, false));
   });
 
   return [...pool.values()];

@@ -9,7 +9,7 @@ import { buildSearchTokens } from '../Trades/tradeSearchIndex';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import config from '../Helper/Environment';
 import {
-  resolveItemImage, summarizeItems, buildItemPool, unwrapFeed,
+  resolveItemImage, summarizeItems, buildItemPool, unwrapFeed, newestGeneratedAt,
   priceOf, displayValueText, isSummable, VALUE_SOURCE, DEFAULT_VALUE_SOURCE,
 } from '../Helper/valueSources';
 import ConditionalKeyboardWrapper from '../Helper/keyboardAvoidingContainer';
@@ -46,6 +46,29 @@ const excludedCount = (summary) => (summary?.modeled || 0) + (summary?.unpriced 
 const excludedLabel = (summary) => {
   const n = excludedCount(summary);
   return n ? `${n} item${n === 1 ? '' : 's'}` : '—';
+};
+
+// Value and demand are different things, and the community's most-repeated
+// lesson is that a high-value, low-demand item will not actually trade. An
+// even-on-value deal where you receive the harder-to-move side is a worse deal
+// than the number says.
+//
+// This ADVISES; it deliberately does not change the WIN/FAIR/LOSE verdict.
+// That verdict is stored as `status` on every trade document and drives the
+// badge on 8,799 existing trades — redefining it would make new trades
+// incomparable with old ones.
+const DEMAND_GAP_THRESHOLD = 1.5;
+
+const getDemandAdvice = (hasAvg, wantsAvg) => {
+  const a = Number(hasAvg);
+  const b = Number(wantsAvg);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  const gap = a - b;
+  if (Math.abs(gap) < DEMAND_GAP_THRESHOLD) return null;
+  return gap > 0
+    // They want the easier-to-move side.
+    ? 'Their side is harder to trade on'
+    : 'Your side is harder to trade on';
 };
 
 const getTradeStatus = (hasTotal, wantsTotal) => {
@@ -131,7 +154,24 @@ const HomeScreen = ({ selectedTheme }) => {
   const [debouncedSearchText, setDebouncedSearchText] = useState(searchText);
   const [showofferwall, setShowofferwall] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [lastUpdatedTime, setLastUpdatedTime] = useState(new Date());
+  // When the VALUES last changed, read from the feed's own meta.generatedAt —
+  // not when this screen mounted, and not when we last fetched. It used to be
+  // `new Date()` at mount, so the label read "Updated just now" permanently no
+  // matter how old the data was. Supreme publishes roughly twice every five
+  // days; players believe it is every two to three weeks, and a label that
+  // always says "just now" is why nobody could tell.
+  //
+  // Null for an older raw upload with no meta — the label hides rather than
+  // inventing a time.
+  const lastUpdatedTime = useMemo(() => {
+    const parse = (raw) => {
+      try {
+        if (!raw) return null;
+        return typeof raw === 'string' ? JSON.parse(raw) : raw;
+      } catch (e) { return null; }
+    };
+    return newestGeneratedAt(parse(localState?.data), parse(localState?.suprime));
+  }, [localState?.data, localState?.suprime]);
 
   // ✅ Cleanup all timeouts and animation frames on unmount
   useEffect(() => {
@@ -154,6 +194,7 @@ const HomeScreen = ({ selectedTheme }) => {
   // ✅ Format last updated time as relative string
   const getLastUpdatedText = useCallback(() => {
     const now = new Date();
+    if (!lastUpdatedTime) return '';
     const diffMs = now - lastUpdatedTime;
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
@@ -171,7 +212,7 @@ const HomeScreen = ({ selectedTheme }) => {
     try {
       await reload();
       if (!isMountedRef.current) return;
-      setLastUpdatedTime(new Date());
+      // No stamping here: lastUpdatedTime is derived from the refreshed feed.
       showSuccessMessage(t('home.alert.success'), t('home.alert.values_reloaded', { defaultValue: 'Values updated!' }));
     } catch (error) {
       console.error('Error refreshing values:', error);
@@ -1028,6 +1069,11 @@ const HomeScreen = ({ selectedTheme }) => {
     return avg % 1 === 0 ? avg.toFixed(0) : avg.toFixed(1);
   }, [wantsItems]);
 
+  const demandAdvice = useMemo(
+    () => getDemandAdvice(hasAvgDemand, wantsAvgDemand),
+    [hasAvgDemand, wantsAvgDemand],
+  );
+
   return (
     <>
       <GestureHandlerRootView>
@@ -1118,6 +1164,12 @@ const HomeScreen = ({ selectedTheme }) => {
                         </View>
                       </View>
                     )}
+
+                    {/* Demand advice. Shown only when the gap is wide enough to
+                        matter, so it stays meaningful rather than decorative. */}
+                    {demandAdvice ? (
+                      <Text style={styles.demandAdvice}>{demandAdvice}</Text>
+                    ) : null}
 
                     {/* What the total leaves out. A modeled value is a
                         bundle-tier rank, not a price, so it cannot be summed —
@@ -1610,6 +1662,13 @@ const getStyles = (isDarkMode, isGG) =>
     sourceToggleTextActive: {
       color: '#FFFFFF',
       opacity: 1,
+    },
+    demandAdvice: {
+      fontSize: 11,
+      textAlign: 'center',
+      marginTop: 2,
+      opacity: 0.75,
+      color: isDarkMode ? config.colors.textDark : config.colors.textLight,
     },
     excludedText: {
       fontSize: 11,

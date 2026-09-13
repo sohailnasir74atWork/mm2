@@ -1636,6 +1636,16 @@ const TradeList = ({ route }) => {
                                 : (tradeItem.deprecatedName || tradeItem.deprecated_name)}
                             </Text>
                           )}
+                          {/* The source that priced this trade had no real value
+                              for this item, so it is not in the ME/YOU totals.
+                              Its own words ("Priceless", "Award only") say why.
+                              Absent on trades made before 2026-09, which render
+                              exactly as they always did. */}
+                          {tradeItem.valueConfidence && tradeItem.valueConfidence !== 'observed' ? (
+                            <Text style={styles.unpricedItemNote} numberOfLines={1}>
+                              {tradeItem.valueText || 'not in total'}
+                            </Text>
+                          ) : null}
                         </View>
                       </>
                     ) : null}
@@ -1686,6 +1696,16 @@ const TradeList = ({ route }) => {
                                 : (tradeItem.deprecatedName || tradeItem.deprecated_name)}
                             </Text>
                           )}
+                          {/* The source that priced this trade had no real value
+                              for this item, so it is not in the ME/YOU totals.
+                              Its own words ("Priceless", "Award only") say why.
+                              Absent on trades made before 2026-09, which render
+                              exactly as they always did. */}
+                          {tradeItem.valueConfidence && tradeItem.valueConfidence !== 'observed' ? (
+                            <Text style={styles.unpricedItemNote} numberOfLines={1}>
+                              {tradeItem.valueText || 'not in total'}
+                            </Text>
+                          ) : null}
                         </View>
                       </>
                     ) : null}
@@ -2166,6 +2186,12 @@ const getStyles = (isDarkMode) =>
       fontSize: 9,
     },
     // Deliberately muted next to Win/Fair/Lose: it is provenance, not a verdict.
+    unpricedItemNote: {
+      fontSize: 7,
+      textAlign: 'center',
+      opacity: 0.65,
+      color: isDarkMode ? config.colors.textDark : config.colors.textLight,
+    },
     sourceBadge: {
       backgroundColor: isDarkMode ? '#475569' : '#94a3b8',
     },

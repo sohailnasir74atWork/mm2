@@ -624,8 +624,15 @@ export const GlobalStateProvider = ({ children }) => {
         // other config nodes so a stock refresh (every 6 min) stops re-reading
         // a node that changes a few times a year.
         try {
-          const cfg = await getConfigNodes(appdatabase, ['image_url']);
+          // `events` rides along with image_url on the same cached read, so the
+          // seasonal-event config costs no extra round trip. Set it from the
+          // Firebase console and every install picks the change up without an
+          // app release — see Code/Engagement/eventConfig.js.
+          const cfg = await getConfigNodes(appdatabase, ['image_url', 'events']);
           image = cfg.image_url || '';
+          if (cfg.events && typeof cfg.events === 'object') {
+            await updateLocalStateRef.current('events', cfg.events);
+          }
         } catch (imgErr) {
           // absent or unreachable — empty string, same as before
         }

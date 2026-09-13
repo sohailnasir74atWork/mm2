@@ -10,6 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 import ReportTradePopup from './ReportTradePopUp';
 import SignInDrawer from '../Firebase/SigninDrawer';
 import { useLocalState } from '../LocalGlobelStats';
+import { ABOVE_BANNER, FLOATING_BUTTON_ICON_SIZE, FLOATING_BUTTON_RIGHT } from '../Helper/floatingButtonLayout';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -2078,7 +2079,7 @@ const TradeList = ({ route }) => {
           >
             <Icon
               name="chevron-up-circle"
-              size={48}
+              size={FLOATING_BUTTON_ICON_SIZE}
               color={config.colors.primary}
             />
           </TouchableOpacity>
@@ -2508,8 +2509,10 @@ const getStyles = (isDarkMode) =>
     },
     scrollToTopButton: {
       position: 'absolute',
-      bottom: 150, // Position above the banner ad + floating tab bar
-      right: 8,
+      // Was a hand-tuned 150, which left it ~90px above the banner — far higher
+      // than the feed's FAB and the chat's button, so it jumped between tabs.
+      bottom: ABOVE_BANNER,
+      right: FLOATING_BUTTON_RIGHT,
       zIndex: 1000,
       elevation: 8, // For Android shadow
       shadowColor: config.colors.shadowDark, // For iOS shadow
@@ -2518,7 +2521,9 @@ const getStyles = (isDarkMode) =>
       shadowRadius: 3.84,
     },
     scrollToTopTouchable: {
-      borderRadius: 28,
+      width: FLOATING_BUTTON_ICON_SIZE,
+      height: FLOATING_BUTTON_ICON_SIZE,
+      borderRadius: FLOATING_BUTTON_ICON_SIZE / 2,
       // backgroundColor: isDarkMode ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)',
       // padding: 4,
       justifyContent: 'center',

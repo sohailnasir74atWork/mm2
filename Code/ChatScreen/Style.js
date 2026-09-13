@@ -1,5 +1,6 @@
 import { StyleSheet } from "react-native";
 import config from "../Helper/Environment";
+import { ABOVE_CHAT_INPUT, FLOATING_BUTTON_ICON_SIZE, FLOATING_BUTTON_RIGHT } from "../Helper/floatingButtonLayout";
 
 export const getStyles = (isDarkMode) =>
 
@@ -564,9 +565,18 @@ platformBadge: {
 },
 scrollToBottomButton: {
   position: 'absolute',
-  bottom: 80,
-  right: 8,
-  marginTop: -24, // Half of icon size (48/2) to center it perfectly
+  // MessagesList returns a Fragment, so this offset is measured from the
+  // wrapper that also holds MessageInput — NOT from the screen edge. That is
+  // why it must not be set to ABOVE_BANNER to "match" the other two screens:
+  // doing so would park the button on top of the text field. ABOVE_CHAT_INPUT
+  // clears the input by the same 20px gap the feed and trades buttons clear
+  // the banner by, so all three read as the same height.
+  bottom: ABOVE_CHAT_INPUT,
+  right: FLOATING_BUTTON_RIGHT,
+  // The old `marginTop: -24` ("half the icon size to centre it") is gone: with
+  // only `bottom` set and no `top`, a top margin does not move an absolutely
+  // positioned box, and trades never had one. Removing it makes the three
+  // buttons provably identical instead of only accidentally aligned.
   zIndex: 1000,
   elevation: 8, // For Android shadow
   shadowColor: '#000',
@@ -575,7 +585,9 @@ scrollToBottomButton: {
   shadowRadius: 4,
 },
 scrollToBottomTouchable: {
-  borderRadius: 24,
+  width: FLOATING_BUTTON_ICON_SIZE,
+  height: FLOATING_BUTTON_ICON_SIZE,
+  borderRadius: FLOATING_BUTTON_ICON_SIZE / 2,
   // padding: 4,
   justifyContent: 'center',
   alignItems: 'center',

@@ -45,6 +45,7 @@ import EventCard from '../Engagement/EventScreen';
 import { releaseByPrefix as releaseNativeAds } from '../Ads/NativeAdManager';
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
+import { ABOVE_BANNER, FLOATING_BUTTON_ICON_SIZE, FLOATING_BUTTON_RIGHT } from '../Helper/floatingButtonLayout';
 import PostsHeader from './componenets/PostsHeader';
 import { useTranslation } from 'react-i18next';
 
@@ -674,13 +675,14 @@ const DesignFeedScreen = ({ route }) => {
         <Icon name="plus" size={24} color="white" />
       </TouchableOpacity> */}
       <TouchableOpacity
-        // bannerBottomPos + 80 keeps the FAB's bottom edge ~20px ABOVE the
-        // ad's top edge, and zIndex 6 (> the ad's 5) guarantees the ad never
-        // renders on top of the button (AdMob "accidental clicks: layout").
-        style={[styles.fab, { bottom: !localState.isPro ? bannerBottomPos + 80 : 75, zIndex: 6 }]}
+        // ABOVE_BANNER keeps the FAB's bottom edge ~20px ABOVE the ad's top
+        // edge, and zIndex 6 (> the ad's 5) guarantees the ad never renders on
+        // top of the button (AdMob "accidental clicks: layout"). The trades and
+        // chat buttons share the same constant so all three line up.
+        style={[styles.fab, { bottom: !localState.isPro ? bannerBottomPos + ABOVE_BANNER : 75, zIndex: 6 }]}
         onPress={() => user?.id ? setModalVisible(true) : setSigninDrawerVisible(true)}
       >
-        <FontAwesome name="circle-plus" size={44} color={config.colors.primary} />
+        <FontAwesome name="circle-plus" size={FLOATING_BUTTON_ICON_SIZE} color={config.colors.primary} />
       </TouchableOpacity>
 
       <UploadModal
@@ -717,12 +719,15 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 65,
-    right: 10,
+    bottom: 65, // overridden inline with ABOVE_BANNER; kept as the Pro fallback
+    right: FLOATING_BUTTON_RIGHT,
     // backgroundColor: config.colors.primary,
-    width: 60,
-    height: 60,
-    borderRadius: 25,
+    // Box is exactly the glyph size (was 60x60 around a 44px glyph, which
+    // pushed this button's centre 8px further from the edge than the chat and
+    // trades ones).
+    width: FLOATING_BUTTON_ICON_SIZE,
+    height: FLOATING_BUTTON_ICON_SIZE,
+    borderRadius: FLOATING_BUTTON_ICON_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
     // backgroundColor:'white'

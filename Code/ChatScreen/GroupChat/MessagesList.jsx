@@ -19,6 +19,7 @@ import { parseMessageText } from '../ChatHelper';
 import { useHaptic } from '../../Helper/HepticFeedBack';
 import Icon from 'react-native-vector-icons/Ionicons';
 import config from '../../Helper/Environment';
+import { FLOATING_BUTTON_ICON_SIZE } from '../../Helper/floatingButtonLayout';
 import { useTranslation } from 'react-i18next';
 import { useGlobalState } from '../../GlobelStats';
 import Clipboard from '@react-native-clipboard/clipboard';
@@ -791,7 +792,7 @@ const MessagesList = ({
           >
             <Icon
               name="chevron-down-circle"
-              size={48}
+              size={FLOATING_BUTTON_ICON_SIZE}
               color={config.colors.primary}
             />
           </TouchableOpacity>

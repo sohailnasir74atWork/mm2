@@ -875,6 +875,10 @@ const channelTabStyles = RNStyleSheet.create({
   scroller: {
     maxHeight: Platform.OS === 'ios' ? 50 : 38,
     flexGrow: 0,
+    // Breathing room between the nav header and the pills. Kept as a margin,
+    // not padding on scrollContent: padding would come out of maxHeight and
+    // squeeze the pills instead of moving them down.
+    marginTop: 2,
   },
   scrollContent: {
     paddingHorizontal: 12,

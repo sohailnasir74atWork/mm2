@@ -28,6 +28,7 @@ import InterstitialAdManager from '../../Ads/IntAd';
 import { useLocalState } from '../../LocalGlobelStats';
 import GroupsGuideModal from './GroupsGuideModal';
 import OnlineUsersList from './OnlineUsersList';
+import { ABOVE_BANNER, FLOATING_BUTTON_RIGHT } from '../../Helper/floatingButtonLayout';
 import CreateGroupModal from './CreateGroupModal';
 import { pickImages } from '../../Helper/imagePicker';
 import RNFS from 'react-native-fs';
@@ -1664,8 +1665,15 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         onPress={() => setOnlineUsersListVisible(true)}
         style={{
           position: 'absolute',
-          bottom: Math.max(insets.bottom, 8) + 56 + 20,
-          right: 20,
+          // Same offset as the feed's "+", the trades scroll-to-top and the
+          // chat scroll-to-bottom -- see Helper/floatingButtonLayout.js. Was
+          // Math.max(insets.bottom, 8) + 56 + 20, i.e. 84 on a device with no
+          // bottom inset and 110 on one with a 34pt inset, so it floated higher
+          // than the other three and by a different amount per device. This
+          // screen has no banner, but the constant is what every other floating
+          // button on the app measures from, so it is the shared baseline.
+          bottom: ABOVE_BANNER,
+          right: FLOATING_BUTTON_RIGHT,
           flexDirection: 'row',
           alignItems: 'center',
           gap: 6,

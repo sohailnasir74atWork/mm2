@@ -93,3 +93,15 @@ exports.cleanupOldPosts = retention.cleanupOldPosts;
 
 // NOT exported: private message retention. See the header.
 // exports.cleanupOldPrivateChats = require('./cleanupOldPrivateChats').cleanupOldPrivateChats;
+
+// NOT exported: dead-group cleanup (added 2026-09-13). Deletes groups with no
+// messages for 7 days, across six paths — Firestore groups + group_invitations
+// + group_join_requests, and RTDB groups/{id} + group_messages/{id} +
+// group_meta_data/{member}/{id} for every member.
+//
+// It ships with DRY_RUN = true, so exporting it only produces a log of what it
+// WOULD delete. Read one night's log, confirm the count and sampled names,
+// then set DRY_RUN = false. Note the header in that file: the obvious Firestore
+// query on lastMessageTimestamp would have matched every group, because
+// nothing ever writes that field.
+// exports.cleanupDeadGroups = require('./cleanupDeadGroups').cleanupDeadGroups;

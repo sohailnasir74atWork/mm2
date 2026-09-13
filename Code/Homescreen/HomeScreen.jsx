@@ -31,6 +31,15 @@ import SubscriptionScreen from '../SettingScreen/OfferWall';
 
 const GRID_STEPS = [4, 8, 12, 16];
 
+// Notice tones. Environment.js carries no semantic good/caution pair, and the
+// MM2 theme maps hasBlockGreen and wantBlockRed both to the brand colour, so
+// they are declared here. Each background is a light tint with the deep shade
+// of the same hue as its foreground, which keeps contrast in either theme.
+const NOTICE_GOOD_BG = '#E7F6EC';
+const NOTICE_GOOD_FG = '#1B6B3A';
+const NOTICE_CAUTION_BG = '#FDF1DA';
+const NOTICE_CAUTION_FG = '#8A5A12';
+
 const createEmptySlots = (count) => Array(count).fill(null);
 
 
@@ -59,6 +68,18 @@ const excludedLabel = (summary) => {
 // incomparable with old ones.
 const DEMAND_GAP_THRESHOLD = 1.5;
 
+// Returns { text, tone } so an advisory line can be coloured by what it
+// actually means for the user instead of every notice looking alike.
+// gap = (demand of what you GIVE) - (demand of what you RECEIVE):
+//
+//   gap > 0   you hand over the liquid side and take back the illiquid one.
+//             Runs against you -> caution.
+//   gap < 0   you offload the illiquid side and take back liquid items.
+//             Runs in your favour -> good.
+//
+// Both strings are the originals; only the tone is new. Still advisory only --
+// it deliberately does not touch the WIN/FAIR/LOSE verdict, which is stored as
+// `status` on 8,799 existing trades.
 const getDemandAdvice = (hasAvg, wantsAvg) => {
   const a = Number(hasAvg);
   const b = Number(wantsAvg);
@@ -66,9 +87,8 @@ const getDemandAdvice = (hasAvg, wantsAvg) => {
   const gap = a - b;
   if (Math.abs(gap) < DEMAND_GAP_THRESHOLD) return null;
   return gap > 0
-    // They want the easier-to-move side.
-    ? 'Their side is harder to trade on'
-    : 'Your side is harder to trade on';
+    ? { text: 'Their side is harder to trade on', tone: 'caution' }
+    : { text: 'Your side is harder to trade on', tone: 'good' };
 };
 
 const getTradeStatus = (hasTotal, wantsTotal) => {
@@ -1165,12 +1185,6 @@ const HomeScreen = ({ selectedTheme }) => {
                       </View>
                     )}
 
-                    {/* Demand advice. Shown only when the gap is wide enough to
-                        matter, so it stays meaningful rather than decorative. */}
-                    {demandAdvice ? (
-                      <Text style={styles.demandAdvice}>{demandAdvice}</Text>
-                    ) : null}
-
                     {/* What the total leaves out. A modeled value is a
                         bundle-tier rank, not a price, so it cannot be summed —
                         without this row a trade of cheap items just reads "0".
@@ -1199,6 +1213,28 @@ const HomeScreen = ({ selectedTheme }) => {
                 </View>
               )}
 
+              {/* Demand advice, moved OUT of the summary card so that one card
+                  is not carrying every piece of information at once. Still
+                  shown only when the gap clears DEMAND_GAP_THRESHOLD, now toned
+                  by whether it runs for or against the user. */}
+              {demandAdvice ? (
+                <View style={[
+                  styles.notice,
+                  demandAdvice.tone === 'good' ? styles.noticeGood : styles.noticeCaution,
+                ]}>
+                  <Icon
+                    name={demandAdvice.tone === 'good' ? 'trending-up-outline' : 'alert-circle-outline'}
+                    size={15}
+                    color={demandAdvice.tone === 'good' ? NOTICE_GOOD_FG : NOTICE_CAUTION_FG}
+                    style={{ marginRight: 7 }}
+                  />
+                  <Text style={[
+                    styles.noticeText,
+                    { color: demandAdvice.tone === 'good' ? NOTICE_GOOD_FG : NOTICE_CAUTION_FG },
+                  ]}>{demandAdvice.text}</Text>
+                </View>
+              ) : null}
+
               <View style={styles.labelContainer}>
                 <Text style={styles.offerLabel}>{t('home.me')}</Text>
                 <Text style={styles.dividerText}></Text>
@@ -1207,30 +1243,23 @@ const HomeScreen = ({ selectedTheme }) => {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <View style={styles.itemRow}>
                   {hasItems?.map((item, index) => {
-                    // For 2 columns
-                    const isLastColumn = (index + 1) % 2 === 0;
-                    const isLastRow = index >= hasItems.length - 2;
                     return (
                       <TouchableOpacity
                         key={index}
-                        style={[
-                          styles.addItemBlockNew,
-                          isLastColumn && { borderRightWidth: 0 },
-                          isLastRow && { borderBottomWidth: 0 }
-                        ]}
+                        style={styles.addItemBlockNew}
                         onPress={() => handleCellPress(index, true)}
                       >
                         {item ? (
                           <>
+                            {/* Art is never dimmed. The active source not
+                                pricing an item is still signalled -- by the
+                                unpricedBadge just below -- but fading the
+                                artwork made the whole grid look washed out on
+                                Supreme, where 62% of items are modeled or
+                                unpriced against MM2's 44%. */}
                             <Image
                               source={{ uri: getImageUrl(item) }}
-                              style={[
-                                styles.itemImageOverlay,
-                                // Dimmed when the active source cannot price it.
-                                // Without this the total just drops on switch
-                                // and nothing says which item caused it.
-                                !isSummable(priceOf(item, valueSource)) && styles.itemImageUnpriced,
-                              ]}
+                              style={styles.itemImageOverlay}
                             />
                             {!isSummable(priceOf(item, valueSource)) && (
                               <View style={styles.unpricedBadge}>
@@ -1249,13 +1278,11 @@ const HomeScreen = ({ selectedTheme }) => {
                             )}
                           </>
                         ) : (
-                          index === lastFilledIndexHas + 1 && (
-                            <Icon
-                              name="add-circle"
-                              size={24}
-                              color={isDarkMode ? "#fdf7e5" : 'grey'}
-                            />
-                          )
+                          <Icon
+                            name="add"
+                            size={22}
+                            color={isDarkMode ? '#3d5a80' : '#C2C7D0'}
+                          />
                         )}
                       </TouchableOpacity>
                     );
@@ -1263,29 +1290,23 @@ const HomeScreen = ({ selectedTheme }) => {
                 </View>
                 <View style={[styles.itemRow]}>
                   {wantsItems?.map((item, index) => {
-                    const isLastColumn = (index + 1) % 2 === 0;
-                    const isLastRow = index >= wantsItems.length - 2;
                     return (
                       <TouchableOpacity
                         key={index}
-                        style={[
-                          styles.addItemBlockNew,
-                          isLastColumn && { borderRightWidth: 0 },
-                          isLastRow && { borderBottomWidth: 0 }
-                        ]}
+                        style={styles.addItemBlockNew}
                         onPress={() => handleCellPress(index, false)}
                       >
                         {item ? (
                           <>
+                            {/* Art is never dimmed. The active source not
+                                pricing an item is still signalled -- by the
+                                unpricedBadge just below -- but fading the
+                                artwork made the whole grid look washed out on
+                                Supreme, where 62% of items are modeled or
+                                unpriced against MM2's 44%. */}
                             <Image
                               source={{ uri: getImageUrl(item) }}
-                              style={[
-                                styles.itemImageOverlay,
-                                // Dimmed when the active source cannot price it.
-                                // Without this the total just drops on switch
-                                // and nothing says which item caused it.
-                                !isSummable(priceOf(item, valueSource)) && styles.itemImageUnpriced,
-                              ]}
+                              style={styles.itemImageOverlay}
                             />
                             {!isSummable(priceOf(item, valueSource)) && (
                               <View style={styles.unpricedBadge}>
@@ -1304,13 +1325,11 @@ const HomeScreen = ({ selectedTheme }) => {
                             )}
                           </>
                         ) : (
-                          index === lastFilledIndexWant + 1 && (
-                            <Icon
-                              name="add-circle"
-                              size={24}
-                              color={isDarkMode ? "#fdf7e5" : 'grey'}
-                            />
-                          )
+                          <Icon
+                            name="add"
+                            size={22}
+                            color={isDarkMode ? '#3d5a80' : '#C2C7D0'}
+                          />
                         )}
                       </TouchableOpacity>
                     );
@@ -1581,22 +1600,32 @@ const getStyles = (isDarkMode, isGG) =>
     },
     summaryContainer: {
       width: '100%',
-
+      // Same sunken field as the item grid's panel (itemRow), so the summary
+      // card sits recessed in it the way a slot tile sits in the grid. Keeps
+      // one visual idea across the screen instead of a floating card up top and
+      // a panel further down.
+      backgroundColor: isDarkMode ? '#0A1A2E' : '#F1F3F6',
+      borderRadius: 12,
+      padding: 6,
+      marginBottom: 10,
     },
     summaryInner: {
       backgroundColor: isDarkMode ? config.colors.surfaceDark : config.colors.surfaceLight,
-      borderRadius: 15,
-      marginBottom: 10,
-
+      // 10 to match the grid tiles; the old 15 agreed with nothing else.
+      // marginBottom moved up to summaryContainer, which owns the spacing now.
+      borderRadius: 10,
       padding: 10,
+      // Softened from the RN boilerplate shadow (opacity 0.25 / radius 3.84 /
+      // elevation 2), which read as a hard dark edge. Wide and faint gives the
+      // raised-on-a-field feel instead.
       shadowColor: config.colors.shadowDark,
       shadowOffset: {
         width: 0,
-        height: 2,
+        height: 3,
       },
-      shadowOpacity: 0.25,
-      shadowRadius: 3.84,
-      elevation: 2,
+      shadowOpacity: 0.07,
+      shadowRadius: 10,
+      elevation: 1,
     },
     topSection: {
       flexDirection: 'row',
@@ -1617,9 +1646,6 @@ const getStyles = (isDarkMode, isGG) =>
       fontSize: 10,
       color: isDarkMode ? config.colors.textDark : config.colors.textLight,
       opacity: 0.55,
-    },
-    itemImageUnpriced: {
-      opacity: 0.35,
     },
     unpricedBadge: {
       position: 'absolute',
@@ -1662,13 +1688,6 @@ const getStyles = (isDarkMode, isGG) =>
     sourceToggleTextActive: {
       color: '#FFFFFF',
       opacity: 1,
-    },
-    demandAdvice: {
-      fontSize: 11,
-      textAlign: 'center',
-      marginTop: 2,
-      opacity: 0.75,
-      color: isDarkMode ? config.colors.textDark : config.colors.textLight,
     },
     excludedText: {
       fontSize: 11,
@@ -1795,29 +1814,51 @@ const getStyles = (isDarkMode, isGG) =>
       marginTop: 5,
       fontFamily: 'Lato-Bold',
     },
+    notice: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: 12,
+      paddingVertical: 9,
+      paddingHorizontal: 12,
+      marginBottom: 10,
+    },
+    noticeGood: { backgroundColor: NOTICE_GOOD_BG },
+    noticeCaution: { backgroundColor: NOTICE_CAUTION_BG },
+    noticeText: {
+      fontSize: 12.5,
+      fontWeight: '500',
+      flex: 1,
+    },
     itemRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      justifyContent: 'center',
       width: '49%',
-      alignItems: 'center',
       marginBottom: 5,
-      borderWidth: 1,
-      borderColor: isGG ? config.colors.borderDark : config.colors.primary,
       marginHorizontal: 'auto',
-      borderRadius: 4,
-      overflow: 'hidden',
+      // A soft sunken panel, replacing the 1px brand-coloured outline at
+      // radius 4. That hard rule around a 2x2 table was the most dated thing on
+      // the screen; the slots now read as separate raised tiles on a recessed
+      // surface. Environment.js has no "sunken" token, hence the literals --
+      // each sits just under surfaceLight / surfaceDark respectively.
+      backgroundColor: isDarkMode ? '#0A1A2E' : '#F1F3F6',
+      borderRadius: 12,
+      padding: 6,
+      gap: 6,
     },
     addItemBlockNew: {
-      width: '50%',
+      // flexBasis 40% + flexGrow lands exactly two per row and lets flex absorb
+      // the gap, so no percentage has to be hand-tuned against it: three 40%
+      // tiles plus two gaps can never fit a row, two plus one gap always can.
+      flexBasis: '40%',
+      flexGrow: 1,
       height: 80,
       backgroundColor: isDarkMode ? config.colors.surfaceDark : config.colors.surfaceLight,
       justifyContent: 'center',
       alignItems: 'center',
       position: 'relative',
-      borderRightWidth: 1,
-      borderBottomWidth: 1,
-      borderColor: isGG ? config.colors.borderDark : config.colors.primary,
+      borderRadius: 10,
+      // Clips item art to the tile's corners.
+      overflow: 'hidden',
     },
     itemText: {
       color: isDarkMode ? config.colors.textDark : config.colors.textLight,

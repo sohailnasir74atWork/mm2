@@ -173,6 +173,12 @@ export const createGroup = async (firestoreDB, appdatabase, creatorData, memberI
     const metaUpdates = {};
     metaUpdates[`group_meta_data/${creatorData.id}/${groupId}/groupId`] = groupId;
     metaUpdates[`group_meta_data/${creatorData.id}/${groupId}/groupName`] = finalGroupName;
+    // Mirror the description too. Without this it existed only in Firestore,
+    // so the groups list (which reads group_meta_data) showed no description
+    // and the edit form opened with the field BLANK -- the value stayed
+    // invisible until someone edited it once, because updateGroupDescription
+    // was the mirror's only writer.
+    metaUpdates[`group_meta_data/${creatorData.id}/${groupId}/description`] = finalDescription || null;
     metaUpdates[`group_meta_data/${creatorData.id}/${groupId}/groupAvatar`] = groupAvatarUrl || null;
     metaUpdates[`group_meta_data/${creatorData.id}/${groupId}/lastMessage`] = null;
     metaUpdates[`group_meta_data/${creatorData.id}/${groupId}/lastMessageTimestamp`] = 0;
@@ -476,6 +482,9 @@ export const acceptGroupInvite = async (firestoreDB, appdatabase, inviteId, user
       groupId: inviteData.groupId,
       groupName: groupData.name || 'Group',
       groupAvatar: groupData.avatar || null,
+      // Same mirror as createGroup -- a member joining by invite needs the
+      // description too, or the group reads as having none for them.
+      description: groupData.description || null,
       lastMessage: null,
       lastMessageTimestamp: 0,
       unreadCount: 0,

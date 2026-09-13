@@ -460,10 +460,18 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
       return;
     }
 
-    // Check if user has permission to edit (group creator, group admin, or global admin)
+    // `groups` comes from RTDB group_meta_data, whose keys are groupId,
+    // groupName, groupAvatar, description, lastMessage*, unreadCount, muted,
+    // joinedAt and createdBy. There is NO `members` object, so both old extra
+    // branches -- `group.members?.[user.id]?.role === 'admin'` and
+    // `isAdmin && group.members?.[user.id]` -- read undefined every time, and
+    // a global admin could never edit despite the comment saying they could.
+    //
+    // Membership needs no separate check: the lookup above already bailed if
+    // this group is absent from the user's own group_meta_data, which lists
+    // only groups they belong to. Presence in `groups` IS membership.
     const isCreator = group.createdBy === user.id;
-    const isGroupAdmin = group.members?.[user.id]?.role === 'admin';
-    const canEdit = isCreator || isGroupAdmin || (isAdmin && group.members?.[user.id]);
+    const canEdit = isCreator || isAdmin;
     
     if (!canEdit) {
       showErrorMessage(t('home.alert.error'), t('groups_screen.only_admin_edit'));

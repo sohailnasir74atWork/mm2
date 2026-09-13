@@ -21,7 +21,7 @@ import { createGroup, updateGroupName, updateGroupDescription, updateGroupAvatar
 import { showSuccessMessage, showErrorMessage } from '../../Helper/MessageHelper';
 import { useHaptic } from '../../Helper/HepticFeedBack';
 import { useNavigation } from '@react-navigation/native';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { pickImages } from '../../Helper/imagePicker';
 import RNFS from 'react-native-fs';
 import { useTranslation } from 'react-i18next';
 import config from '../../Helper/Environment';
@@ -175,7 +175,7 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
 
   // Handle image picker
   const handlePickImage = useCallback(() => {
-    launchImageLibrary(
+    pickImages(
       {
         mediaType: 'photo',
         selectionLimit: 1,

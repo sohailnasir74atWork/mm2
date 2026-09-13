@@ -8,6 +8,10 @@ let wooshSound = null;
 let popSound = null;
 let refCount = 0;
 let loadPromise = null;
+// Bumped by releaseGameSounds(). A load that was already in flight compares its
+// own generation against this and, if it no longer matches, throws its buffer
+// away instead of publishing it — see the comment in initGameSounds().
+let generation = 0;
 
 function getStorage() {
     try {
@@ -26,24 +30,56 @@ export async function initGameSounds() {
     if (loadPromise) return loadPromise;
     if (wooshSound && popSound) return Promise.resolve();
 
+    // Each Sound is held in a LOCAL and only published to the module variable
+    // once it has actually loaded.
+    //
+    // The old code assigned `wooshSound = new Sound(...)` and then read that
+    // same module variable back inside the load callback. But Sound's callback
+    // arrives over the bridge from RNSound.prepare(), never synchronously — so
+    // when the user opened a game and left again before the mp3 finished
+    // decoding, releaseGameSounds() had already set `wooshSound = null`, and
+    // the callback ran `null.setVolume(1.0)`. That is an uncaught
+    // "TypeError: Cannot read property 'setVolume' of null", which React Native
+    // turns into a fatal JavascriptException — and all eight game screens
+    // mount/unmount this service, so backing out of a game quickly was enough.
+    const myGeneration = generation;
+    const stale = () => myGeneration !== generation;
+    const settle = (resolve) => {
+        // Only clear the shared handle if this load is still the current one;
+        // a newer init (or releaseGameSounds) already owns it otherwise.
+        if (!stale()) loadPromise = null;
+        resolve();
+    };
+
     loadPromise = new Promise((resolve) => {
-        wooshSound = new Sound('woosh.mp3', Sound.MAIN_BUNDLE, (err) => {
+        const woosh = new Sound('woosh.mp3', Sound.MAIN_BUNDLE, (err) => {
             if (err) {
                 console.warn('[GameSound] Failed to load woosh:', err);
-                wooshSound = null;
+            } else if (stale()) {
+                // Nobody is on a game screen any more (or a newer load has
+                // superseded this one): hand the buffer straight back rather
+                // than publishing a sound nothing will ever release.
+                try { woosh.release(); } catch {}
             } else {
-                console.log('[GameSound] woosh loaded OK');
-                wooshSound.setVolume(1.0);
+                woosh.setVolume(1.0);
+                wooshSound = woosh;
             }
-            popSound = new Sound('pop.mp3', Sound.MAIN_BUNDLE, (err2) => {
+
+            if (stale()) {
+                settle(resolve);
+                return;
+            }
+
+            const pop = new Sound('pop.mp3', Sound.MAIN_BUNDLE, (err2) => {
                 if (err2) {
                     console.warn('[GameSound] Failed to load pop:', err2);
-                    popSound = null;
+                } else if (stale()) {
+                    try { pop.release(); } catch {}
                 } else {
-                    console.log('[GameSound] pop loaded OK');
-                    popSound.setVolume(1.0);
+                    pop.setVolume(1.0);
+                    popSound = pop;
                 }
-                resolve();
+                settle(resolve);
             });
         });
     });
@@ -72,17 +108,21 @@ export function setSoundEnabled(gameKey, val) {
 
 export function playWoosh(gameKey) {
     if (!isSoundEnabled(gameKey)) return;
-    if (!wooshSound) { console.warn('[GameSound] woosh not loaded'); return; }
+    // Snapshot the handle: stop()'s callback is async too, so reading the module
+    // variable again inside it could hit null after releaseGameSounds() ran.
+    const sound = wooshSound;
+    if (!sound) { console.warn('[GameSound] woosh not loaded'); return; }
     try {
-        wooshSound.stop(() => { wooshSound.play((ok) => { if (!ok) console.warn('[GameSound] woosh play failed'); }); });
+        sound.stop(() => { sound.play((ok) => { if (!ok) console.warn('[GameSound] woosh play failed'); }); });
     } catch (e) { console.warn('[GameSound] woosh error:', e); }
 }
 
 export function playPop(gameKey) {
     if (!isSoundEnabled(gameKey)) return;
-    if (!popSound) { console.warn('[GameSound] pop not loaded'); return; }
+    const sound = popSound;
+    if (!sound) { console.warn('[GameSound] pop not loaded'); return; }
     try {
-        popSound.stop(() => { popSound.play((ok) => { if (!ok) console.warn('[GameSound] pop play failed'); }); });
+        sound.stop(() => { sound.play((ok) => { if (!ok) console.warn('[GameSound] pop play failed'); }); });
     } catch (e) { console.warn('[GameSound] pop error:', e); }
 }
 
@@ -92,6 +132,9 @@ export function stopAmbient() {}
 export function releaseGameSounds() {
     refCount = Math.max(0, refCount - 1);
     if (refCount > 0) return;
+    // Invalidate any load still in flight so its callback drops its buffer
+    // instead of writing into the module variables we are about to clear.
+    generation += 1;
     try {
         wooshSound?.release();
         popSound?.release();

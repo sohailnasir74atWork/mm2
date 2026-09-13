@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ChatScreen from './GroupChat/Trader';
 import PrivateChatScreen from './PrivateChat/PrivateChat';
@@ -42,6 +43,32 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
   // three child listeners — and re-read the node — on every banned-list change).
   const bannedUsersRef = useRef([]);
 
+  // These are the app's only RTDB listeners that live for the whole session —
+  // every other screen's listeners go away when the user navigates off it. That
+  // made them the ones still attached when React Native tears the JS context
+  // down (the user backs out of the app while the process stays cached): the
+  // Firebase SDK is process-scoped, so it kept delivering child events into a
+  // native module whose executors had already been shut down, which throws
+  // RejectedExecutionException on the main thread and takes the app with it.
+  //
+  // Holding them only while the app is actually in the foreground means nothing
+  // is attached by the time teardown happens. It also stops us paying for chat
+  // metadata sync while the app is backgrounded and JS is suspended — but note
+  // the flip side: re-attaching re-reads chat_meta_data/{uid} and
+  // group_meta_data/{uid} once per foreground instead of once per launch.
+  const [isForeground, setIsForeground] = useState(
+    () => AppState.currentState !== 'background',
+  );
+
+  useEffect(() => {
+    // 'inactive' is a transient iOS state (system dialogs); only a real
+    // background should drop the listeners, or they would churn needlessly.
+    const sub = AppState.addEventListener('change', (next) => {
+      setIsForeground(next !== 'background');
+    });
+    return () => sub.remove();
+  }, []);
+
 
 
   useEffect(() => {
@@ -74,6 +101,10 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
       return;
     }
   
+    // Backgrounded: hold no listeners, and leave the last known badge count on
+    // screen rather than zeroing it.
+    if (!isForeground) return;
+
     const userChatsRef = ref(appdatabase, `chat_meta_data/${user.id}`);
     let totalUnread = 0;
     const unreadCounts = new Map(); // Track unread counts per chat
@@ -163,7 +194,7 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
     };
     // bannedUsers intentionally excluded — read via bannedUsersRef so the
     // listeners attach once per user, not on every banned-list change.
-  }, [user?.id, appdatabase]);
+  }, [user?.id, appdatabase, isForeground]);
 
   // ✅ Load groups from group_meta_data
   useEffect(() => {
@@ -171,6 +202,9 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
       setGroups([]);
       return;
     }
+
+    // Same as the unread listeners above: not held while backgrounded.
+    if (!isForeground) return;
 
     setGroupsLoading(true);
     const userGroupsRef = ref(appdatabase, `group_meta_data/${user.id}`);
@@ -243,7 +277,7 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
     return () => {
       unsubGroups();
     };
-  }, [user?.id, appdatabase]);
+  }, [user?.id, appdatabase, isForeground]);
 
   const [onlineUsersVisible, setOnlineUsersVisible] = useState(false);
 

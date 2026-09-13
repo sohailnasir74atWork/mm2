@@ -430,22 +430,29 @@ export const GlobalStateProvider = ({ children }) => {
 
   const lastProWriteRef = useRef({ uid: null, isPro: undefined });
   const updateUserProStatus = () => {
-    if (!user?.id) {
+    if (!user?.id || !appdatabase) {
       // console.error("User ID or database instance is missing!");
       return;
     }
 
+    // Coerce to a real boolean before writing. set() THROWS synchronously on
+    // undefined ("'value' must be defined") rather than returning a rejected
+    // promise, and this runs inside a setTimeout — so an undefined isPro (a
+    // localState that hasn't hydrated from MMKV yet) escaped the .catch() below
+    // as an uncaught JS exception instead of a failed write.
+    const isPro = localState?.isPro === true;
+
     // Skip redundant RTDB writes: previously this fired on every login and
     // every isPro change, almost always re-writing the value just fetched.
     const last = lastProWriteRef.current;
-    if (last.uid === user.id && last.isPro === localState?.isPro) {
+    if (last.uid === user.id && last.isPro === isPro) {
       return;
     }
-    lastProWriteRef.current = { uid: user.id, isPro: localState?.isPro };
+    lastProWriteRef.current = { uid: user.id, isPro };
 
     const userIsProRef = ref(appdatabase, `/users/${user?.id}/isPro`);
 
-    set(userIsProRef, localState?.isPro)
+    set(userIsProRef, isPro)
       .then(() => {
       })
       .catch((error) => {

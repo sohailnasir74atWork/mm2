@@ -64,7 +64,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 // Initialize dayjs plugins
 dayjs.extend(relativeTime);
 import PetModal from '../ChatScreen/PrivateChat/PetsModel';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { pickImages } from '../Helper/imagePicker';
 import FramedAvatar from '../ChatScreen/GroupChat/FramedAvatar';
 import { getMyCosmetics, syncMyCosmetics } from '../Helper/cosmeticsCache';
 // Bunny avatar upload (same zone/keys as your post uploader)
@@ -583,7 +583,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
   }, [avatarSearch, avatarOptions]);
   const handlePickAndUploadAvatar = useCallback(async () => {
     try {
-      const result = await launchImageLibrary({
+      const result = await pickImages({
         mediaType: 'photo',
         selectionLimit: 1,
       });

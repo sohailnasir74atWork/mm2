@@ -12,7 +12,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { pickImages } from '../../Helper/imagePicker';
 import { Image as CompressorImage } from 'react-native-compressor';
 import config from '../../Helper/Environment';
 import { useGlobalState } from '../../GlobelStats';
@@ -80,7 +80,7 @@ const UploadModal = ({ visible, onClose, onUpload, user }) => {
 
 const pickAndCompress = useCallback(async () => {
   try {
-    const result = await launchImageLibrary({
+    const result = await pickImages({
       mediaType: 'photo',
       selectionLimit: MAX_IMAGES,
       quality: 0.8,

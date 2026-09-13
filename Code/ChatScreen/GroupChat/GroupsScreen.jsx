@@ -29,7 +29,7 @@ import { useLocalState } from '../../LocalGlobelStats';
 import GroupsGuideModal from './GroupsGuideModal';
 import OnlineUsersList from './OnlineUsersList';
 import CreateGroupModal from './CreateGroupModal';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { pickImages } from '../../Helper/imagePicker';
 import RNFS from 'react-native-fs';
 
 const BUNNY_STORAGE_HOST = 'storage.bunnycdn.com';
@@ -635,7 +635,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
       return;
     }
 
-    launchImageLibrary(
+    pickImages(
       {
         mediaType: 'photo',
         selectionLimit: 1,

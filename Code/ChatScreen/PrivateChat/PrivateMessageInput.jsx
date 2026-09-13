@@ -17,7 +17,7 @@ import InterstitialAdManager from '../../Ads/IntAd';
 import { useLocalState } from '../../LocalGlobelStats';
 import { validateContent } from '../../Helper/ContentModeration';
 
-import { launchImageLibrary } from 'react-native-image-picker';
+import { pickImages } from '../../Helper/imagePicker';
 import RNFS from 'react-native-fs';
 
 const BUNNY_STORAGE_HOST = 'storage.bunnycdn.com';
@@ -102,7 +102,7 @@ const PrivateMessageInput = ({
       return;
     }
 
-    launchImageLibrary(
+    pickImages(
       {
         mediaType: 'photo',
         selectionLimit: remainingSlots, // Allow selecting up to remaining slots

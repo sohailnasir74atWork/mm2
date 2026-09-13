@@ -28,7 +28,7 @@ import {
   collection, query, where, orderBy, limit, getDocs,
   addDoc, serverTimestamp, Timestamp, doc, updateDoc, arrayUnion, deleteDoc,
 } from '@react-native-firebase/firestore';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { pickImages } from '../Helper/imagePicker';
 import { Image as CompressorImage } from 'react-native-compressor';
 import RNFS from 'react-native-fs';
 import FontAwesome from 'react-native-vector-icons/FontAwesome6';
@@ -528,7 +528,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
   const handlePickImage = useCallback(async () => {
     if (!user?.id) { onRequireSignIn?.(); return; }
     try {
-      const result = await launchImageLibrary({
+      const result = await pickImages({
         mediaType: 'photo', quality: 0.8, selectionLimit: 1,
         maxWidth: 1920, maxHeight: 1920,
       });

@@ -93,8 +93,22 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
       let bannedUntil = Date.now() + 24 * 60 * 60 * 1000;
       if (snap.exists()) {
         const data = snap.val();
-        if (!isAdmin) { strikeCount = data.strikeCount; }
-        if (isAdmin) { strikeCount = data.strikeCount + 1; }
+        // Fallbacks matter here, and not just for tidiness: without them
+        // `data.strikeCount + 1` is NaN whenever the stored record has no
+        // strikeCount, and a NaN anywhere in a set() payload kills the process
+        // rather than rejecting the promise — the native write throws a raw
+        // DatabaseException ("Value cannot be NaN or Inf") that
+        // @react-native-firebase blind-casts, so it surfaces as an uncaught
+        // ClassCastException on a Play-services worker thread that no JS
+        // try/catch can reach.
+        //
+        // The old code also *created* that state: the non-admin branch assigned
+        // `undefined`, Firebase drops undefined keys, so the record came back
+        // without a strikeCount and the next admin ban on the same user crashed.
+        // Same hardening as banUserByEmail() in ChatScreen/utils.js.
+        if (data && typeof data === 'object') {
+          strikeCount = isAdmin ? (data.strikeCount || 0) + 1 : (data.strikeCount || 1);
+        }
         if (strikeCount === 2) bannedUntil = Date.now() + 3 * 24 * 60 * 60 * 1000;
         else if (strikeCount >= 3) bannedUntil = "permanent";
       }

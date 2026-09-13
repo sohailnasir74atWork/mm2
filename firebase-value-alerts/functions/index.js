@@ -16,7 +16,15 @@ const admin = require("firebase-admin");
 
 admin.initializeApp();
 
-const VALUES_URL = "https://mm2-api.b-cdn.net/mm2values.json";
+// 📅 2026-09-13. This pointed at mm2values.json, which was renamed on the CDN
+// and has returned 404 ever since. The poll ran every 15 minutes — 96 times a
+// day — failed at the first step every single time, and logged a warning
+// nobody read. Value alerts have been silently dead the whole time.
+//
+// The file is now the pipeline's dist build, wrapped as { meta, data }.
+// extractItems() recurses, so it walks into `data` on its own and ignores
+// `meta` (no `name` field), which is why only the URL needed changing.
+const VALUES_URL = "https://mm2-api.b-cdn.net/data.json";
 const GAME = "mm2";
 const SNAPSHOT_REF = "value_alerts/snapshot"; // RTDB path holding last file text
 const CHANGES_REF = "value_alerts/changes";   // RTDB log of changes (future feed)
@@ -61,7 +69,13 @@ function extractItems(node, out) {
 }
 
 exports.valueAlertsPoll = onSchedule(
-  { schedule: "every 15 minutes", timeZone: "Etc/UTC", memory: "256MiB", timeoutSeconds: 120 },
+  // Hourly, not every 15 minutes. The scrape behind this file runs roughly
+  // twice every five days, so 96 polls a day was ~96x more often than the data
+  // could possibly change. Each poll is also cache-busted (?vcheck=), so every
+  // one bypassed Bunny's edge and pulled the full file from origin — ~27 MB a
+  // day of origin traffic to observe a change that happens twice a week.
+  // Hourly still catches any change the same day.
+  { schedule: "every 60 minutes", timeZone: "Etc/UTC", memory: "256MiB", timeoutSeconds: 120 },
   async () => {
     // 1. Fetch the live file (cache-busted so we see the freshest version).
     const res = await fetch(`${VALUES_URL}?vcheck=${Date.now()}`, {

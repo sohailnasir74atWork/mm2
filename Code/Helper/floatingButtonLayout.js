@@ -45,6 +45,18 @@ export const ABOVE_BANNER = BANNER_HEIGHT + FLOATING_BUTTON_GAP; // 80
 export const ABOVE_CHAT_INPUT = CHAT_INPUT_HEIGHT + FLOATING_BUTTON_GAP; // 76
 
 /**
+ * Bottom offset on a screen with NO banner ad — the groups screen, for one.
+ *
+ * The tab bar is docked in the layout flow (the reason every screen sets
+ * `bannerBottomPos = 0`: "screen bottom == tab bar top"), so an offset here is
+ * already measured from the tab bar's top edge. With no banner to clear there
+ * is nothing to add, and the gap alone is the whole offset — using
+ * ABOVE_BANNER on such a screen reserves 60dp for an ad that is not there and
+ * leaves the button visibly stranded.
+ */
+export const ABOVE_TAB_BAR = FLOATING_BUTTON_GAP; // 20
+
+/**
  * Glyph size for all three buttons. They were 48 (chat), 48 (trades) and 44
  * (feed's "+"), so the feed's read as the odd one out.
  *

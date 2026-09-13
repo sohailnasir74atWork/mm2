@@ -28,7 +28,7 @@ import InterstitialAdManager from '../../Ads/IntAd';
 import { useLocalState } from '../../LocalGlobelStats';
 import GroupsGuideModal from './GroupsGuideModal';
 import OnlineUsersList from './OnlineUsersList';
-import { ABOVE_BANNER, FLOATING_BUTTON_RIGHT } from '../../Helper/floatingButtonLayout';
+import { ABOVE_TAB_BAR, FLOATING_BUTTON_RIGHT } from '../../Helper/floatingButtonLayout';
 import CreateGroupModal from './CreateGroupModal';
 import { pickImages } from '../../Helper/imagePicker';
 import RNFS from 'react-native-fs';
@@ -1665,14 +1665,16 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         onPress={() => setOnlineUsersListVisible(true)}
         style={{
           position: 'absolute',
-          // Same offset as the feed's "+", the trades scroll-to-top and the
-          // chat scroll-to-bottom -- see Helper/floatingButtonLayout.js. Was
-          // Math.max(insets.bottom, 8) + 56 + 20, i.e. 84 on a device with no
-          // bottom inset and 110 on one with a 34pt inset, so it floated higher
-          // than the other three and by a different amount per device. This
-          // screen has no banner, but the constant is what every other floating
-          // button on the app measures from, so it is the shared baseline.
-          bottom: ABOVE_BANNER,
+          // ABOVE_TAB_BAR, not ABOVE_BANNER: this screen renders no banner ad,
+          // and the tab bar is docked in the layout flow, so the offset is
+          // already measured from the tab bar's top edge. ABOVE_BANNER would
+          // reserve 60dp for an ad that is not there and strand the button in
+          // empty space. Same 20dp gap above the bottom furniture that the
+          // other three buttons keep above theirs -- see
+          // Helper/floatingButtonLayout.js. (Originally
+          // Math.max(insets.bottom, 8) + 56 + 20: 84 with no bottom inset, 110
+          // with a 34pt one, so it also moved per device.)
+          bottom: ABOVE_TAB_BAR,
           right: FLOATING_BUTTON_RIGHT,
           flexDirection: 'row',
           alignItems: 'center',

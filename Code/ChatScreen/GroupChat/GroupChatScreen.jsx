@@ -11,7 +11,6 @@ import {
   Image,
 } from 'react-native';
 import { useFocusEffect, useRoute, useNavigation } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getStyles } from '../Style';
 import GroupMessageInput from './GroupMessageInput';
 import GroupMessageList from './GroupMessageList';
@@ -43,7 +42,6 @@ const GroupChatScreen = () => {
   const { groupId } = route.params || {};
 
   const { user, theme, appdatabase, firestoreDB } = useGlobalState();
-  const insets = useSafeAreaInsets();
 
   // Seed MY OWN profile into the shared cache.
   // Chat message payloads are slim — they carry no frame/text-colour — so the
@@ -1099,8 +1097,15 @@ const GroupChatScreen = () => {
         </View>
       </ConditionalKeyboardWrapper>
 
-      {/* Spacer: reserves space for floating tab bar so input isn't hidden behind it */}
-      <View style={{ height: Math.max(insets.bottom, 8) + 68 }} />
+      {/* No spacer. The comment here used to say it reserved room for a
+          "floating tab bar", but the tab bar in AppHelper/MainTabs.js is a
+          plain View with height 56 + insets.bottom and paddingBottom
+          insets.bottom -- no position:'absolute'. It is docked in the layout
+          flow and already occupies its own space, which is why every screen
+          sets bannerBottomPos = 0 with the note "screen bottom == tab bar
+          top". So this reserved the tab bar a second time and left 84-102dp of
+          dead air between the message input and the nav. This screen renders
+          no banner either, so there is nothing else to clear. */}
 
       {/* Members Modal */}
       <Modal

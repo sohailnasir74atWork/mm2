@@ -95,6 +95,15 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
   const [guideModalVisible, setGuideModalVisible] = useState(false);
   const [onlineUsersListVisible, setOnlineUsersListVisible] = useState(false);
   const [activeTab, setActiveTab] = useState('joined'); // 'joined' or 'all'
+
+  // Does this user already own a group? One group per creator is the model
+  // (getUserAdminGroup returns a single group), so the FAB becomes "Add
+  // Members" rather than offering to create a second. Read off the groups the
+  // screen already has -- group_meta_data carries createdBy -- so no query.
+  const ownsAGroup = useMemo(
+    () => !!user?.id && groups.some((g) => g?.createdBy === user.id),
+    [groups, user?.id],
+  );
   const [allGroups, setAllGroups] = useState([]);
   const [allGroupsLoading, setAllGroupsLoading] = useState(false);
   const [allGroupsLoadingMore, setAllGroupsLoadingMore] = useState(false);
@@ -1660,7 +1669,14 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         )
       )}
 
-      {/* FAB Button - Create Group */}
+      {/* FAB. Only on the Joined tab: on All Groups you are browsing other
+          people's groups, where "create" is unrelated to what is on screen.
+          Label follows whether you already own one -- the model is one group
+          per creator, and the picker this opens now detects the owned group
+          and adds to it rather than creating a second, so the button has to
+          say so. `groups` already carries createdBy from group_meta_data, so
+          this costs no extra read. */}
+      {activeTab === 'joined' && (
       <TouchableOpacity
         onPress={() => setOnlineUsersListVisible(true)}
         style={{
@@ -1698,9 +1714,12 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
           color="#fff" 
         />
         <Text style={{ color: '#fff', fontSize: 14, fontFamily: 'Lato-Bold' }}>
-          {t('groups_screen.create_group') || 'Create'}
+          {ownsAGroup
+            ? (t('groups_screen.add_members', { defaultValue: 'Add Members' }))
+            : (t('groups_screen.create_group') || 'Create')}
         </Text>
       </TouchableOpacity>
+      )}
 
       {/* Online Users List for Group Creation/Adding Members */}
       <OnlineUsersList

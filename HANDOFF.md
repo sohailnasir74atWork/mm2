@@ -12,7 +12,7 @@ Detail lives in `PLAN_2026-09.md` (§1–9) and
 ## 0. 2026-09-13 — what changed, and what it means for you
 
 Four commits on this branch since 1.3.7: `ce480c0`, `1466b2d`, `efe386d`,
-`34e630e`. **27 Cloud Functions are now live** (was 15). Android **1.4.0 (32)**.
+`34e630e`. **27 Cloud Functions are now live** (was 15). Android **1.4.1 (33)**.
 
 ### Supreme is now the default value source
 
@@ -120,11 +120,11 @@ Data after retention (measured 2026-09-06): 17,374 chat messages, 8,799 trades,
 ### The build
 
 `android/app/build/outputs/bundle/release/app-release.aab`
-versionName **1.4.0**, versionCode **32**, signed with
+versionName **1.4.1**, versionCode **33**, signed with
 `android/app/solanalab.keystore`. iOS is **3.8 (39)**.
 
 Earlier builds are kept beside it (`.v26`, `.v27`, `.v29`, `.v30`,
-`.PREV-2026-07-29`) rather than overwritten. Delete them once 1.4.0 is live.
+`.PREV-2026-07-29`) rather than overwritten. Delete them once 1.4.1 is live.
 
 **1.3.6, 1.3.7 and 1.3.8 were built and never uploaded.** Do not treat an
 unuploaded bundle as shipped — users are still on whatever is live on Play.
@@ -142,7 +142,7 @@ git checkout main && git merge feat/cost-security-roles-trade-search-2026-09
 
 ## 2. Do this next, in order
 
-1. **Upload 1.4.0 to Play.** Until it ships, users see none of it: not Supreme
+1. **Upload 1.4.1 to Play.** Until it ships, users see none of it: not Supreme
    values, not the language chat rooms, not the event hub, and not the native
    ad fix. Three server halves are already live and waiting — rules, functions
    and retention — so the gap between server and client is now wide.

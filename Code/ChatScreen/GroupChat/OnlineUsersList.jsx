@@ -10,10 +10,12 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  TextInput,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../../GlobelStats';
 import { ref, get, query, orderByValue, equalTo, limitToFirst, startAfter } from '@react-native-firebase/database';
+import { searchUsersByName } from '../utils/userSearch';
 import { getOrFetchFullProfile } from '../../Helper/profileCache';
 import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
 import { useNavigation } from '@react-navigation/native';
@@ -605,6 +607,46 @@ const OnlineUsersList = ({
   }, [styles, handleStartChat, isDarkMode, isSelectionMode, selectedUserIds, mode, invitingIds, invitedIds, handleGameInvite]);
 
   // ✅ Memoize key extractor
+  // ── Search by name ──────────────────────────────────────────────────────
+  // The list itself only ever held people who were online right now, so an
+  // offline friend could not be added to a group at all. A non-empty query
+  // swaps the data source to a prefix search over /users; clearing it returns
+  // to the online list untouched. See utils/userSearch.js for why prefix and
+  // not substring.
+  const [searchText, setSearchText] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const isSearching = searchText.trim().length >= 2;
+
+  useEffect(() => {
+    const term = searchText.trim();
+    if (term.length < 2) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const found = await searchUsersByName(appdatabase, term, { limit: 25 });
+        if (!cancelled) setSearchResults(found);
+      } catch (err) {
+        if (!cancelled) setSearchResults([]);
+        console.warn('[OnlineUsersList] search failed:', err?.message || err);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 350);
+
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [searchText, appdatabase]);
+
+  // Selection state is keyed by id and lives outside both lists, so a user
+  // picked from search stays selected after the query is cleared.
+  const visibleUsers = isSearching ? searchResults : allOnlineUsers;
+
   const keyExtractor = useCallback((item) => item?.id || Math.random().toString(), []);
 
   return (
@@ -664,25 +706,53 @@ const OnlineUsersList = ({
             </View>
           </View>
 
+          {/* Search. Only in the member pickers -- 'view' mode is a presence
+              list, where searching offline people would be misleading. */}
+          {(mode === 'select' || mode === 'gameInvite') && (
+            <View style={styles.searchWrap}>
+              <Icon name="search" size={16} color={isDarkMode ? '#9CA3AF' : '#6B7280'} />
+              <TextInput
+                style={styles.searchInput}
+                value={searchText}
+                onChangeText={setSearchText}
+                placeholder="Search by name"
+                placeholderTextColor={isDarkMode ? '#6B7280' : '#9CA3AF'}
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="search"
+              />
+              {searchText.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchText('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Icon name="close-circle" size={16} color={isDarkMode ? '#6B7280' : '#9CA3AF'} />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
           {/* Users List */}
-          {loading ? (
+          {(isSearching ? searching : loading) ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={config.colors.primary} />
             </View>
-          ) : allOnlineUsers.length === 0 ? (
+          ) : visibleUsers.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Icon 
-                name="people-outline" 
+                name={isSearching ? 'search-outline' : 'people-outline'}
                 size={64} 
                 color={isDarkMode ? '#4B5563' : '#D1D5DB'} 
               />
               <Text style={styles.emptyText}>
-                No online users
+                {isSearching ? `No one found for "${searchText.trim()}"` : 'No online users'}
               </Text>
+              {isSearching && (
+                <Text style={styles.searchHintText}>
+                  Search matches the start of a name
+                </Text>
+              )}
             </View>
           ) : (
             <FlatList
-              data={allOnlineUsers}
+              data={visibleUsers}
               renderItem={renderUserItem}
               keyExtractor={keyExtractor}
               style={styles.list}
@@ -692,12 +762,12 @@ const OnlineUsersList = ({
               maxToRenderPerBatch={5}
               windowSize={5}
               initialNumToRender={5}
-              onEndReached={handleLoadMore}
+              onEndReached={isSearching ? undefined : handleLoadMore}
               onEndReachedThreshold={0.5}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
               ListFooterComponent={
-                allOnlineUserIds.length > loadedUserIds.size ? (
+                !isSearching && allOnlineUserIds.length > loadedUserIds.size ? (
                   <View style={styles.loadMoreContainer}>
                     {loadingMore ? (
                       <ActivityIndicator size="small" color={config.colors.primary} />
@@ -904,6 +974,28 @@ const getStyles = (isDark) =>
       justifyContent: 'center',
       alignItems: 'center',
       paddingVertical: 40,
+    },
+    searchWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginHorizontal: 16,
+      marginBottom: 8,
+      paddingHorizontal: 12,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: isDark ? '#1F2937' : '#F1F3F6',
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 14,
+      padding: 0,
+      color: isDark ? '#FFFFFF' : '#111827',
+    },
+    searchHintText: {
+      marginTop: 6,
+      fontSize: 12,
+      color: isDark ? '#6B7280' : '#9CA3AF',
     },
     emptyText: {
       marginTop: 12,

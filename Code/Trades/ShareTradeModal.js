@@ -9,6 +9,7 @@ import config from '../Helper/Environment';
 import { showErrorMessage } from '../Helper/MessageHelper';
 import { mixpanel } from '../AppHelper/MixPenel';
 import InterstitialAdManager from '../Ads/IntAd';
+import { resolveItemImage } from '../Helper/valueSources';
 
 // ✅ Migration helper: Normalize hasTotal/wantsTotal to handle both old (object.value) and new (number) formats
 const normalizeTotal = (total) => {
@@ -71,27 +72,9 @@ const ShareTradeModal = ({ visible, onClose, hasItems, wantsItems, hasTotal, wan
     const tradeStatus = useMemo(() => getTradeStatus(hasTotal, wantsTotal), [hasTotal, wantsTotal]);
     const profitLoss = wantsTotalValue - hasTotalValue;
     const isProfit = profitLoss >= 0;
-    // ✅ MM2: Updated getImageUrl to match MM2 format
-    const getImageUrl = (item) => {
-        if (!item || !item.name) return '';
-
-        // ✅ MM2 format: https://mm2values.com/${item.image}
-        if (item.image) {
-            // If image is already a full URL, return as is
-            if (item.image.startsWith('http://') || item.image.startsWith('https://')) {
-                return item.image;
-            }
-            // Otherwise, use MM2 format
-            return `https://mm2values.com/${item.image}`;
-        }
-
-        // Fallback: try Image property (from extractMM2Values)
-        if (item.Image) {
-            return item.Image;
-        }
-
-        return '';
-    };
+    // See Code/Helper/valueSources.js. It checks Image before image, so the
+    // extractMM2Values fallback this used to do last is covered first.
+    const getImageUrl = resolveItemImage;
     
     
     const progressBarStyle = useMemo(() => {

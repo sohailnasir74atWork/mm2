@@ -58,6 +58,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import FramedAvatar from './FramedAvatar';
 import { getCachedProfile, warmProfileCache, invalidateFullProfile, getRoleOverride, getOrFetchFullProfile } from '../../Helper/profileCache';
+import { resolveItemImage } from '../../Helper/valueSources';
 
 dayjs.extend(relativeTime);
 
@@ -1277,24 +1278,8 @@ const ProfileBottomDrawer = ({
     const groupedHasItems = groupTradeItems(trade.hasItems || []);
     const groupedWantsItems = groupTradeItems(trade.wantsItems || []);
 
-    // Helper to get MM2 image URL (matching Trades.jsx getImageUrl)
-    const getTradeItemImageUrl = (item) => {
-      if (!item) return '';
-      
-      // ✅ Handle new format: { name, type, value, image }
-      if (item.image) {
-        // If image is already a full URL, return as is
-        if (item.image.startsWith('http://') || item.image.startsWith('https://')) {
-          return item.image;
-        }
-        // Otherwise, use MM2 format: https://mm2values.com/${item.image}
-        return `https://mm2values.com/${item.image}`;
-      }
-      
-      // ✅ Handle old format: { name, image, value } - image might be directly accessible
-      // This is a fallback for backward compatibility
-      return '';
-    };
+    // See Code/Helper/valueSources.js.
+    const getTradeItemImageUrl = resolveItemImage;
 
     return (
       <View

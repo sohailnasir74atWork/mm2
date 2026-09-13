@@ -6,7 +6,10 @@ import {
   TouchableOpacity,
   Text,
   Platform,
+  ScrollView,
+  StyleSheet as RNStyleSheet,
 } from 'react-native';
+import { createMMKV } from 'react-native-mmkv';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useGlobalState } from '../../GlobelStats';
 import SignInDrawer from '../../Firebase/SigninDrawer';
@@ -31,6 +34,7 @@ import BannerAdComponent from '../../Ads/bannerAds';
 import { logoutUser } from '../../Firebase/UserLogics';
 import { showMessage } from 'react-native-flash-message';
 import config from '../../Helper/Environment';
+import { CHANNELS } from '../chatChannels';
 import PetModal from '../PrivateChat/PetsModel';
 import { seedCurrentUser } from '../../Helper/profileCache';
 import { syncMyCosmetics } from '../../Helper/cosmeticsCache';
@@ -39,6 +43,10 @@ leoProfanity.loadDictionary('en');
 
 
 
+
+
+const CHANNEL_STORAGE_KEY = 'preferred_chat_lang';
+const channelStorage = createMMKV();
 
 const ChatScreen = ({ selectedTheme, bannedUsers, modalVisibleChatinfo, setChatFocused,
   setModalVisibleChatinfo, unreadMessagesCount, fetchChats, unreadcount, setunreadcount, onlineUsersVisible, setOnlineUsersVisible }) => {
@@ -58,7 +66,7 @@ const ChatScreen = ({ selectedTheme, bannedUsers, modalVisibleChatinfo, setChatF
   const [signinMessage, setSigninMessage] = useState(false);
   const { triggerHapticFeedback } = useHaptic();
   const { localState } = useLocalState()
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // Seed MY OWN profile + refresh my equipped cosmetics.
   // Public-chat messages are slim (no frame / text colour in the payload), so
@@ -162,7 +170,52 @@ const startPrivateChat = useCallback(() => {
   callbackfunction();
 }, [selectedUser, selectedTheme, closeProfileDrawer]);
 
-  const chatRef = useMemo(() => ref(appdatabase, 'chat_new'), []);
+  // Preferred channel, remembered across launches. Falls back to the app's
+  // own language, then English — so a Spanish-speaking user lands in the
+  // Spanish room without hunting for it.
+  const [activeChannel, setActiveChannel] = useState(() => {
+    try {
+      const savedId = channelStorage.getString(CHANNEL_STORAGE_KEY);
+      if (savedId) {
+        const found = CHANNELS.find((c) => c.id === savedId);
+        if (found) return found;
+      }
+    } catch (e) { /* storage unavailable — fall through to the language match */ }
+    const lang = (i18n?.language || 'en').split('-')[0];
+    return CHANNELS.find((c) => c.id === lang) || CHANNELS[0];
+  });
+
+  // Preferred channel first, the rest in declared order.
+  const orderedChannels = useMemo(() => {
+    const idx = CHANNELS.findIndex((c) => c.id === activeChannel.id);
+    if (idx <= 0) return CHANNELS;
+    return [CHANNELS[idx], ...CHANNELS.slice(0, idx), ...CHANNELS.slice(idx + 1)];
+  }, [activeChannel.id]);
+
+  // Switching rooms must drop the old room's messages. Without the reset the
+  // new channel's first page appends underneath the previous language's
+  // backlog, and the pagination cursor keeps paging the old node.
+  const handleChannelSwitch = useCallback((channel) => {
+    if (!channel || channel.id === activeChannel.id) return;
+    triggerHapticFeedback('impactLight');
+    try {
+      channelStorage.set(CHANNEL_STORAGE_KEY, channel.id);
+    } catch (e) { /* preference is a convenience; never block the switch */ }
+    setActiveChannel(channel);
+    setMessages([]);
+    setPendingMessages([]);
+    setLastLoadedKey(null);
+    setReplyTo(null);
+    setInput('');
+  }, [activeChannel.id, triggerHapticFeedback]);
+
+  // Everything downstream already depends on chatRef — loadMessages, the
+  // onChildAdded subscription and the send handler all list it in their deps —
+  // so switching channels re-points the listeners without further wiring.
+  const chatRef = useMemo(
+    () => ref(appdatabase, activeChannel.path),
+    [appdatabase, activeChannel.path],
+  );
   const pinnedMessagesRef = useMemo(() => ref(appdatabase, 'pin_messages'), []);
 
   // const isAdmin = user?.admin || false;
@@ -657,6 +710,43 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
   return (
     <>
       <GestureHandlerRootView>
+        {/* Language channels. Each is a separate RTDB node; see CHANNELS. */}
+        <ScrollView
+          horizontal
+          style={channelTabStyles.scroller}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={channelTabStyles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {orderedChannels.map((channel) => {
+            const isActive = channel.id === activeChannel.id;
+            return (
+              <TouchableOpacity
+                key={channel.id}
+                style={[
+                  channelTabStyles.pill,
+                  isActive
+                    ? { backgroundColor: config.colors.primary, borderColor: config.colors.primary }
+                    : { backgroundColor: 'transparent', borderColor: theme === 'dark' ? '#444' : '#ccc' },
+                ]}
+                onPress={() => handleChannelSwitch(channel)}
+                activeOpacity={0.8}
+              >
+                <Text style={channelTabStyles.pillFlag}>{channel.flag}</Text>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    channelTabStyles.pillText,
+                    { color: isActive ? '#fff' : (theme === 'dark' ? '#aaa' : '#666') },
+                    isActive && channelTabStyles.pillTextActive,
+                  ]}
+                >
+                  {channel.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         <View style={styles.container}>
           <ChatHeaderContent
@@ -675,12 +765,18 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
               <ActivityIndicator size="large" color="#1E88E5" style={{ flex: 1 }} />
             ) : (
               <MessagesList
+                channelPath={activeChannel.path}
                 messages={messages}
                 user={user}
                 flatListRef={flatListRef}
                 isDarkMode={theme === 'dark'}
                 onPinMessage={handlePinMessage}
-                onDeleteMessage={(messageId) => remove(ref(appdatabase, `chat_new/${messageId.replace('chat_new-', '')}`))}
+                onDeleteMessage={(messageId) => remove(ref(
+                  appdatabase,
+                  // The id is prefixed with the node it came from, so strip
+                  // whichever channel is active rather than assuming chat_new.
+                  `${activeChannel.path}/${messageId.replace(`${activeChannel.path}-`, '')}`,
+                ))}
                 // isAdmin={isAdmin}
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
@@ -774,3 +870,26 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
 };
 
 export default ChatScreen;
+
+const channelTabStyles = RNStyleSheet.create({
+  scroller: {
+    maxHeight: Platform.OS === 'ios' ? 50 : 38,
+    flexGrow: 0,
+  },
+  scrollContent: {
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    gap: 8,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  pillFlag: { fontSize: 13, marginRight: 5 },
+  pillText: { fontSize: 10.5, fontWeight: '500' },
+  pillTextActive: { fontWeight: '700' },
+});

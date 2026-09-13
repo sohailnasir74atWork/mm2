@@ -15,6 +15,9 @@ import { doc, getDoc } from '@react-native-firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import config from '../Helper/Environment';
 import { useThemeColors } from '../Helper/themeColors';
+import {
+  buildItemPool, unwrapFeed, priceOf, isSummable, DEFAULT_VALUE_SOURCE,
+} from '../Helper/valueSources';
 import { setAppLanguage } from '../../i18n';
 import { useLanguage } from '../Translation/LanguageProvider';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -142,41 +145,35 @@ const HomeTabScreen = ({ selectedTheme }) => {
     return h < 12 ? t('home.good_morning') : h < 17 ? t('home.good_afternoon') : t('home.good_evening');
   }, [t]);
 
+  // Which catalogue prices this screen. See Code/Helper/valueSources.js.
+  const valueSource = localState?.valueSource || DEFAULT_VALUE_SOURCE;
+
   const parsedData = useMemo(() => {
     const parse = (raw) => {
       try {
-        if (!raw) return [];
+        if (!raw) return null;
         const p = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        if (!p || typeof p !== 'object') return [];
-        // MM2 data is nested: {category: {tier: [{name, value, ...}]}}
-        const items = [];
-        for (const tiers of Object.values(p)) {
-          if (tiers && typeof tiers === 'object') {
-            for (const arr of Object.values(tiers)) {
-              if (Array.isArray(arr)) {
-                items.push(...arr);
-              }
-            }
-          }
-        }
-        return items;
-      } catch { return []; }
+        return p && typeof p === 'object' ? unwrapFeed(p) : null;
+      } catch { return null; }
     };
-    return [...parse(localState?.data), ...parse(localState?.suprime)];
+    // One deduped pool from both catalogues, same as the calculator.
+    // See Code/Helper/valueSources.js.
+    return buildItemPool(parse(localState?.data), parse(localState?.suprime));
   }, [localState?.data, localState?.suprime]);
 
+  // Priced from the catalogue the user selected, and only from values that can
+  // honestly be summed — a bundle-tier rank is not currency, and Supreme does
+  // not price leaderboard awards at all. An item the pool does not know falls
+  // back to whatever value was stored with it, which is what this always did.
+  // See Code/Helper/valueSources.js.
   const lookupVal = useCallback((item) => {
-    if (!item?.name || !parsedData.length) return Number(String(item?.value || 0).replace(/,/g, '')) || 0;
+    if (!item?.name) return 0;
     const n = (item.name || '').toLowerCase().trim();
     const f = parsedData.find(d => (d?.name || '').toLowerCase().trim() === n);
-    if (f) {
-      const v = Number(String(f.value || 0).replace(/,/g, ''));
-      if (v) return v;
-      const rv = Number(String(f.rvalue || 0).replace(/,/g, ''));
-      if (rv) return rv;
-    }
-    return Number(String(item?.value || 0).replace(/,/g, '')) || 0;
-  }, [parsedData]);
+    const priced = priceOf(f || item, valueSource);
+    if (isSummable(priced)) return priced.value || 0;
+    return 0;
+  }, [parsedData, valueSource]);
 
   const portfolio = useMemo(() => owned.reduce((s, p) => s + lookupVal(p), 0), [owned, lookupVal]);
 

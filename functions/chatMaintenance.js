@@ -11,6 +11,7 @@
  */
 
 const admin = require('firebase-admin');
+const { CHAT_CHANNEL_PATHS } = require('./chatChannels');
 const functions = require('firebase-functions/v1');
 
 if (!admin.apps.length) {
@@ -45,10 +46,19 @@ const db = () => admin.database();
 // Trigger is onCreate, not onWrite. onWrite also fired on every DELETE, so
 // the nightly retention pass woke this function once per deleted message —
 // 73,988 times in a single run on 2026-09-06.
-exports.cleanUpNoContentMessages = functions
+//
+// 📅 2026-09-13. The chat became one node per language, and an RTDB trigger
+// cannot wildcard across sibling nodes — `/{channel}/{messageId}` would match
+// every top-level node in the database, not just the chat ones. So there is
+// one function per channel, built from the same list the client uses.
+//
+// English keeps the bare `cleanUpNoContentMessages` name it deploys under
+// today. Renaming it would delete the live function and create a new one,
+// and there is a window in between where nothing moderates chat_new.
+const makeNoContentCleaner = (path) => functions
   .runWith({ memory: '128MB', timeoutSeconds: 30 })
   .database
-  .ref('/chat_new/{messageId}')
+  .ref(`/${path}/{messageId}`)
   .onCreate(async (snapshot, context) => {
     const { messageId } = context.params;
     const message = snapshot.val();
@@ -67,9 +77,20 @@ exports.cleanUpNoContentMessages = functions
     // sitting alongside real pets still counts, because the pets are real.
     if (text || hasPets || hasMedia) return null;
 
-    console.log(`Deleting empty message ${messageId} (no text, no pets, no media)`);
-    return db().ref(`/chat_new/${messageId}`).remove();
+    console.log(`Deleting empty message ${path}/${messageId} (no text, no pets, no media)`);
+    return db().ref(`/${path}/${messageId}`).remove();
   });
+
+// English keeps the original export name (and therefore the deployed function).
+exports.cleanUpNoContentMessages = makeNoContentCleaner('chat_new');
+
+// One per additional language, named `cleanUpNoContent_<suffix>`.
+// These are NEW functions and must be deployed by explicit name — never with
+// `firebase deploy --only functions`, which offers to delete valueAlertsPoll.
+for (const path of CHAT_CHANNEL_PATHS) {
+  if (path === 'chat_new') continue;
+  exports[`cleanUpNoContent_${path.replace(/^chat_/, '')}`] = makeNoContentCleaner(path);
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 //  notifyNewMessage

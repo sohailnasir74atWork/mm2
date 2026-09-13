@@ -28,6 +28,8 @@ import { FRUIT_KEYWORDS } from '../../Helper/filter';
 import ScamSafetyBox from './Scamwarning';
 import { useNavigation } from '@react-navigation/native';
 import config from '../../Helper/Environment';
+import { resolveItemImage } from '../../Helper/valueSources';
+import { sourceLabelForItems } from '../../Helper/valueSources';
 
 
 
@@ -84,29 +86,9 @@ const PrivateMessageList = ({
   const { canTranslate, incrementTranslationCount, getRemainingTranslationTries, localState } = useLocalState();
   const navigation = useNavigation()
 
-  // ✅ Helper function to get MM2 image URL (matching Trades.jsx getImageUrl)
-  const getImageUrl = useCallback((item) => {
-    if (!item) return '';
-    
-    // If imageUrl is already a full URL, return as is
-    if (item.imageUrl && (item.imageUrl.startsWith('http://') || item.imageUrl.startsWith('https://'))) {
-      return item.imageUrl;
-    }
-    
-    // ✅ Handle new format: { name, type, value, image }
-    if (item.image) {
-      // If image is already a full URL, return as is
-      if (item.image.startsWith('http://') || item.image.startsWith('https://')) {
-        return item.image;
-      }
-      // Otherwise, use MM2 format: https://mm2values.com/${item.image}
-      return `https://mm2values.com/${item.image}`;
-    }
-    
-    // ✅ Handle old format: { name, image, value } - image might be directly accessible
-    // This is a fallback for backward compatibility
-    return '';
-  }, []);
+  // See Code/Helper/valueSources.js. It reads Image / image / imageUrl, so the
+  // imageUrl passthrough this used to do is covered. Stable, so no useCallback.
+  const getImageUrl = resolveItemImage;
 
   // ✅ Memoize handleCopy
   const handleCopy = useCallback((message) => {
@@ -324,12 +306,6 @@ const PrivateMessageList = ({
             {hasFruits && (
               <View style={[fruitStyles.fruitsWrapper]}>
                 {fruits.map((fruit, index) => {
-                  const valueType = (fruit.valueType || 'd').toLowerCase();
-
-                  let valueBadgeStyle = fruitStyles.badgeDefault;
-                  if (valueType === 'n') valueBadgeStyle = fruitStyles.badgeNeon;
-                  if (valueType === 'm') valueBadgeStyle = fruitStyles.badgeMega;
-
                   return (
                     <View
                       key={`${fruit.id || fruit.name}-${index}`}
@@ -350,9 +326,6 @@ const PrivateMessageList = ({
                           · Value: {Number(fruit.value || 0).toLocaleString()}{' '}
                         </Text>
                         <View style={fruitStyles.badgeRow}>
-                          <View style={[fruitStyles.badge, valueBadgeStyle]}>
-                            <Text style={fruitStyles.badgeText}>{valueType.toUpperCase()}</Text>
-                          </View>
                           {fruit.isFly && (
                             <View style={[fruitStyles.badge, fruitStyles.badgeFly]}>
                               <Text style={fruitStyles.badgeText}>F</Text>
@@ -378,6 +351,15 @@ const PrivateMessageList = ({
                     </Text>
                   </View>
                 )}
+
+                {/* Which catalogue priced this list. Replaces a 'D' badge that
+                    was an Adopt Me leftover (Default/Neon/Mega) — MM2 has no such
+                    variants, so it rendered 'D' on every item and meant nothing.
+                    The two catalogues disagree on 70% of the items they share, so
+                    a reader needs to know which one these numbers came from. */}
+                <Text style={fruitStyles.sourceNote}>
+                  Based on {sourceLabelForItems(fruits)} values
+                </Text>
               </View>
             )}
 
@@ -521,6 +503,12 @@ const PrivateMessageList = ({
   );
 };
 export const fruitStyles = StyleSheet.create({
+  sourceNote: {
+    fontSize: 9,
+    opacity: 0.6,
+    marginTop: 4,
+    alignSelf: 'flex-end',
+  },
   fruitsWrapper: {
     marginTop: 1,
     // gap: 1,

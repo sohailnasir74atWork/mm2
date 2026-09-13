@@ -1,0 +1,7 @@
+{
+  "firebase": {
+    "projectId": "mm2vlaues-ed80c",
+    "databaseURL": "https://mm2vlaues-ed80c-default-rtdb.firebaseio.com",
+    "storageBucket": "mm2vlaues-ed80c.firebasestorage.app"
+  }
+}

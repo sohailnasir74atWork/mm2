@@ -14,9 +14,10 @@ import config from "../Helper/Environment";
 import { ref, get, update, remove } from "@react-native-firebase/database";
 import { useTranslation } from "react-i18next";
 import { banUserwithEmail } from "./utils";
+import { DEFAULT_CHANNEL } from './chatChannels';
 
 
-const ReportPopup = ({ visible, message, onClose }) => {
+const ReportPopup = ({ visible, message, onClose, channelPath = DEFAULT_CHANNEL.path }) => {
   const [selectedReason, setSelectedReason] = useState("Spam");
   const [customReason, setCustomReason] = useState("");
   const [showCustomInput, setShowCustomInput] = useState(false);
@@ -58,7 +59,9 @@ const ReportPopup = ({ visible, message, onClose }) => {
     }
   
     setLoading(true);
-    const messageRef = ref(appdatabase, `chat_new/${sanitizedId}`);
+    // The room the message was reported from. Defaults to English so the
+    // trade-report caller, which has no channel, keeps working unchanged.
+    const messageRef = ref(appdatabase, `${channelPath}/${sanitizedId}`);
   
     get(messageRef)
       .then((snapshot) => {

@@ -27,6 +27,10 @@ import { Menu, MenuOption, MenuOptions, MenuTrigger } from 'react-native-popup-m
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
 import { handleBloxFruit, handleadoptme } from '../SettingScreen/settinghelper';
+import {
+  resolveItemImage, buildItemPool, unwrapFeed, priceOf, displayValueText,
+  DEFAULT_VALUE_SOURCE,
+} from '../Helper/valueSources';
 
 
 // ✅ MM2: Removed VALUE_TYPES and MODIFIERS - MM2 doesn't use these
@@ -192,85 +196,29 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
   );
 
 
-  // ✅ MM2: Extract values from nested structure {category: {tier: [items]}} - matching HomeScreen structure
-  const extractMM2Values = useCallback((data) => {
-    const items = [];
-    try {
-      if (!data || typeof data !== 'object') {
-        console.warn("⚠️ extractMM2Values: Invalid data structure", typeof data);
-        return items;
-      }
-      
-      for (const [category, tiers] of Object.entries(data)) {
-        if (!tiers || typeof tiers !== 'object') continue;
-        
-        for (const [tier, values] of Object.entries(tiers)) {
-          if (!Array.isArray(values)) continue;
-          
-          for (const item of values) {
-            if (!item || !item.name) continue;
-
-            const cleanedValue = String(item.value || 0).replace(/,/g, '');
-            const numericValue = !isNaN(cleanedValue) ? Number(cleanedValue) : 0;
-
-            items.push({
-              ...item,
-              Name: item.name,
-              name: item.name,
-              FormattedValue: numericValue !== null ? numericValue.toLocaleString() : item.value,
-              Value: numericValue !== null ? numericValue : 0,
-              value: numericValue !== null ? numericValue : 0,
-              Image: item.image ? `https://mm2values.com/${item.image}` : '',
-              image: item.image || '',
-              Category: category.trim(),
-              category: category.trim(),
-              Tier: tier.trim(),
-              tier: tier.trim(),
-              type: category.trim(),
-              id: `${category}-${tier}-${item.name}`,
-              // ✅ Pass through all scraped fields
-              demand: item.demand || 'N/A',
-              itemRarity: item.rarity || 'N/A',
-              stability: item.stability || 'N/A',
-              range: item.range || 'N/A',
-              wiki: item.wiki || '',
-              displayValue: item.displayValue || '',
-            });
-          }
-        }
-      }
-    } catch (error) {
-      console.error("❌ Failed to extract MM2 values:", error);
-    }
-    return items;
-  }, []);
+  // Which catalogue prices this screen. See Code/Helper/valueSources.js.
+  const valueSource = localState?.valueSource || DEFAULT_VALUE_SOURCE;
 
   // Memoize the parsed data to prevent unnecessary re-parsing
   const parsedValuesData = useMemo(() => {
-    const extract = (raw) => {
+    const parse = (raw) => {
       try {
-        if (!raw) return [];
+        if (!raw) return null;
         const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        return typeof parsed === 'object' && parsed !== null ? extractMM2Values(parsed) : [];
+        return parsed && typeof parsed === 'object' ? unwrapFeed(parsed) : null;
       } catch (error) {
         console.error("❌ Error parsing data:", error);
-        return [];
+        return null;
       }
     };
-    return extract(localState.data);
-  }, [localState.data, extractMM2Values]);
+    // One deduped pool from both catalogues, same as the calculator.
+    // This screen is also the chat item picker (PetsModel embeds it), so what
+    // it lists and what it prices is what gets sent into a conversation.
+    return buildItemPool(parse(localState.data), parse(localState.suprime));
+  }, [localState.data, localState.suprime]);
 
-  // ✅ MM2: Image URL generation
-  const getImageUrl = (item) => {
-    if (!item || !item.name) return '';
-
-    // ✅ MM2 format: https://mm2values.com/${item.image}
-    if (item.image) {
-      return `https://mm2values.com/${item.image}`;
-    }
-
-    return '';
-  };
+  // See Code/Helper/valueSources.js.
+  const getImageUrl = resolveItemImage;
   // Memoize the parsed codes data
   const parsedCodesData = useMemo(() => {
     if (!localState.codes) return [];
@@ -302,9 +250,11 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
   // ✅ MM2: Simplified getItemValue (no modifiers needed)
   const getItemValue = useCallback((item) => {
     if (!item) return '0';
-    // ✅ MM2: Use value directly
-    const cleanedValue = String(item.value || 0).replace(/,/g, '');
-    const numericValue = !isNaN(cleanedValue) ? Number(cleanedValue) : 0;
+    // The source's own words when it has no real price — "Priceless",
+    // "Award only", "x3 T1 Legendaries". See Code/Helper/valueSources.js.
+    const label = displayValueText(item, valueSource);
+    if (label) return label;
+    const numericValue = priceOf(item, valueSource).value || 0;
     // For values >= 1, use toLocaleString for commas (250,000,000)
     // For values < 1 (like .44, .33), show as-is without extra zeros
     if (numericValue >= 1) {
@@ -314,7 +264,7 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
     }
     // Small decimals: show cleanly (e.g., 0.44 not 0.440000)
     return numericValue.toString();
-  }, []);
+  }, [valueSource]);
   const filteredData = useMemo(() => {
     if (!Array.isArray(parsedValuesData) || parsedValuesData.length === 0) return [];
 
@@ -423,20 +373,28 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
   // ✅ MM2: Simplified renderItem
   const renderItem = useCallback(
     ({ item }) => {
-      // value for this item
-      const currentValue = getItemValue(item);
 
       // image url for this item
       const imageUrl = getImageUrl(item);
 
       const handlePress = () => {
+        const priced = priceOf(item, valueSource);
         const fruitObj = {
           Name: item.name,
           name: item.name,
-          value: Number(currentValue),
+          // currentValue may be a label ("Priceless"), so take the number from
+          // priceOf rather than parsing the display string back.
+          value: priced.value || 0,
           imageUrl,
           category: item.type || item.category,
           id: item.id,
+          // Provenance travels with the item. Without it a chat message or a
+          // saved inventory row cannot say which catalogue priced it, and a
+          // bundle-tier rank would later be summed as currency.
+          // Null on anything older, which readers treat as MM2 — see isSummable().
+          valueSource,
+          valueConfidence: priced.valueConfidence || null,
+          valueText: priced.valueText || null,
         };
 
         // 👉 From chat: always add another copy
@@ -468,7 +426,11 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
       styles,
       selectedFruits,
       ownedPets,
-      wishlistPets
+      wishlistPets,
+      // Without this the callback keeps whichever source was active when it
+      // was created, so an item added after toggling would be priced from the
+      // old catalogue.
+      valueSource,
     ]
   );
 

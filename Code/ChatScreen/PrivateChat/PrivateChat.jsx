@@ -34,6 +34,7 @@ import {
   serverTimestamp,
 } from '@react-native-firebase/firestore';
 import ProfileBottomDrawer from '../GroupChat/BottomDrawer';
+import { resolveItemImage } from '../../Helper/valueSources';
 
 
 
@@ -479,24 +480,8 @@ showSuccessMessage(
     return groupItems(trade.wantsItems);
   }, [trade?.wantsItems, groupItems]);
 
-  // ✅ Helper function to get MM2 image URL (matching Trades.jsx getImageUrl)
-  const getImageUrl = useCallback((item) => {
-    if (!item) return '';
-    
-    // ✅ Handle new format: { name, type, value, image }
-    if (item.image) {
-      // If image is already a full URL, return as is
-      if (item.image.startsWith('http://') || item.image.startsWith('https://')) {
-        return item.image;
-      }
-      // Otherwise, use MM2 format: https://mm2values.com/${item.image}
-      return `https://mm2values.com/${item.image}`;
-    }
-    
-    // ✅ Handle old format: { name, image, value } - image might be directly accessible
-    // This is a fallback for backward compatibility
-    return '';
-  }, []);
+  // See Code/Helper/valueSources.js. Stable reference, so no useCallback.
+  const getImageUrl = resolveItemImage;
 
   // ✅ Memoize sendMessage
   const sendMessage = useCallback(async (text, image, fruits) => {

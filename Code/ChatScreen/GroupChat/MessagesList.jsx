@@ -33,8 +33,10 @@ import { getDeviceLanguage } from '../../../i18n';
 import { mixpanel } from '../../AppHelper/MixPenel';
 import { FRUIT_KEYWORDS } from '../../Helper/filter';
 import { banUserwithEmail, unbanUserWithEmail } from '../utils';
+import { sourceLabelForItems } from '../../Helper/valueSources';
 
 const MessagesList = ({
+  channelPath,
   messages,
   isAtBottom, setIsAtBottom,
   handleLoadMore,
@@ -555,12 +557,6 @@ const MessagesList = ({
     ]}
   >
     {fruits.map((fruit, index) => {
-      const valueType = (fruit.valueType || 'd').toLowerCase(); // 'd' | 'n' | 'm'
-
-      let valueBadgeStyle = fruitStyles.badgeDefault;
-      if (valueType === 'n') valueBadgeStyle = fruitStyles.badgeNeon;
-      if (valueType === 'm') valueBadgeStyle = fruitStyles.badgeMega;
-
       return (
         <View
           key={`${fruit.id || fruit.name}-${index}`}
@@ -590,12 +586,6 @@ const MessagesList = ({
 
             <View style={fruitStyles.badgeRow}>
               {/* D / N / M badge */}
-              <View style={[fruitStyles.badge, valueBadgeStyle]}>
-                <Text style={fruitStyles.badgeText}>
-                  {valueType.toUpperCase()}
-                </Text>
-              </View>
-
               {/* Fly badge */}
               {fruit.isFly && (
                 <View style={[fruitStyles.badge, fruitStyles.badgeFly]}>
@@ -635,6 +625,15 @@ const MessagesList = ({
         </Text>
       </View>
     )}
+
+    {/* Which catalogue priced this list. Replaces a 'D' badge that
+        was an Adopt Me leftover (Default/Neon/Mega) — MM2 has no such
+        variants, so it rendered 'D' on every item and meant nothing.
+        The two catalogues disagree on 70% of the items they share, so
+        a reader needs to know which one these numbers came from. */}
+    <Text style={fruitStyles.sourceNote}>
+      Based on {sourceLabelForItems(fruits)} values
+    </Text>
   </View>
 )}
               </MenuTrigger>
@@ -801,6 +800,7 @@ const MessagesList = ({
       <ReportPopup
         visible={showReportPopup}
         message={selectedMessage}
+        channelPath={channelPath}
         onClose={(success) => {
           if (success) {
             handleReportSuccess(selectedMessage.id);
@@ -813,6 +813,12 @@ const MessagesList = ({
   );
 };
 export const fruitStyles = StyleSheet.create({
+  sourceNote: {
+    fontSize: 9,
+    opacity: 0.6,
+    marginTop: 4,
+    alignSelf: 'flex-end',
+  },
   fruitsWrapper: {
     marginTop: 1,
     // gap: 1,

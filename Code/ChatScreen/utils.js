@@ -4,6 +4,7 @@ import { Alert } from 'react-native';
 import { useState, useEffect } from 'react';
 import { getServerTime } from '../Helper/serverTime';
 import { invalidateFullProfile, setRoleOverride } from '../Helper/profileCache';
+import { CHAT_CHANNEL_PATHS } from './chatChannels';
 
 // Initialize the database reference
 const database = getDatabase();
@@ -448,39 +449,47 @@ export const handleDeleteLast300Messages = async (senderId, showAlert = false) =
 
   try {
     const db = getDatabase();
-    const chatQuery = query(
-      ref(db, 'chat_new'),
-      orderByChild('senderId'),
-      equalTo(senderId),
-      limitToLast(80)
+    // Sweep every language room, not just English. A spammer moderators are
+    // cleaning up after can have posted in any of them, and this used to look
+    // like it had worked while leaving the other channels untouched.
+    // Each channel declares `.indexOn: senderId`, so these stay indexed reads.
+    const snapshots = await Promise.all(
+      CHAT_CHANNEL_PATHS.map((path) => get(query(
+        ref(db, path),
+        orderByChild('senderId'),
+        equalTo(senderId),
+        limitToLast(80),
+      )).then((snap) => ({ path, snap })).catch(() => ({ path, snap: null }))),
     );
 
-    const snapshot = await get(chatQuery);
+    // Flatten every room into one list, each entry keeping the node it came
+    // from so the delete targets the right channel.
+    const collected = [];
+    for (const { path, snap } of snapshots) {
+      if (!snap || !snap.exists()) continue;
+      const messages = snap.val();
+      if (!messages || typeof messages !== 'object') continue;
+      for (const [key, value] of Object.entries(messages)) {
+        if (key) collected.push({ path, key, timestamp: value?.timestamp || 0 });
+      }
+    }
 
-    if (!snapshot.exists()) {
+    if (collected.length === 0) {
       if (showAlert) {
         Alert.alert('Info', 'No messages found to delete.');
       }
       return { success: true, count: 0 };
     }
 
-    const allMessages = snapshot.val();
-    if (!allMessages || typeof allMessages !== 'object') {
-      return { success: true, count: 0 };
-    }
-
-    const sorted = Object.entries(allMessages)
-      .sort((a, b) => {
-        const timestampA = a[1]?.timestamp || 0;
-        const timestampB = b[1]?.timestamp || 0;
-        return timestampB - timestampA;
-      })
+    // Newest 60 ACROSS all rooms, so the cap still means what it says.
+    const sorted = collected
+      .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, 60);
 
     const updates = {};
-    sorted.forEach(([key]) => {
+    sorted.forEach(({ path, key }) => {
       if (key) {
-        updates[`chat_new/${key}`] = null;
+        updates[`${path}/${key}`] = null;
       }
     });
 

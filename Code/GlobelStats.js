@@ -10,6 +10,7 @@ import { requestPermission } from './Helper/PermissionCheck';
 import { useColorScheme, AppState } from 'react-native';
 import { getFlag } from './Helper/CountryCheck';
 import { getConfigNodes } from './Helper/configCache';
+import { indexMM2Images, indexSupremePrices, unwrapFeed } from './Helper/valueSources';
 import { getServerTime } from './Helper/serverTime';
 import { generateOnePieceUsername } from './Helper/RendomNamegen';
 
@@ -540,14 +541,25 @@ export const GlobalStateProvider = ({ children }) => {
       const lastActivity = ls.lastActivity ? new Date(ls.lastActivity).getTime() : 0;
       const now = Date.now();
       const timeElapsed = now - lastActivity;
-      const EXPIRY_LIMIT = refresh ? 1 * 1000 : 6 * 60 * 1000; // 10s for refresh, 6min default
-      const shouldFetch =
-        timeElapsed > EXPIRY_LIMIT ||
-        !ls.data ||
-        !Object.keys(ls.data).length ||
-        !ls.suprime ||
-        !Object.keys(ls.suprime).length ||
-        !ls.imgurl;
+
+      // Bunny is billed per GB served. The two catalogues are ~1.5 MB together
+      // on every fetch, and they only change when the scraper runs — a few
+      // times a day at most. The old 6-minute window meant a user who opened
+      // the app ten times a day paid for ten downloads of identical bytes.
+      //
+      // So: cached for a day, and `refresh` (the pull-to-refresh / "Updated
+      // just now" control) always goes to the network, because that is the
+      // user explicitly asking for today's numbers.
+      const CACHE_TTL = 24 * 60 * 60 * 1000;
+
+      const hasCachedValues =
+        ls.data && Object.keys(ls.data).length &&
+        ls.suprime && Object.keys(ls.suprime).length;
+
+      // `imgurl` is deliberately NOT part of this. It is a config node with a
+      // default, cached separately, and MM2 may not publish one at all —
+      // including it forced a full catalogue download on every single launch.
+      const shouldFetch = Boolean(refresh) || !hasCachedValues || timeElapsed > CACHE_TTL;
 
       if (shouldFetch) {
         let data = {};
@@ -555,39 +567,55 @@ export const GlobalStateProvider = ({ children }) => {
         let image = '';
 
         // ✅ MM2 CDN URLs
-        const suprimeUrl = 'https://mm2api-suprime.b-cdn.net/supreme_mm2values.json';
-        const cdnUrl = 'https://mm2-api.b-cdn.net/mm2values.json';
+        // Both zones serve the pipeline's dist build, wrapped as { meta, data }
+        // — meta carries generatedAt and the observed/modeled/none counts.
+        // The filename differs per zone: MM2 publishes dist/data.json, Supreme
+        // publishes dist/supreme.json. unwrap() also accepts a bare categories
+        // object, so an older raw upload still works if one is restored.
+        //
+        // These moved twice on 2026-09-13 (mm2values.json -> mm2.json ->
+        // data.json). A shipped build cannot be re-pointed, so if they move
+        // again, keep the old path alive on the zone as a copy.
+        const suprimeUrl = 'https://mm2api-suprime.b-cdn.net/supreme.json';
+        const cdnUrl = 'https://mm2-api.b-cdn.net/data.json';
 
-        try {
-          const dataRes = await fetch(cdnUrl, {
-            method: 'GET',
-            cache: 'no-store',
-          });
-          const dataJson = await dataRes.json();
-          const dataSuprime = await fetch(suprimeUrl, {
-            method: 'GET',
-            cache: 'no-store',
-          });
-          const suprimeJson = await dataSuprime.json();
-
-          if (!dataJson || typeof dataJson !== 'object' || dataJson.error || !Object.keys(dataJson).length) {
+        const loadFromCdn = async (url) => {
+          const res = await fetch(url, { method: 'GET', cache: 'no-store' });
+          // Bunny answers a missing file with a 200-looking HTML error page on
+          // some zones and a 404 on others. Check the status before parsing.
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const payload = unwrapFeed(await res.json());
+          // Validate AFTER unwrapping. `{ meta, data }` has two keys, so the
+          // old top-level length check passed even when `data` was empty.
+          if (!payload || typeof payload !== 'object' || payload.error || !Object.keys(payload).length) {
             throw new Error('CDN returned invalid or error data');
           }
-          if (!suprimeJson || typeof suprimeJson !== 'object' || suprimeJson.error || !Object.keys(suprimeJson).length) {
-            throw new Error('CDN returned invalid or error data');
-          }
+          return payload;
+        };
 
-          data = dataJson;
-          suprime = suprimeJson;
+        // Fetched independently, and that is the point. Until 2026-09-13 both
+        // shared one try block while the Supreme URL 404'd, so parsing its HTML
+        // body threw *after* MM2 had already succeeded — discarding good MM2
+        // data and falling back to Firebase on every refresh.
+        const [mm2Result, suprimeResult] = await Promise.allSettled([
+          loadFromCdn(cdnUrl),
+          loadFromCdn(suprimeUrl),
+        ]);
+
+        if (mm2Result.status === 'fulfilled') {
+          data = mm2Result.value;
           console.log('✅ Loaded MM2 data from CDN:', cdnUrl);
-        } catch (err) {
-          console.warn('⚠️ Failed to load from CDN, falling back to Firebase:', err.message);
-
-          const fallbackNode = 'mm2Data';
-          const dbSnapshot = await get(ref(appdatabase, fallbackNode));
+        } else {
+          console.warn('⚠️ MM2 CDN failed, falling back to Firebase:', mm2Result.reason?.message);
+          const dbSnapshot = await get(ref(appdatabase, 'mm2Data'));
           data = dbSnapshot.exists() ? dbSnapshot.val() : {};
-          
-          // Try to get suprime from Firebase as well
+        }
+
+        if (suprimeResult.status === 'fulfilled') {
+          suprime = suprimeResult.value;
+          console.log('✅ Loaded Supreme data from CDN:', suprimeUrl);
+        } else {
+          console.warn('⚠️ Supreme CDN failed, falling back to Firebase:', suprimeResult.reason?.message);
           const suprimeSnapshot = await get(ref(appdatabase, 'suprimeData'));
           suprime = suprimeSnapshot.exists() ? suprimeSnapshot.val() : {};
         }
@@ -632,6 +660,38 @@ export const GlobalStateProvider = ({ children }) => {
   const reload = useCallback(() => {
     fetchStockData(true);
   }, [fetchStockData]);
+
+  // ── MM2 image index, for Supreme's art fallback ──
+  // Keyed off localState.data rather than the fetch, because a cache hit
+  // (6-minute window) skips fetchStockData entirely and the index still has to
+  // exist. Supreme items carry a placeholder instead of an image path, so
+  // resolveItemImage() looks them up here by name — see Helper/valueSources.js.
+  useEffect(() => {
+    try {
+      const raw = localState?.data;
+      if (!raw) return;
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      indexMM2Images(unwrapFeed(parsed));
+    } catch (e) {
+      // A malformed cache must not take the provider down; the index simply
+      // stays empty and Supreme items fall back to no image.
+    }
+  }, [localState?.data]);
+
+  // ── Supreme price index, for the calculator's source toggle ──
+  // Same reasoning as above: keyed off the cached catalogue, not the fetch, so
+  // a cache hit still populates it. Empty index → every item reads as "not
+  // listed" on Supreme, which is honest rather than a silent zero.
+  useEffect(() => {
+    try {
+      const raw = localState?.suprime;
+      if (!raw) return;
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      indexSupremePrices(unwrapFeed(parsed));
+    } catch (e) {
+      // same rationale as the image index above
+    }
+  }, [localState?.suprime]);
 
   
 

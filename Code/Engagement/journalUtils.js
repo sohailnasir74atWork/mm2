@@ -10,6 +10,7 @@ import {
   collection, doc, setDoc, deleteDoc, serverTimestamp,
   query, orderBy, limit, getDocs, writeBatch,
 } from '@react-native-firebase/firestore';
+import { resolveItemImage } from '../Helper/valueSources';
 
 export const JOURNAL_RESULTS = ['win', 'fair', 'loss'];
 
@@ -21,8 +22,7 @@ export const getJournalRevision = () => journalRevision;
 
 /** Normalize a calculator/inventory item to the slim shape stored on an entry. */
 export const slimItem = (it) => {
-  let image = it?.Image || it?.image || it?.imageUrl || '';
-  if (image && !/^https?:\/\//.test(image)) image = `https://mm2values.com/${image}`;
+  const image = resolveItemImage(it);
   return {
     name: it?.name || it?.Name || 'Unknown',
     type: it?.type || it?.Type || it?.Category || '',

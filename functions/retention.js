@@ -37,6 +37,8 @@ const RETENTION_DAYS = 15;
 const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
 const RTDB_BATCH = 500;      // keys per multi-path RTDB update
+const { CHAT_CHANNEL_PATHS } = require('./chatChannels');
+
 const FS_BATCH = 400;        // docs per Firestore commit; the hard cap is 500
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -49,34 +51,43 @@ exports.cleanupOldPublicChats = functions
   .onRun(async () => {
     const cutoff = Date.now() - RETENTION_MS;
     const db = admin.database();
-    const chatRef = db.ref('chat_new');
-    let deleted = 0;
+    let deletedTotal = 0;
 
-    console.log(`🧹 chat_new: deleting messages before ${new Date(cutoff).toISOString()}`);
+    // Every language room, not just English. A channel left out of this loop
+    // grows without limit — see functions/chatChannels.js.
+    for (const path of CHAT_CHANNEL_PATHS) {
+      const chatRef = db.ref(path);
+      let deleted = 0;
 
-    // orderByChild('timestamp') needs the .indexOn that database.rules.json
-    // declares for chat_new. Without it RTDB still answers but sorts the whole
-    // node in memory on every page.
-    for (;;) {
-      const snap = await chatRef
-        .orderByChild('timestamp')
-        .endAt(cutoff)
-        .limitToFirst(RTDB_BATCH)
-        .once('value');
+      console.log(`🧹 ${path}: deleting messages before ${new Date(cutoff).toISOString()}`);
 
-      if (!snap.exists() || snap.numChildren() === 0) break;
+      // orderByChild('timestamp') needs the .indexOn that database.rules.json
+      // declares for each channel. Without it RTDB still answers but sorts the
+      // whole node in memory on every page.
+      for (;;) {
+        const snap = await chatRef
+          .orderByChild('timestamp')
+          .endAt(cutoff)
+          .limitToFirst(RTDB_BATCH)
+          .once('value');
 
-      const updates = {};
-      snap.forEach((child) => { updates[`chat_new/${child.key}`] = null; });
+        if (!snap.exists() || snap.numChildren() === 0) break;
 
-      const n = Object.keys(updates).length;
-      await db.ref().update(updates);   // one write for the whole batch
-      deleted += n;
+        const updates = {};
+        snap.forEach((child) => { updates[`${path}/${child.key}`] = null; });
 
-      if (n < RTDB_BATCH) break;
+        const n = Object.keys(updates).length;
+        await db.ref().update(updates);   // one write for the whole batch
+        deleted += n;
+
+        if (n < RTDB_BATCH) break;
+      }
+
+      console.log(`✅ ${path}: deleted ${deleted} messages`);
+      deletedTotal += deleted;
     }
 
-    console.log(`✅ chat_new: deleted ${deleted} messages`);
+    console.log(`✅ public chat: deleted ${deletedTotal} messages across ${CHAT_CHANNEL_PATHS.length} channels`);
     return null;
   });
 

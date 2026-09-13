@@ -8,6 +8,10 @@ import { useGlobalState } from '../GlobelStats';
 import { buildSearchTokens } from '../Trades/tradeSearchIndex';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import config from '../Helper/Environment';
+import {
+  resolveItemImage, summarizeItems, buildItemPool, unwrapFeed,
+  priceOf, displayValueText, isSummable, VALUE_SOURCE, DEFAULT_VALUE_SOURCE,
+} from '../Helper/valueSources';
 import ConditionalKeyboardWrapper from '../Helper/keyboardAvoidingContainer';
 import { useHaptic } from '../Helper/HepticFeedBack';
 import { getDatabase, ref } from '@react-native-firebase/database';
@@ -34,6 +38,15 @@ const createEmptySlots = (count) => Array(count).fill(null);
 // ✅ MM2: Removed VALUE_TYPES, MODIFIERS, and hideBadge - MM2 doesn't use these
 
 // ✅ MM2: Removed getItemValue function - MM2 uses simple value field
+
+// Items a total cannot honestly include: `modeled` values are ordinal ranks
+// derived from bundle pricing, `none` has no price at all.
+// See Code/Helper/valueSources.js.
+const excludedCount = (summary) => (summary?.modeled || 0) + (summary?.unpriced || 0);
+const excludedLabel = (summary) => {
+  const n = excludedCount(summary);
+  return n ? `${n} item${n === 1 ? '' : 's'}` : '—';
+};
 
 const getTradeStatus = (hasTotal, wantsTotal) => {
   // If both are 0 (initial state), show WIN
@@ -72,10 +85,25 @@ const HomeScreen = ({ selectedTheme }) => {
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
   const [selectedSection, setSelectedSection] = useState(null);
   const [searchText, setSearchText] = useState('');
-  const [hasTotal, setHasTotal] = useState(0);
-  const [wantsTotal, setWantsTotal] = useState(0);
   const { triggerHapticFeedback } = useHaptic();
   const { localState, updateLocalState } = useLocalState();
+
+  // Which catalogue prices this screen. The picker pool stays MM2 — the toggle
+  // changes what items are WORTH, never which items exist, so nothing can
+  // vanish from the grid mid-trade. See Code/Helper/valueSources.js.
+  const valueSource = localState?.valueSource || DEFAULT_VALUE_SOURCE;
+
+  // Totals are DERIVED from the grids, not accumulated alongside them. They
+  // used to be state bumped by an updateTotal() call next to every mutation,
+  // which meant any path that changed a grid without calling it drifted. The
+  // grids are the source of truth — they are what a trade is built from.
+  //
+  // summarizeItems sums only `observed` values and counts the rest; see
+  // Code/Helper/valueSources.js for why a modeled value must not be summed.
+  const hasSummary = useMemo(() => summarizeItems(hasItems, valueSource), [hasItems, valueSource]);
+  const wantsSummary = useMemo(() => summarizeItems(wantsItems, valueSource), [wantsItems, valueSource]);
+  const hasTotal = hasSummary.total;
+  const wantsTotal = wantsSummary.total;
   const navigation = useNavigation();
   const [modalVisible, setModalVisible] = useState(false);
   const [description, setDescription] = useState('');
@@ -195,45 +223,17 @@ const HomeScreen = ({ selectedTheme }) => {
   const resetState = useCallback(() => {
     triggerHapticFeedback('impactLight');
     setSelectedSection(null);
-    setHasTotal(0);
-    setWantsTotal(0);
+    // hasTotal / wantsTotal are derived from the grids, so clearing the grids
+    // below clears them too.
     setGridStepIndex(0);
     setHasItems(createEmptySlots(GRID_STEPS[0]));
     setWantsItems(createEmptySlots(GRID_STEPS[0]));
   }, [triggerHapticFeedback]);
 
 
-  // ✅ MM2 image URL generation
-  const getImageUrl = useCallback((item) => {
-    if (!item || !item.name) return '';
+  // See Code/Helper/valueSources.js. Stable reference, so no useCallback.
+  const getImageUrl = resolveItemImage;
 
-    // ✅ MM2 format: https://mm2values.com/${item.image}
-    if (item.image) {
-      return `https://mm2values.com/${item.image}`;
-    }
-
-    // Fallback: try Image property (from extractMM2Values)
-    if (item.Image) {
-      return item.Image;
-    }
-
-    return '';
-  }, []);
-
-
-  const updateTotal = useCallback((item, section, add = true, isNew = false) => {
-    if (!item) return;
-
-    // ✅ MM2: Use Value property directly (no valueType/modifiers needed)
-    const value = Number(item.Value || item.selectedValue || 0);
-    const valueChange = isNew ? (add ? value : -value) : 0;
-
-    if (section === 'has') {
-      setHasTotal(prev => prev + valueChange);
-    } else {
-      setWantsTotal(prev => prev + valueChange);
-    }
-  }, []);
 
   // ✅ MM2: Removed handleBadgePress - MM2 doesn't use badges
   const maybeExpandGrid = useCallback(
@@ -299,14 +299,6 @@ const HomeScreen = ({ selectedTheme }) => {
 
       targetArray[nextEmptyIndex] = selectedItem;
 
-      // Update totals for the side we modified
-      updateTotal(
-        selectedItem,
-        selectedSection === 'has' ? 'has' : 'wants',
-        true,
-        true
-      );
-
       // This will also expand 9→12→15→18 if needed
       maybeExpandGrid(nextHasItems, nextWantsItems);
 
@@ -317,7 +309,6 @@ const HomeScreen = ({ selectedTheme }) => {
       wantsItems,
       selectedSection,
       triggerHapticFeedback,
-      updateTotal,
       maybeExpandGrid,
     ]
   );
@@ -330,16 +321,13 @@ const HomeScreen = ({ selectedTheme }) => {
 
     if (items[index]) {
       triggerHapticFeedback('impactLight');
-      const item = items[index];
       const updatedItems = [...items];
       updatedItems[index] = null;
 
       if (isHas) {
         setHasItems(updatedItems);
-        updateTotal(item, 'has', false, true);
       } else {
         setWantsItems(updatedItems);
-        updateTotal(item, 'wants', false, true);
       }
     } else {
       triggerHapticFeedback('impactLight');
@@ -383,7 +371,7 @@ const HomeScreen = ({ selectedTheme }) => {
         }, 500);
       });
     }
-  }, [hasItems, wantsItems, triggerHapticFeedback, updateTotal, adShowen, localState.isPro]);
+  }, [hasItems, wantsItems, triggerHapticFeedback, adShowen, localState.isPro]);
 
   // ✅ MM2: Removed mode change effect - MM2 doesn't use Shark/Frost mode
   // ✅ MM2: Simplified toggleFavorite (no type needed)
@@ -472,7 +460,19 @@ const HomeScreen = ({ selectedTheme }) => {
   // ✅ MM2: Simplified favorite item render (no badges needed)
   const renderFavoriteItem = useCallback(({ item }) => {
     const imageUrl = getImageUrl(item);
-    const currentValue = Number(item.Value || 0);
+    // Priced from the active catalogue, like every other surface. Reading
+    // item.Value here showed the MM2 number no matter which source was
+    // selected, so an item Supreme prices differently — or not at all —
+    // still read as its MM2 value in the inventory list.
+    const priced = priceOf(item, valueSource);
+    const currentValue = priced.value;
+    const valueLabel = displayValueText(item, valueSource) || formatValue(currentValue);
+    // Supreme declines to price leaderboard awards, and that is where the most
+    // valuable items in the game sit. "Award only" alone would hide that this
+    // is a 500,000,000 item, so MM2's figure rides along, labelled as MM2's.
+    const reference = priced.referenceValue
+      ? `MM2: ${formatValue(priced.referenceValue)}`
+      : '';
 
     // Handler to add item to calculator
     const handleAddToCalculator = () => {
@@ -493,7 +493,6 @@ const HomeScreen = ({ selectedTheme }) => {
       if (nextEmptyIndex === -1) return;
 
       targetArray[nextEmptyIndex] = selectedItem;
-      updateTotal(selectedItem, selectedSection === 'has' ? 'has' : 'wants', true, true);
       maybeExpandGrid(nextHasItems, nextWantsItems);
       setIsDrawerVisible(false);
     };
@@ -518,7 +517,8 @@ const HomeScreen = ({ selectedTheme }) => {
 
           <View style={styles.favoriteItemInfo}>
             <Text style={styles.favoriteItemName} numberOfLines={1}>{item.name || item.Name}</Text>
-            <Text style={styles.favoriteItemValue}>Value: {formatValue(currentValue)}</Text>
+            <Text style={styles.favoriteItemValue}>Value: {valueLabel}</Text>
+            {reference ? <Text style={styles.referenceValue}>{reference}</Text> : null}
             {item.Tier && (
               <Text style={styles.favoriteItemRarity}>{item.Tier}</Text>
             )}
@@ -538,7 +538,7 @@ const HomeScreen = ({ selectedTheme }) => {
         </TouchableOpacity>
       </View>
     );
-  }, [selectedSection, hasItems, wantsItems, updateTotal, maybeExpandGrid, triggerHapticFeedback, toggleFavorite, isDarkMode, getImageUrl]);
+  }, [selectedSection, hasItems, wantsItems, maybeExpandGrid, triggerHapticFeedback, toggleFavorite, isDarkMode, getImageUrl]);
 
   // ✅ MM2: Simplified grid item render
   const renderGridItem = useCallback(({ item }) => {
@@ -575,8 +575,16 @@ const HomeScreen = ({ selectedTheme }) => {
           {item.name || item.Name}
         </Text>
         <Text numberOfLines={1} style={styles.gridItemValue}>
-          {formatValue(item.Value || item.value || 0)}
+          {/* The source's own words when it has no real price — "Priceless",
+              "Award only", "x3 T1 Legendaries" — all beat a derived 0.024.
+              See Code/Helper/valueSources.js. */}
+          {displayValueText(item, valueSource) || formatValue(priceOf(item, valueSource).value)}
         </Text>
+        {priceOf(item, valueSource).referenceValue ? (
+          <Text numberOfLines={1} style={[styles.referenceValue, { textAlign: 'center' }]}>
+            MM2: {formatValue(priceOf(item, valueSource).referenceValue)}
+          </Text>
+        ) : null}
         {item.demand != null && item.demand !== 'N/A' && (
           <Text style={styles.gridItemDemand}>{item.demand}/10</Text>
         )}
@@ -660,47 +668,6 @@ const HomeScreen = ({ selectedTheme }) => {
   // console.log(localState.isGG)
 
   // ✅ Extract MM2 values from nested structure {category: {tier: [items]}}
-  const extractMM2Values = useCallback((data) => {
-    const items = [];
-
-    try {
-      for (const [category, tiers] of Object.entries(data)) {
-        for (const [tier, values] of Object.entries(tiers)) {
-          for (const item of values) {
-            if (!item?.name) continue;
-
-            const cleanedValue = String(item.value).replace(/,/g, '');
-            const numericValue = !isNaN(cleanedValue) ? Number(cleanedValue) : null;
-
-            // ✅ Parse demand score (numeric like "5", "6.5", or "N/A")
-            const demandRaw = item.demand;
-            const demandNum = demandRaw && demandRaw !== 'N/A' ? Number(demandRaw) : null;
-
-            items.push({
-              Name: item.name,
-              name: item.name,
-              FormattedValue: numericValue !== null ? formatValue(numericValue) : item.value,
-              Value: numericValue !== null ? numericValue : 0,
-              Image: `https://mm2values.com/${item.image}`,
-              image: item.image,
-              Category: category.trim(),
-              category: category.trim(),
-              Tier: tier,
-              tier: tier,
-              type: category.trim(), // For compatibility with existing code
-              id: `${category}-${tier}-${item.name}`, // Generate unique ID
-              demand: demandNum, // ✅ Demand score (numeric or null)
-              rarity: item.rarity || null,
-            });
-          }
-        }
-      }
-    } catch (error) {
-      console.error("❌ Failed to extract MM2 values:", error);
-    }
-
-    return items;
-  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -708,15 +675,23 @@ const HomeScreen = ({ selectedTheme }) => {
     const parseAndSetData = async () => {
       try {
         const parseSource = (raw) => {
-          if (!raw) return [];
+          if (!raw) return null;
           const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-          if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
-            return extractMM2Values(parsed);
-          }
-          return [];
+          return parsed && typeof parsed === 'object' && Object.keys(parsed).length
+            ? unwrapFeed(parsed)
+            : null;
         };
 
-        const items = [...parseSource(localState.data), ...parseSource(localState.suprime)];
+        // One pool from both catalogues, deduped by name. The old
+        // `[...mm2, ...supreme]` was not a merge — it produced 2,481 rows with
+        // 953 duplicate names. buildItemPool keeps MM2's row where both list
+        // an item (it owns the artwork) and appends Supreme-only tradables,
+        // so neither catalogue's exclusives are unreachable.
+        // See Code/Helper/valueSources.js.
+        const items = buildItemPool(
+          parseSource(localState.data),
+          parseSource(localState.suprime),
+        );
         if (isMounted) setFruitRecords(items);
       } catch (err) {
         console.error("❌ Error parsing data in HomeScreen:", err);
@@ -729,7 +704,7 @@ const HomeScreen = ({ selectedTheme }) => {
     return () => {
       isMounted = false;
     };
-  }, [localState.data, localState.suprime, extractMM2Values]);
+  }, [localState.data, localState.suprime]);
 
   // console.log(filteredData.length)
 
@@ -815,22 +790,31 @@ const HomeScreen = ({ selectedTheme }) => {
 
       // ✅ MM2: Simplified trade item mapping - save full URL for backward compatibility with old apps
       const mapTradeItem = item => {
-        // ✅ Prioritize Image (full URL) over image (relative path) for old app compatibility
-        let imageUrl = item.Image || item.image || '';
+        // An absolute URL is stored on every trade item, because old app
+        // versions read it verbatim. A Supreme item with no MM2 match resolves
+        // to '' — better a missing image than a permanently broken URL baked
+        // into the document. See Code/Helper/valueSources.js.
+        const imageUrl = resolveItemImage(item);
 
-        // ✅ If we have a relative path, convert it to full URL (for backward compatibility)
-        if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
-          imageUrl = `https://mm2values.com/${imageUrl}`;
-        }
+        // Price from the catalogue the user was actually looking at. Taking
+        // item.Value here instead would store MM2 prices under a Supreme total,
+        // and the per-item values would not add up to hasTotal.
+        const priced = priceOf(item, valueSource);
 
         return {
           name: item.name || item.Name,
           type: item.type || item.Category || item.Type,
-          value: item.Value || item.value || 0,
+          value: priced.value,
           image: imageUrl, // ✅ Save full URL like old app expects
           // ✅ Include deprecated names if available
           deprecatedNames: item.deprecatedNames || item.deprecated_names || null,
           deprecatedName: item.deprecatedName || item.deprecated_name || null,
+          // Additive, and null for anything that predates it. Without this the
+          // trade cannot tell a real 25 from a bundle-tier 0.024 when it is
+          // read back, and `value` alone would be summed as currency forever.
+          // Readers must treat a missing field as summable — see isSummable().
+          valueConfidence: priced.valueConfidence || null,
+          valueText: priced.valueText || null,
         };
       };
 
@@ -857,6 +841,11 @@ const HomeScreen = ({ selectedTheme }) => {
         // ✅ Migration: Save in old format { value: number } for backward compatibility with old apps
         hasTotal: { value: hasTotal || 0 },
         wantsTotal: { value: wantsTotal || 0 },
+        // Which catalogue these numbers came from. Absent on every trade made
+        // before 2026-09, which readers must treat as 'mm2' — that is all
+        // there was. Without it a Supreme-priced trade is indistinguishable
+        // from an MM2 one, and the two disagree on 70% of shared items.
+        valueSource,
         description: description || "",
         timestamp: timestamp, // ✅ Use serverTimestamp for Firestore
         status: statusLetter, // ✅ Trade status: 'w' (win), 'l' (lose), 'f' (fair)
@@ -1048,6 +1037,31 @@ const HomeScreen = ({ selectedTheme }) => {
               {config.isNoman && (
                 <View style={styles.summaryContainer}>
                   <View style={styles.summaryInner}>
+                    {/* Source toggle. Changes what items are worth, not which
+                        items exist — the picker pool stays MM2, so switching
+                        can never empty the grid. The two catalogues disagree
+                        on 70% of the items they share. */}
+                    <View style={styles.sourceToggleRow}>
+                      {[VALUE_SOURCE.MM2, VALUE_SOURCE.SUPREME].map((src) => {
+                        const active = valueSource === src;
+                        return (
+                          <TouchableOpacity
+                            key={src}
+                            style={[styles.sourceToggleButton, active && styles.sourceToggleButtonActive]}
+                            activeOpacity={0.8}
+                            onPress={() => {
+                              if (active) return;
+                              triggerHapticFeedback('impactLight');
+                              updateLocalState('valueSource', src);
+                            }}
+                          >
+                            <Text style={[styles.sourceToggleText, active && styles.sourceToggleTextActive]}>
+                              {src === VALUE_SOURCE.MM2 ? 'MM2' : 'Supreme'}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                     <View style={styles.topSection}>
                       <Text style={styles.bigNumber} numberOfLines={1} adjustsFontSizeToFit>{formatValue(hasTotal) || '0'}</Text>
                       <View style={styles.statusContainer}>
@@ -1105,6 +1119,18 @@ const HomeScreen = ({ selectedTheme }) => {
                       </View>
                     )}
 
+                    {/* What the total leaves out. A modeled value is a
+                        bundle-tier rank, not a price, so it cannot be summed —
+                        without this row a trade of cheap items just reads "0".
+                        See Code/Helper/valueSources.js. */}
+                    {(excludedCount(hasSummary) > 0 || excludedCount(wantsSummary) > 0) && (
+                      <View style={styles.demandSummaryRow}>
+                        <Text style={styles.excludedText}>{excludedLabel(hasSummary)}</Text>
+                        <Text style={styles.demandSummaryLabel}>Unpriced</Text>
+                        <Text style={styles.excludedText}>{excludedLabel(wantsSummary)}</Text>
+                      </View>
+                    )}
+
                     <View style={styles.profitLossBox}>
                       <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.bigNumber2, { color: isProfit ? config.colors.hasBlockGreen : config.colors.wantBlockRed }]}>
                         {formatValue(Math.abs(profitLoss))}
@@ -1146,8 +1172,21 @@ const HomeScreen = ({ selectedTheme }) => {
                           <>
                             <Image
                               source={{ uri: getImageUrl(item) }}
-                              style={[styles.itemImageOverlay]}
+                              style={[
+                                styles.itemImageOverlay,
+                                // Dimmed when the active source cannot price it.
+                                // Without this the total just drops on switch
+                                // and nothing says which item caused it.
+                                !isSummable(priceOf(item, valueSource)) && styles.itemImageUnpriced,
+                              ]}
                             />
+                            {!isSummable(priceOf(item, valueSource)) && (
+                              <View style={styles.unpricedBadge}>
+                                <Text style={styles.unpricedBadgeText}>
+                                  {priceOf(item, valueSource).missing ? '—' : '?'}
+                                </Text>
+                              </View>
+                            )}
                             {/* ✅ MM2: Show demand pill if demand >= 5 */}
                             {item.demand != null && item.demand >= 5 && (
                               <View style={styles.calcDemandOverlay}>
@@ -1188,8 +1227,21 @@ const HomeScreen = ({ selectedTheme }) => {
                           <>
                             <Image
                               source={{ uri: getImageUrl(item) }}
-                              style={[styles.itemImageOverlay]}
+                              style={[
+                                styles.itemImageOverlay,
+                                // Dimmed when the active source cannot price it.
+                                // Without this the total just drops on switch
+                                // and nothing says which item caused it.
+                                !isSummable(priceOf(item, valueSource)) && styles.itemImageUnpriced,
+                              ]}
                             />
+                            {!isSummable(priceOf(item, valueSource)) && (
+                              <View style={styles.unpricedBadge}>
+                                <Text style={styles.unpricedBadgeText}>
+                                  {priceOf(item, valueSource).missing ? '—' : '?'}
+                                </Text>
+                              </View>
+                            )}
                             {/* ✅ MM2: Show demand pill if demand >= 5 */}
                             {item.demand != null && item.demand >= 5 && (
                               <View style={styles.calcDemandOverlay}>
@@ -1508,6 +1560,63 @@ const getStyles = (isDarkMode, isGG) =>
       textAlign: 'center',
       color: isDarkMode ? config.colors.textDark : config.colors.textLight,
       flex: 1,
+    },
+    referenceValue: {
+      fontSize: 10,
+      color: isDarkMode ? config.colors.textDark : config.colors.textLight,
+      opacity: 0.55,
+    },
+    itemImageUnpriced: {
+      opacity: 0.35,
+    },
+    unpricedBadge: {
+      position: 'absolute',
+      top: 2,
+      left: 2,
+      minWidth: 14,
+      height: 14,
+      borderRadius: 7,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDarkMode ? '#00000099' : '#00000066',
+    },
+    unpricedBadgeText: {
+      fontSize: 9,
+      fontWeight: '700',
+      color: '#FFFFFF',
+    },
+    sourceToggleRow: {
+      flexDirection: 'row',
+      alignSelf: 'center',
+      borderRadius: 8,
+      padding: 2,
+      marginBottom: 8,
+      backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : config.colors.dividerLight,
+    },
+    sourceToggleButton: {
+      paddingHorizontal: 16,
+      paddingVertical: 4,
+      borderRadius: 6,
+    },
+    sourceToggleButtonActive: {
+      backgroundColor: config.colors.secondary,
+    },
+    sourceToggleText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: isDarkMode ? config.colors.textDark : config.colors.textLight,
+      opacity: 0.7,
+    },
+    sourceToggleTextActive: {
+      color: '#FFFFFF',
+      opacity: 1,
+    },
+    excludedText: {
+      fontSize: 11,
+      textAlign: 'center',
+      flex: 1,
+      color: isDarkMode ? config.colors.textDark : config.colors.textLight,
+      opacity: 0.6,
     },
     // ✅ Aggregate demand summary styles
     demandSummaryRow: {

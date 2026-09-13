@@ -50,6 +50,14 @@ const chatMaintenance = require('./chatMaintenance');
 exports.cleanUpNoContentMessages = chatMaintenance.cleanUpNoContentMessages;
 exports.notifyNewMessage = chatMaintenance.notifyNewMessage;
 
+// One empty-message cleaner per language channel (2026-09-13). Re-exported by
+// name so `fetch-live-functions.js` can audit them and so they deploy
+// individually — this file is the deploy manifest, and the list of names it
+// prints is what goes into `firebase deploy --only`.
+for (const [name, fn] of Object.entries(chatMaintenance)) {
+  if (name.startsWith('cleanUpNoContent_')) exports[name] = fn;
+}
+
 // ── Push notifications ─────────────────────────────────────────────────
 // NOT deployed historically. Exporting it here means a full-codebase deploy
 // WILL create it and users will start receiving comment notifications.

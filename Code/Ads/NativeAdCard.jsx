@@ -175,16 +175,34 @@ const NativeAdCard = ({ adKey, isDarkMode = false }) => {
           height, full width) so taps reliably land on it instead of dead space. */}
       {ad.callToAction ? (
         <NativeAsset assetType={NativeAssetType.CALL_TO_ACTION}>
-          {/* box-only: the View IS the registered callToActionView, so it must
-              receive the tap. Without this the inner <Text> intercepts the touch
-              on Android and the SDK's click listener never fires (icon/headline
-              work because they're leaf nodes with nothing to intercept). */}
-          <View
-            pointerEvents="box-only"
+          {/*
+            A <Text>, NOT a <View> wrapping a <Text>, and deliberately so.
+
+            registerAsset() resolves this element's native tag and hands it to
+            GMA as `nativeAdView.callToActionView`; GMA then calls
+            setOnClickListener on it. Android only reaches that listener via the
+            normal onTouchEvent -> performClick path.
+
+            A ReactViewGroup takes part in React Native's own touch
+            interception, so the gesture is consumed by the RN touch system
+            before performClick fires and the SDK never sees the click. The
+            previous attempt at fixing this added pointerEvents="box-only",
+            which makes the ViewGroup intercept even harder — the opposite of
+            what was needed.
+
+            ReactTextView is a leaf and intercepts nothing, so the native click
+            listener fires normally. That is exactly why the headline and icon
+            assets have always worked while this button did not: they are leaves
+            and this was the only asset wrapped in a View.
+
+            Keep it a leaf. Styling it as a button is fine; nesting is not.
+          */}
+          <Text
+            suppressHighlighting
             style={[styles.cta, { backgroundColor: config.colors.secondary }]}
           >
-            <Text style={styles.ctaText}>{ad.callToAction}</Text>
-          </View>
+            {ad.callToAction}
+          </Text>
         </NativeAsset>
       ) : null}
     </NativeAdView>
@@ -263,15 +281,19 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   // Full-width, 48dp-tall button = a large, reliable click target for the CTA.
+  // Button styling on a <Text>. lineHeight centres the label vertically on
+  // both platforms (a Text cannot use flex centring), textAlignVertical does
+  // the same on Android, and overflow:hidden is required for borderRadius to
+  // actually clip on an Android Text.
   cta: {
     marginTop: 12,
     minHeight: 48,
+    lineHeight: 48,
     borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 16,
-  },
-  ctaText: {
+    overflow: 'hidden',
+    textAlign: 'center',
+    textAlignVertical: 'center',
     color: '#ffffff',
     fontWeight: '700',
     fontSize: 15,

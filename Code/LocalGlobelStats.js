@@ -37,6 +37,15 @@ export const LocalStateProvider = ({ children }) => {
     isPro: storage.getBoolean('isPro') ?? false,
     fetchDataTime: storage.getString('fetchDataTime') || null,
     data: safeParseJSON('data', {}),
+    // The Supreme catalogue. GlobalStats has written this to MMKV since the
+    // dual-feed fetch landed, but it was never rehydrated here — so on every
+    // cold start it came back undefined and stayed that way until the next
+    // network fetch finished.
+    suprime: safeParseJSON('suprime', {}),
+    // Which catalogue prices the calculator: 'mm2' | 'supreme'. The two
+    // disagree on 70% of the items they share, so this is a real preference,
+    // not a display option. See Code/Helper/valueSources.js.
+    valueSource: storage.getString('valueSource') || 'supreme',
     ggData: safeParseJSON('ggData', {}),
     codes: safeParseJSON('codes', {}),
     normalStock: safeParseJSON('normalStock', []),

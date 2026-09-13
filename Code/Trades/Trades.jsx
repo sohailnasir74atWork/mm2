@@ -43,6 +43,7 @@ import {
   updateDoc,
 } from '@react-native-firebase/firestore';
 import { saveTrade, unsaveTrade, fetchSavedTradeRefs } from './tradeHelpers';
+import { resolveItemImage, VALUE_SOURCE } from '../Helper/valueSources';
 
 // Initialize dayjs plugins
 dayjs.extend(relativeTime);
@@ -1351,24 +1352,10 @@ const TradeList = ({ route }) => {
     return 0;
   };
 
-  // ✅ MM2: Image URL generation - handles both old and new item structures
-  const getImageUrl = (item) => {
-    if (!item) return '';
-
-    // ✅ Handle new format: { name, type, value, image }
-    if (item.image) {
-      // If image is already a full URL, return as is
-      if (item.image.startsWith('http://') || item.image.startsWith('https://')) {
-        return item.image;
-      }
-      // Otherwise, use MM2 format: https://mm2values.com/${item.image}
-      return `https://mm2values.com/${item.image}`;
-    }
-
-    // ✅ Handle old format: { name, image, value } - image might be directly accessible
-    // This is a fallback for backward compatibility
-    return '';
-  };
+  // Image URL generation. Absolute URLs (every saved trade) pass through
+  // untouched; a Supreme item's /media/ path resolves via the MM2 catalogue.
+  // See Code/Helper/valueSources.js.
+  const getImageUrl = resolveItemImage;
 
 
 
@@ -1593,6 +1580,23 @@ const TradeList = ({ route }) => {
                 </Text>
               </View>
             )}
+            {/* Which catalogue priced this trade. Win/Fair/Lose is a verdict on
+                the totals, and the totals depend entirely on the source: the
+                two disagree on 70% of the items they share, and Supreme does
+                not price leaderboard awards at all. Without this badge a
+                viewer cannot tell what "Win" was measured against.
+
+                Absent on every trade posted before 2026-09, which is exactly
+                what MM2 means — it was the only catalogue then. */}
+            <View style={[
+              styles.statusBadge,
+              styles.sourceBadge,
+              item.valueSource === VALUE_SOURCE.SUPREME && styles.sourceBadgeSupreme,
+            ]}>
+              <Text style={styles.statusBadgeText}>
+                {item.valueSource === VALUE_SOURCE.SUPREME ? 'SUPREME' : 'MM2'}
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -2160,6 +2164,13 @@ const getStyles = (isDarkMode) =>
       color: 'white',
       fontWeight: '700',
       fontSize: 9,
+    },
+    // Deliberately muted next to Win/Fair/Lose: it is provenance, not a verdict.
+    sourceBadge: {
+      backgroundColor: isDarkMode ? '#475569' : '#94a3b8',
+    },
+    sourceBadgeSupreme: {
+      backgroundColor: config.colors.secondary,
     },
     traderName: {
       fontFamily: 'Lato-Bold',

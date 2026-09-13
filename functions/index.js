@@ -59,9 +59,19 @@ for (const [name, fn] of Object.entries(chatMaintenance)) {
 }
 
 // ── Push notifications ─────────────────────────────────────────────────
-// NOT deployed historically. Exporting it here means a full-codebase deploy
-// WILL create it and users will start receiving comment notifications.
-// exports.notifyPostComment = require('./notifyPostComment').notifyPostComment;
+// Enabled 2026-09-13. notifyPostComment had been written but left commented
+// out here, so it was never deployed and nobody was ever told about a comment
+// on their post. notifyPostLike is new.
+//
+// Both are live now, so both cost money per feed interaction. The caps matter:
+// notifyPostComment notifies at most 50 people (author + previous commenters
+// + likers) and notifyPostLike notifies exactly one (the author). Raise either
+// and a popular post becomes expensive fast.
+//
+// Both honour an opt-out under users/{uid}/notificationSettings —
+// postCommentNotifications and postLikeNotifications. Absent means on.
+exports.notifyPostComment = require('./notifyPostComment').notifyPostComment;
+exports.notifyPostLike = require('./notifyPostLike').notifyPostLike;
 
 // ── Role rosters (mods / trusted / cmsr) ───────────────────────────────
 const rosters = require('./syncRoleRosters');

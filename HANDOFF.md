@@ -1,11 +1,99 @@
 # MM2 Values — handoff
 
-Last updated **2026-09-06**. Firebase project `mm2vlaues-ed80c`.
+Last updated **2026-09-13**. Firebase project `mm2vlaues-ed80c`.
 **Firebase only. Do not add Supabase** — that is a standing decision, and it is
 why every port from Adopt Me needs rewriting rather than copying.
 
 Detail lives in `PLAN_2026-09.md` (§1–9) and
 `docs/FUNCTION_AUDIT_2026-09-06.md`. This file is the short version.
+
+---
+
+## 0. 2026-09-13 — what changed, and what it means for you
+
+Four commits on this branch since 1.3.7: `ce480c0`, `1466b2d`, `efe386d`,
+`34e630e`. **27 Cloud Functions are now live** (was 15). Android **1.3.9 (31)**.
+
+### Supreme is now the default value source
+
+The app used to be MM2-only. It now carries both catalogues, and **Supreme is
+what a new install sees**. The toggle is the user's and persists.
+
+Know what that costs before judging a bug report: **Supreme does not price
+leaderboard awards, and that is where the top of the game lives.** All 25 of
+MM2's most valuable items — Gold Minty, Gold LogChopper, Nik's Scythe — are
+unpriced there. They render by reason ("Award only", "Priceless") with MM2's
+figure as a labelled reference, never as 0. If someone reports "my 500M item
+shows no value", that is this, working correctly.
+
+`Code/Helper/valueSources.js` is the single place that knows how the two feeds
+differ — images, name matching, value confidence, the merged pool, the toggle.
+Read its header before touching any values code.
+
+### Things that were silently broken and are now fixed
+
+Each of these looked fine and did nothing:
+
+| | was |
+|---|---|
+| CDN fetch | both URLs 404'd; one shared try block meant a Supreme failure also discarded good MM2 data, falling back to Firebase every refresh |
+| `valueAlertsPoll` | polled a renamed URL **96×/day**, failed at step one every time. Value alerts were dead for months |
+| `notifyPostComment` | fully written, export commented out — a comment on your post notified nobody |
+| `localState.suprime` | written to MMKV, never read back on cold start |
+| "Updated just now" | seeded from `new Date()` at mount, so it said that permanently |
+| `imgurl` in the fetch guard | an empty config node forced a full catalogue download **on every launch** |
+| moderator "delete last messages" | only ever scanned English chat |
+| native ad call-to-action | unclickable — see §9 |
+
+### Cost changes
+
+- Values cache **6 minutes → 24 hours**; manual refresh always goes live.
+- `valueAlertsPoll` **every 15 min → hourly**. It is cache-busted, so each poll
+  pulled the full file from origin: ~27 MB/day to observe a change that happens
+  twice a week.
+- The `imgurl` guard above was likely a real share of the Bunny bill.
+
+### Ten language chat rooms
+
+`chat_new` is English and keeps its name — it holds every message ever sent.
+Nine new nodes, each with rules + `.indexOn`, retention, and its own moderation
+trigger. **All three are required**: a channel missing any one of them grows
+unbounded, unindexed, or unmoderated.
+
+`Code/ChatScreen/chatChannels.js` and `functions/chatChannels.js` must stay in
+step with each other **and** with `database.rules.json`. Change one, change all
+three.
+
+### Backward compatibility — the rule everything follows
+
+Everything added is **additive and null-tolerant**:
+
+- absent `valueSource` on a trade → MM2 (all there was)
+- absent `valueConfidence` → summable (the old behaviour). **Reverse this and
+  every one of the 8,799 existing trades silently totals zero.**
+- saved trades' absolute image URLs pass through untouched
+- old raw CDN payloads still unwrap
+
+11 dedicated tests cover this. 131 assertions across 10 suites in total; the
+scratch harnesses are not in the repo, but `valueSources.js` is pure and easy
+to re-test.
+
+---
+
+## 0b. Open cost findings — decisions for you, not bugs
+
+**`cleanupOldPrivateChats` is written but deliberately not deployed.**
+`private_messages` holds **~72,500 chat keys** and has never been cleaned. The
+function was rewritten on 2026-09-02 because the previous version timed out
+nightly and deleted nothing. It stays off because deleting private
+conversations was never asked for — `functions/index.js` says so explicitly.
+Enabling it is a product decision. It is the largest single storage item.
+
+**`users` is ~85,400 records** and only grows.
+
+**Node.js 20 is decommissioned 2026-10-30.** Every deploy now warns. After that
+date nothing can be redeployed, including a fix to a live bug. This is the
+closest hard deadline in the project.
 
 ---
 
@@ -18,26 +106,32 @@ Detail lives in `PLAN_2026-09.md` (§1–9) and
 | Firestore rules | live — anonymous writes blocked |
 | RTDB rules | live — user enumeration blocked, role flags write-protected |
 | Firestore indexes | live — 14, including trade search and polls |
-| Cloud Functions | live — 15 |
-| 15-day retention | live and running nightly |
+| Cloud Functions | live — **27** (15 before 2026-09-13) |
+| RTDB chat rules | live — **10 language channels**, each indexed |
+| 15-day retention | live nightly, **all 10 chat channels** |
+| Feed notifications | live — comments **and** likes, both new on 2026-09-13 |
 | Android build | **built, not uploaded to Play** |
 | Git | **committed to a branch, not pushed to `main`** |
 
-Data after retention: 17,374 chat messages, 8,799 trades, 607 feed posts,
-0 polls.
+Data after retention (measured 2026-09-06): 17,374 chat messages, 8,799 trades,
+607 feed posts, 0 polls. RTDB key counts on 2026-09-13: `users` ~85,400,
+`private_messages` ~72,500, `chat_meta_data` ~27,500, `chat_new` ~13,900.
 
 ### The build
 
 `android/app/build/outputs/bundle/release/app-release.aab`
-versionName **1.3.6**, versionCode **28**, 46.8 MB, signed with
-`android/app/solanalab.keystore`.
+versionName **1.3.9**, versionCode **31**, signed with
+`android/app/solanalab.keystore`. iOS is **3.8 (39)**.
 
-Earlier builds are kept beside it (`.v26`, `.v27`, `.PREV-2026-07-29`) rather
-than overwritten. Delete them once 1.3.6 is live.
+Earlier builds are kept beside it (`.v26`, `.v27`, `.v29`, `.v30`,
+`.PREV-2026-07-29`) rather than overwritten. Delete them once 1.3.9 is live.
+
+**1.3.6, 1.3.7 and 1.3.8 were built and never uploaded.** Do not treat an
+unuploaded bundle as shipped — users are still on whatever is live on Play.
 
 ### The branch
 
-`feat/cost-security-roles-trade-search-2026-09`, three commits, nothing
+`feat/cost-security-roles-trade-search-2026-09`, **seven commits**, nothing
 uncommitted. Created off `main` rather than committing straight to it.
 
 ```bash
@@ -48,10 +142,10 @@ git checkout main && git merge feat/cost-security-roles-trade-search-2026-09
 
 ## 2. Do this next, in order
 
-1. **Upload 1.3.6 to Play.** Until it ships, users still see the old app: the
-   trade search still looks broken to them, and none of the role, badge,
-   dashboard or poll work is visible. The server half is already live and
-   waiting for it.
+1. **Upload 1.3.9 to Play.** Until it ships, users see none of it: not Supreme
+   values, not the language chat rooms, not the event hub, and not the native
+   ad fix. Three server halves are already live and waiting — rules, functions
+   and retention — so the gap between server and client is now wide.
 2. **Merge the branch.**
 3. **Sign in once with a founder email and grant yourself `admin`.** Nobody
    holds any role, so every roster is empty and the dashboard is unreachable
@@ -149,6 +243,51 @@ port. `BadgesScreen` exists but only awards from XP level, and nothing writes
 **Signing passwords are in plaintext** in `android/app/build.gradle`.
 Pre-existing. Left alone because changing it risks breaking your build, but it
 should move to `gradle.properties` outside version control.
+
+---
+
+## 5b. Traps added 2026-09-13
+
+**A function can exist, be correct, and still be doing nothing.** Three
+separate features were dead this way: `notifyPostComment` (export commented
+out), `valueAlertsPoll` (polling a renamed URL), and `cleanupOldPrivateChats`
+(never exported). `functions/index.js` is the deploy manifest — if it is not
+exported there, it is not running, whatever the file says.
+
+**`firebase-value-alerts/` has its own `node_modules`** and ships with none.
+A deploy from that directory fails with "Couldn't find firebase-functions
+package" until you `npm install` inside `firebase-value-alerts/functions`.
+
+**Never point the value URLs back at `mm2values.json` or `data.json` on the
+supreme zone.** The CDN filenames moved twice on 2026-09-13. Current:
+
+```
+MM2      https://mm2-api.b-cdn.net/data.json
+Supreme  https://mm2api-suprime.b-cdn.net/supreme.json
+```
+
+Both are `{ meta, data }`. `unwrapFeed()` accepts either shape, so a rollback
+to a raw upload still works — but the old *names* 404.
+
+**Supreme's `image` field is not an image.** It is a lazy-load placeholder
+(`/media/N_A.webp`) on 1,399 of 1,402 items. The real asset id is `imageKey`,
+and supremevalues.com is behind Imperva — every image request returns a
+212-byte challenge page under HTTP 200, so it fails silently rather than
+erroring. Art comes from the MM2 catalogue by name; 248 pool rows still have
+none and need a Bunny mirror.
+
+**A native ad's call-to-action must be a leaf `<Text>`, never a `<View>`
+wrapping one.** A ReactViewGroup takes part in React Native's touch
+interception, so the gesture is consumed before Android reaches the click
+listener GMA set — the button looks pressable and does nothing while tapping
+the ad body still works. `pointerEvents="box-only"` makes it worse. Same fix
+applied to Blox Fruit; Adopt Me already had it right.
+
+**MM2 codes are a dead mechanic.** Zero active codes for all of 2025 and 2026;
+the expired list is 2015–2017 era. Sites claiming codes "expire within hours"
+are SEO farms with a reason to imply a drop is imminent. `/codes` in RTDB is
+null and nothing has ever written `localState.codes`. Do not build a code
+system on that evidence — it was investigated and rejected on 2026-09-13.
 
 ---
 

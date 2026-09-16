@@ -105,3 +105,4 @@ exports.cleanupOldPosts = retention.cleanupOldPosts;
 // query on lastMessageTimestamp would have matched every group, because
 // nothing ever writes that field.
 // exports.cleanupDeadGroups = require('./cleanupDeadGroups').cleanupDeadGroups;
+exports.expireFeaturedTrades = require('./expireFeaturedTrades').expireFeaturedTrades;

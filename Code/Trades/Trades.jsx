@@ -10,7 +10,30 @@ import { useNavigation } from '@react-navigation/native';
 import ReportTradePopup from './ReportTradePopUp';
 import SignInDrawer from '../Firebase/SigninDrawer';
 import { useLocalState } from '../LocalGlobelStats';
+// Free users can feature one trade per 24h by watching a rewarded ad. Pro keeps
+// its two instant boosts, so paying still buys both quantity and the
+// convenience of skipping the ad — the ad path must not undercut it.
+const AD_BOOST_DAILY_LIMIT = 1;
+
+// Feed rhythm — see mergeFeaturedWithNormal.
+const FEATURED_BLOCK_SIZE = 3;
+const NORMAL_BLOCK_SIZE = 6;
+
+// How long a boost keeps a trade at the top.
+const FEATURE_DURATION_MS = 12 * 60 * 60 * 1000;
+
+// The rolling window the per-user boost limits are counted over. Deliberately
+// SEPARATE from FEATURE_DURATION_MS: if they were one constant, shortening the
+// boost would silently double everyone's daily allowance.
+const BOOST_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// Trades carry featuredUntil, not a boostedAt stamp, and
+// featuredUntil = boostedAt + FEATURE_DURATION_MS. So "boosted inside the
+// limit window" is featuredUntil > now - (WINDOW - DURATION).
+const BOOST_WINDOW_START_OFFSET_MS = BOOST_LIMIT_WINDOW_MS - FEATURE_DURATION_MS;
+
 import { ABOVE_BANNER, bannerAware, FLOATING_BUTTON_ICON_SIZE, FLOATING_BUTTON_RIGHT } from '../Helper/floatingButtonLayout';
+import RewardedAdManager from '../Ads/RewardedAdManager';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -328,6 +351,110 @@ const TradeList = ({ route }) => {
 
   // console.log(isProStatus, 'from trade model')
 
+  // Warm the rewarded ad so the first FREE BOOST tap doesn't sit on a cold
+  // load. Non-Pro only: Pro members never see the button.
+  useEffect(() => {
+    if (isProStatus) return;
+    try { RewardedAdManager.prepare(); } catch (_) {}
+  }, [isProStatus]);
+
+  // Shared by the Pro path and the ad path so the two can never drift into
+  // writing different shapes for the same "featured" state.
+  const applyFeaturedToTrade = useCallback(async (item) => {
+    await updateDoc(doc(firestoreDB, "trades_new", item.id), {
+      isFeatured: true,
+      featuredUntil: Timestamp.fromDate(new Date(Date.now() + FEATURE_DURATION_MS)),
+    });
+    const markFeatured = (prev) =>
+      prev.map((trade) => (trade.id === item.id ? { ...trade, isFeatured: true } : trade));
+    setTrades(markFeatured);
+    setFilteredTrades(markFeatured);
+  }, [firestoreDB]);
+
+  // How many of this user's trades were boosted inside the current limit
+  // window. Both paths read the same number, so a free user cannot stack an ad
+  // boost on top of a Pro boost by switching plans mid-day.
+  const countBoostsInWindow = useCallback(async () => {
+    const windowStart = Timestamp.fromMillis(Date.now() - BOOST_WINDOW_START_OFFSET_MS);
+    const snapshot = await getDocs(
+      query(
+        collection(firestoreDB, "trades_new"),
+        where("userId", "==", user.id),
+        where("isFeatured", "==", true),
+        where("featuredUntil", ">", windowStart)
+      )
+    );
+    return snapshot.size;
+  }, [firestoreDB, user?.id]);
+
+  // ── Watch an ad → feature the trade ─────────────────────────────────────
+  const handleFreeBoostTrade = useCallback(async (item) => {
+    if (!user?.id || !firestoreDB) return;
+
+    let alreadyBoosted;
+    try {
+      alreadyBoosted = await countBoostsInWindow();
+    } catch (err) {
+      console.error("Error checking featured trades:", err);
+      Alert.alert(t("home.alert.error"), t("trade.verify_error_message"));
+      return;
+    }
+
+    // Out of free boosts → this is the moment they actually want more, which
+    // makes it a better Pro pitch than a button that nags before they care.
+    if (alreadyBoosted >= AD_BOOST_DAILY_LIMIT) {
+      Alert.alert(
+        t("trade.limit_reached_title", { defaultValue: "Limit Reached" }),
+        t("trade.ad_boost_limit_message", {
+          defaultValue: "You've used your free boost for today. Pro members boost 2 trades a day, instantly and with no ads.",
+        }),
+        [
+          { text: t("trade.cancel"), style: "cancel" },
+          { text: t("trade.upgrade"), onPress: () => setShowofferwall(true) },
+        ]
+      );
+      return;
+    }
+
+    Alert.alert(
+      t("trade.ad_boost_title", { defaultValue: "Feature this trade free" }),
+      t("trade.ad_boost_message", {
+        defaultValue: "Watch a short video and your trade is featured at the top for 12 hours.",
+      }),
+      [
+        { text: t("trade.cancel"), style: "cancel" },
+        {
+          text: t("trade.ad_boost_watch", { defaultValue: "Watch" }),
+          onPress: () => {
+            RewardedAdManager.showWithCallback(
+              async () => {
+                try {
+                  await applyFeaturedToTrade(item);
+                  showSuccessMessage(t("trade.feature_success"), t("trade.feature_success_message"));
+                } catch (error) {
+                  console.error("Error featuring trade after ad:", error);
+                  showErrorMessage(t("trade.feature_error"), t("trade.feature_error_message"));
+                }
+              },
+              () => showErrorMessage(
+                t("trade.ad_boost_incomplete_title", { defaultValue: "Not featured" }),
+                t("trade.ad_boost_incomplete_message", {
+                  defaultValue: "You need to watch the whole video to feature your trade.",
+                })
+              ),
+              () => showErrorMessage(
+                t("trade.ad_boost_unavailable_title", { defaultValue: "No video right now" }),
+                t("trade.ad_boost_unavailable_message", {
+                  defaultValue: "No video is available at the moment. Please try again in a few minutes.",
+                })
+              )
+            );
+          },
+        },
+      ]
+    );
+  }, [user?.id, firestoreDB, countBoostsInWindow, applyFeaturedToTrade, t]);
+
   const handleMakeFeatureTrade = async (item) => {
     if (!isProStatus) {
       Alert.alert(
@@ -346,7 +473,7 @@ const TradeList = ({ route }) => {
 
     try {
       // 🔐 Check from Firestore how many featured trades user already has
-      const oneDayAgo = Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
+      const oneDayAgo = Timestamp.fromMillis(Date.now() - BOOST_WINDOW_START_OFFSET_MS);
       
       let featuredSnapshot;
       let limitChecked = false;
@@ -423,7 +550,7 @@ const TradeList = ({ route }) => {
           
           // Filter client-side for featuredUntil > oneDayAgo
           const now = Date.now();
-          const oneDayAgoMs = now - 24 * 60 * 60 * 1000;
+          const oneDayAgoMs = now - BOOST_WINDOW_START_OFFSET_MS;
           const validFeaturedTrades = featuredSnapshot.docs.filter(doc => {
             const data = doc.data();
             if (!data.featuredUntil) return false;
@@ -468,7 +595,7 @@ const TradeList = ({ route }) => {
                   {
                     isFeatured: true,
                     featuredUntil: Timestamp.fromDate(
-                      new Date(Date.now() + 24 * 60 * 60 * 1000)
+                      new Date(Date.now() + FEATURE_DURATION_MS)
                     ),
                   }
                 );
@@ -1156,46 +1283,37 @@ const TradeList = ({ route }) => {
   //   }
   // };
 
+  // Feed rhythm: 3 featured, 6 normal, 3 featured, 6 normal, ...
+  //
+  // Previously 4-and-4 but only ever handed 3 featured trades, so the loop
+  // exhausted them on the first block and the rest of the page was one
+  // unbroken run of normal trades — the interleave never actually happened.
+  //
+  // Degrades gracefully both ways: run out of featured and the remaining
+  // normal trades are appended; run out of normal and leftover featured are
+  // appended. Nothing is dropped.
   const mergeFeaturedWithNormal = (featuredTrades, normalTrades) => {
-    // Input validation
     if (!Array.isArray(featuredTrades) || !Array.isArray(normalTrades)) {
-      console.warn('⚠️ Invalid input: featuredTrades or normalTrades is not an array');
       return [];
     }
 
-    let result = [];
+    const result = [];
     let featuredIndex = 0;
     let normalIndex = 0;
-    const featuredCount = featuredTrades.length;
-    const normalCount = normalTrades.length;
-    const MAX_ITERATIONS = 1000; // Safety limit
-    let iterationCount = 0;
 
-    // Add first 4 featured trades (if available)
-    for (let i = 0; i < 4 && featuredIndex < featuredCount; i++) {
-      result.push(featuredTrades[featuredIndex]);
-      featuredIndex++;
-    }
+    const take = (source, from, count) => {
+      const slice = source.slice(from, from + count);
+      result.push(...slice);
+      return slice.length;
+    };
 
-    // Merge in the format of 4 normal trades, then 4 featured trades
-    while (normalIndex < normalCount && iterationCount < MAX_ITERATIONS) {
-      iterationCount++;
-
-      // Insert up to 4 normal trades
-      for (let i = 0; i < 4 && normalIndex < normalCount; i++) {
-        result.push(normalTrades[normalIndex]);
-        normalIndex++;
-      }
-
-      // Insert up to 4 featured trades (if available)
-      for (let i = 0; i < 4 && featuredIndex < featuredCount; i++) {
-        result.push(featuredTrades[featuredIndex]);
-        featuredIndex++;
-      }
-    }
-
-    if (iterationCount >= MAX_ITERATIONS) {
-      console.warn('⚠️ Maximum iterations reached in mergeFeaturedWithNormal');
+    while (featuredIndex < featuredTrades.length || normalIndex < normalTrades.length) {
+      const tookFeatured = take(featuredTrades, featuredIndex, FEATURED_BLOCK_SIZE);
+      featuredIndex += tookFeatured;
+      const tookNormal = take(normalTrades, normalIndex, NORMAL_BLOCK_SIZE);
+      normalIndex += tookNormal;
+      // Neither advanced — both exhausted. Without this the loop spins.
+      if (tookFeatured === 0 && tookNormal === 0) break;
     }
 
     return result;
@@ -1770,6 +1888,15 @@ const TradeList = ({ route }) => {
               <TouchableOpacity onPress={() => handleMakeFeatureTrade(item)} style={[styles.ownerBtn, { backgroundColor: '#8B5CF6' }]}>
                 <Icon name="rocket-outline" size={12} color="white" />
                 <Text style={styles.ownerBtnText}>BOOST IT</Text>
+              </TouchableOpacity>
+            )}
+            {/* Watch-an-ad boost. Hidden from Pro members on purpose: they
+                already get two instant boosts a day, and part of what they
+                paid for is not being shown ads. */}
+            {!item.isFeatured && !isProStatus && (
+              <TouchableOpacity onPress={() => handleFreeBoostTrade(item)} style={[styles.ownerBtn, { backgroundColor: '#F59E0B' }]}>
+                <Icon name="play-circle-outline" size={12} color="white" />
+                <Text style={styles.ownerBtnText}>{t('trade.free_boost', { defaultValue: 'FREE BOOST' })}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity onPress={() => handleDelete(item)} style={[styles.ownerBtn, { backgroundColor: '#EF4444' }]}>

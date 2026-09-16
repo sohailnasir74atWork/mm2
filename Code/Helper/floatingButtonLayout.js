@@ -76,8 +76,40 @@ export const FLOATING_BUTTON_ICON_SIZE = 48;
  */
 export const FLOATING_BUTTON_RIGHT = 8;
 
+/**
+ * Pro-aware wrapper around the ABOVE_* constants.
+ *
+ * Pro members see no banner ad, so every offset that reserves BANNER_HEIGHT
+ * leaves them staring at a 60dp gap with nothing in it. Pass the base offset
+ * for the screen and whether this viewer is Pro:
+ *
+ *   bottom: bannerAware(ABOVE_BANNER, isPro)   // feed / trades
+ *
+ * Only use this where the banner is genuinely inside the same reference frame
+ * as the button. On a screen whose button is positioned against a wrapper that
+ * does NOT contain the banner, there is nothing to subtract and the base
+ * offset is already correct.
+ */
+export const bannerAware = (base, isPro) =>
+  isPro ? Math.max(FLOATING_BUTTON_GAP, base - BANNER_HEIGHT) : base;
+
+/**
+ * Offset for the group chat's scroll button on apps where the button's wrapper
+ * holds the list, the banner AND the message composer (Adopt Me and Blox
+ * Fruits are built this way; MM2's chat wrapper excludes the banner, which is
+ * why it uses ABOVE_CHAT_INPUT directly).
+ *
+ * TUNED, NOT DERIVED: 106 reproduces the ~105 these buttons have shipped with
+ * for a long time and which looks right on device. Deriving it from a nominal
+ * composer height put it ~23px too high.
+ */
+export const ABOVE_CHAT_INPUT_AND_BANNER = 106;
+
 export default {
   BANNER_HEIGHT,
+  bannerAware,
+  ABOVE_CHAT_INPUT_AND_BANNER,
+  ABOVE_TAB_BAR,
   FLOATING_BUTTON_GAP,
   CHAT_INPUT_HEIGHT,
   ABOVE_BANNER,

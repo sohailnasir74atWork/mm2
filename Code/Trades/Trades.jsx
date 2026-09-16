@@ -10,7 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 import ReportTradePopup from './ReportTradePopUp';
 import SignInDrawer from '../Firebase/SigninDrawer';
 import { useLocalState } from '../LocalGlobelStats';
-import { ABOVE_BANNER, FLOATING_BUTTON_ICON_SIZE, FLOATING_BUTTON_RIGHT } from '../Helper/floatingButtonLayout';
+import { ABOVE_BANNER, bannerAware, FLOATING_BUTTON_ICON_SIZE, FLOATING_BUTTON_RIGHT } from '../Helper/floatingButtonLayout';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -2059,6 +2059,7 @@ const TradeList = ({ route }) => {
         <Animated.View
           style={[
             styles.scrollToTopButton,
+            { bottom: bannerAware(ABOVE_BANNER, !!localState?.isPro) },
             {
               opacity: scrollButtonOpacity,
               transform: [
@@ -2511,6 +2512,9 @@ const getStyles = (isDarkMode) =>
       position: 'absolute',
       // Was a hand-tuned 150, which left it ~90px above the banner — far higher
       // than the feed's FAB and the chat's button, so it jumped between tabs.
+      // `bottom` is overridden at the call site via bannerAware() so Pro
+      // members, who have no banner ad, don't get a 60dp gap beneath the
+      // button. This stays as the non-Pro fallback.
       bottom: ABOVE_BANNER,
       right: FLOATING_BUTTON_RIGHT,
       zIndex: 1000,

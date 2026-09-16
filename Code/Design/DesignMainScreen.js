@@ -45,7 +45,7 @@ import EventCard from '../Engagement/EventScreen';
 import { releaseByPrefix as releaseNativeAds } from '../Ads/NativeAdManager';
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
-import { ABOVE_BANNER, FLOATING_BUTTON_ICON_SIZE, FLOATING_BUTTON_RIGHT } from '../Helper/floatingButtonLayout';
+import { ABOVE_BANNER, bannerAware, FLOATING_BUTTON_ICON_SIZE, FLOATING_BUTTON_RIGHT } from '../Helper/floatingButtonLayout';
 import PostsHeader from './componenets/PostsHeader';
 import { useTranslation } from 'react-i18next';
 
@@ -679,7 +679,7 @@ const DesignFeedScreen = ({ route }) => {
         // edge, and zIndex 6 (> the ad's 5) guarantees the ad never renders on
         // top of the button (AdMob "accidental clicks: layout"). The trades and
         // chat buttons share the same constant so all three line up.
-        style={[styles.fab, { bottom: !localState.isPro ? bannerBottomPos + ABOVE_BANNER : 75, zIndex: 6 }]}
+        style={[styles.fab, { bottom: bannerBottomPos + bannerAware(ABOVE_BANNER, !!localState.isPro), zIndex: 6 }]}
         onPress={() => user?.id ? setModalVisible(true) : setSigninDrawerVisible(true)}
       >
         <FontAwesome name="circle-plus" size={FLOATING_BUTTON_ICON_SIZE} color={config.colors.primary} />

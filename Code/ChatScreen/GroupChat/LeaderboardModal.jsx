@@ -19,7 +19,6 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import InterstitialAdManager from '../../Ads/IntAd';
 import { useLocalState } from '../../LocalGlobelStats';
-import { mixpanel } from '../../AppHelper/MixPenel';
 import config from '../../Helper/Environment';
 import { useHaptic } from '../../Helper/HepticFeedBack';
 import ProfileBottomDrawer from './BottomDrawer';
@@ -168,7 +167,6 @@ const LeaderboardModal = ({
     setSelectedUser(selectedUserData);
 
     setIsDrawerVisible(true);
-    mixpanel.track("Leaderboard User Click");
   }, [triggerHapticFeedback]);
 
   // ✅ Handle start chat from BottomDrawer
@@ -187,7 +185,6 @@ const LeaderboardModal = ({
           },
         });
       }
-      mixpanel.track("Leaderboard Start Chat");
     }, 300);
   }, [selectedUser, navigation, onClose]);
 

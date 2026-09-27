@@ -20,7 +20,6 @@ import { getStyles } from '../Style';
 import { banUser, handleDeleteLast300Messages, isUserOnline, unbanUser } from '../utils';
 import { serverNowMs } from '../../Helper/serverTime';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProfileBottomDrawer from './BottomDrawer';
 import leoProfanity from 'leo-profanity';
 import ConditionalKeyboardWrapper from '../../Helper/keyboardAvoidingContainer';
@@ -28,7 +27,6 @@ import { useHaptic } from '../../Helper/HepticFeedBack';
 import { useLocalState } from '../../LocalGlobelStats';
 import database, { onValue, ref, remove, get, push, onChildAdded, query as dbQuery, orderByKey, limitToLast, endAt } from '@react-native-firebase/database';
 import { useTranslation } from 'react-i18next';
-import { mixpanel } from '../../AppHelper/MixPenel';
 import InterstitialAdManager from '../../Ads/IntAd';
 import BannerAdComponent from '../../Ads/bannerAds';
 import { logoutUser } from '../../Firebase/UserLogics';
@@ -87,8 +85,8 @@ const ChatScreen = ({ selectedTheme, bannedUsers, modalVisibleChatinfo, setChatF
 const [selectedFruits, setSelectedFruits] = useState([]); 
 const [device, setDevice] = useState(null)
 const [selectedEmoji, setSelectedEmoji] = useState(null);
-const insets = useSafeAreaInsets();
 const bannerBottomPos = 0; // tab bar is docked (in layout flow), so screen bottom == tab bar top; banner sits flush above it
+const [bannerHeight, setBannerHeight] = useState(0); // measured, 0 when no ad is on screen
 
   // ✅ Track last sent message to prevent duplicates (session-based, no Firebase cost)
   const lastSentMessageRef = useRef(null);
@@ -165,7 +163,6 @@ const startPrivateChat = useCallback(() => {
     if (navigation && typeof navigation.navigate === 'function') {
       navigation.navigate('PrivateChat', { selectedUser, selectedTheme });
     }
-    mixpanel.track("Inbox Chat");
   };
   callbackfunction();
 }, [selectedUser, selectedTheme, closeProfileDrawer]);
@@ -450,7 +447,10 @@ const startPrivateChat = useCallback(() => {
 
   const handlePinMessage = async (message) => {
     try {
-      const pinnedMessage = { ...message, pinnedAt: Date.now() };
+      // A message from an older build still carries currentUserEmail, and
+      // pin_messages is public-read too — never copy it into a pin.
+      const { currentUserEmail: _senderEmail, ...publicFields } = message || {};
+      const pinnedMessage = { ...publicFields, pinnedAt: Date.now() };
       const newRef = await push(pinnedMessagesRef, pinnedMessage);
   
       // Use the Firebase key for tracking the message
@@ -524,6 +524,12 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
   const hasFruits = Array.isArray(fruits) && fruits.length > 0;
 
   const MAX_CHARACTERS = 250;
+  // Staff write the pinned announcements, which run long. They get a word
+  // budget instead of the 250-char cap; the char ceiling only stops a
+  // pasted blob with no spaces from counting as one word.
+  const MOD_MAX_WORDS = 300;
+  const MOD_MAX_CHARACTERS = 2000;
+  const isStaffSender = !!isAdmin || !!user?.isModerator;
   const MESSAGE_COOLDOWN = 100; // ms
   const LINK_REGEX = /(https?:\/\/[^\s]+)/i; // no "g" flag
 
@@ -604,8 +610,14 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
   }
 
   // Length check
-  if (trimmedInput.length > MAX_CHARACTERS) {
-    Alert.alert(t('home.alert.error'), t('misc.messageTooLong'));
+  if (isStaffSender) {
+    const wordCount = trimmedInput ? trimmedInput.split(/\s+/).length : 0;
+    if (wordCount > MOD_MAX_WORDS || trimmedInput.length > MOD_MAX_CHARACTERS) {
+      Alert.alert(t('home.alert.error'), t('misc.messageTooLongWords', { max: MOD_MAX_WORDS }));
+      return;
+    }
+  } else if (trimmedInput.length > MAX_CHARACTERS) {
+    Alert.alert(t('home.alert.error'), t('misc.messageTooLong', { max: MAX_CHARACTERS }));
     return;
   }
 
@@ -674,7 +686,9 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
       isPro: !!localState?.isPro,
       isAdmin: !!isAdmin,
       strikeCount: strikeInfo?.strikeCount ?? null,
-      currentUserEmail,
+      // No `currentUserEmail` any more: every room is public-read, signed out
+      // included, so it published each sender's email. Staff moderation
+      // resolves the email from users_private (Helper/privateProfile.js).
       fruits: hasFruits ? fruits : [],
       gif: hasEmoji ? emojiUrl : null,
       flage: user.flage ? user.flage : null,
@@ -839,8 +853,12 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
     />
           </ConditionalKeyboardWrapper>
 
-          {/* Spacer: reserves space for floating nav bar + ad so content isn't hidden behind them */}
-          <View style={{ height: !localState.isPro ? bannerBottomPos + 60 : Math.max(insets.bottom, 8) + 68 }} />
+          {/* Spacer: reserves room for the absolutely-positioned banner, and
+              ONLY when a banner is actually on screen. On a no-fill (or for a
+              Pro member) the banner occupies nothing and the tab bar is docked
+              in the layout flow, so anything reserved here is dead space
+              between the message input and the tab bar. */}
+          <View style={{ height: bannerHeight ? bannerBottomPos + bannerHeight : 0 }} />
 
           <SignInDrawer
             visible={isSigninDrawerVisible}
@@ -862,7 +880,7 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
       </GestureHandlerRootView>
       {!localState.isPro && (
         <View style={{ position: 'absolute', bottom: bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
-          <BannerAdComponent />
+          <BannerAdComponent onHeightChange={setBannerHeight} />
         </View>
       )}
     </>

@@ -412,7 +412,9 @@ const DesignFeedScreen = ({ route }) => {
     }
   };
 
-  const handleUploadPost = async (desc, imageUrls, selectedTags, currentUserEmail) => {
+  // UploadModal still passes the poster's email as a 4th argument; it is
+  // deliberately not taken (see the post body below).
+  const handleUploadPost = async (desc, imageUrls, selectedTags) => {
     // ✅ Prevent multiple submissions - check if already submitting
     if (isSubmittingPost) {
       return;
@@ -476,7 +478,9 @@ const DesignFeedScreen = ({ route }) => {
         selectedTags: Array.isArray(selectedTags) && selectedTags.length > 0 
           ? selectedTags 
           : (selectedTags ? [selectedTags] : ['Discussion']), // ✅ Always ensure tags exist
-        email: currentUserEmail || null,
+        // No `email`: designPosts is world-readable, so it published every
+        // poster's address. Staff post bans resolve it from users_private;
+        // report auto-bans run server-side (functions/reportAutoBan.js).
         report: false,
         flage: user?.flage || null,
         robloxUsername: user?.robloxUsername || null,

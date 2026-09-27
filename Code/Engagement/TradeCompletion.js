@@ -24,6 +24,7 @@ import { useThemeColors } from '../Helper/themeColors';
 import { useLocalState } from '../LocalGlobelStats';
 import { addJournalEntry, slimItem } from './journalUtils';
 import { addXP, XP_ACTIONS } from './xpUtils';
+import { ModalKeyboardView } from '../Helper/keyboardAvoidingContainer';
 
 const TRADE_RATINGS = [
   { key: 'win',  label: 'Win',  emoji: '🏆', color: '#10B981', desc: 'I got more value' },
@@ -197,7 +198,7 @@ const TradeCompletion = ({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <View style={$.overlay}>
+      <ModalKeyboardView style={$.overlay}>
         <View style={[$.sheet, { backgroundColor: C.bg }]}>
           <View style={$.grabber} />
 
@@ -317,7 +318,7 @@ const TradeCompletion = ({
             </>
           )}
         </View>
-      </View>
+      </ModalKeyboardView>
     </Modal>
   );
 };

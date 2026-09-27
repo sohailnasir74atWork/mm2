@@ -11,10 +11,10 @@ import {
 } from "react-native";
 import { useGlobalState } from "../GlobelStats";
 import config from "../Helper/Environment";
-import { ref, get, update, remove } from "@react-native-firebase/database";
+import { ref, get, update } from "@react-native-firebase/database";
 import { useTranslation } from "react-i18next";
-import { banUserwithEmail } from "./utils";
 import { DEFAULT_CHANNEL } from './chatChannels';
+import { ModalKeyboardView } from '../Helper/keyboardAvoidingContainer';
 
 
 const ReportPopup = ({ visible, message, onClose, channelPath = DEFAULT_CHANNEL.path }) => {
@@ -72,21 +72,25 @@ const ReportPopup = ({ visible, message, onClose, channelPath = DEFAULT_CHANNEL.
           throw new Error("Invalid message data");
         }
 
-        const reportCount = Number(data?.reportCount || 0);
-  
-        if (reportCount >= 1) {
-          // ✅ Second report: delete the message
-          // ✅ Await banUserwithEmail to ensure it completes
-          if (message.currentUserEmail) {
-            banUserwithEmail(message.currentUserEmail).catch((error) => {
-              console.error("Error banning user:", error);
-            });
-          }
-          return remove(messageRef).then(() => ({ action: "deleted" }));
-        } else {
-          // ✅ First report: set to 1 (don't increment beyond this)
-          return update(messageRef, { reportCount: 1 }).then(() => ({ action: "reported" }));
-        }
+        // Chat rooms are publicly writable, so reportCount can hold anything.
+        // NaN/Infinity in an RTDB write kills the process natively (RNFB), so
+        // only a finite, non-negative integer is ever incremented.
+        const rawCount = Number(data?.reportCount);
+        const reportCount = Number.isFinite(rawCount) && rawCount > 0 ? Math.floor(rawCount) : 0;
+
+        // Only RECORD the report. The second one (reportCount reaching 2)
+        // is acted on server-side by functions/reportAutoBan.js
+        // (autoBanOnMessageReports): it bans the sender with the same record
+        // this screen used to write, then deletes the message.
+        //
+        // It used to happen here, with the email copied into every public
+        // message as `currentUserEmail`. Messages no longer carry it, and a
+        // reporter cannot read anyone's email, so the ban needs the Admin SDK.
+        // Older builds still ban from the reporter's device and delete the
+        // message on the second report; their `if (message.currentUserEmail)`
+        // guard skips the ban once messages stop carrying the email.
+        return update(messageRef, { reportCount: reportCount + 1 })
+          .then(() => ({ action: reportCount >= 1 ? "escalated" : "reported" }));
       })
       .then((res) => {
         setLoading(false);
@@ -107,7 +111,7 @@ const ReportPopup = ({ visible, message, onClose, channelPath = DEFAULT_CHANNEL.
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <ModalKeyboardView style={styles.overlay}>
         <View style={styles.popup}>
           <Text style={styles.title}>{t("report_popup.title")}</Text>
           <Text style={styles.messageText}>{`${t("report_popup.message_label")}: "${message?.text}"`}</Text>
@@ -189,7 +193,7 @@ const ReportPopup = ({ visible, message, onClose, channelPath = DEFAULT_CHANNEL.
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </ModalKeyboardView>
     </Modal>
   );
 };

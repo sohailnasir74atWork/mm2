@@ -10,6 +10,7 @@ import { name as appName } from './app.json';
 import { GlobalStateProvider } from './Code/GlobelStats';
 import { LocalStateProvider } from './Code/LocalGlobelStats';
 import { MenuProvider } from 'react-native-popup-menu';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { LanguageProvider } from './Code/Translation/LanguageProvider';
 import messaging from '@react-native-firebase/messaging';
 import FlashMessage from 'react-native-flash-message';
@@ -38,7 +39,14 @@ class ErrorBoundary extends React.Component {
 }
 
 // ✅ Memoized App component to prevent unnecessary re-renders
+// SafeAreaProvider is required by every react-native-safe-area-context
+// consumer (SafeAreaView, useSafeAreaInsets). This one reports the WINDOW's
+// insets, which is right for onboarding (rendered outside App's padded root).
+// The navigator must not read it: App.js nests its own provider inside the
+// root SafeAreaView, or every tab screen adds the iOS insets a second time.
+// initialWindowMetrics seeds the first frame so nothing shifts after mount.
 const App = React.memo(() => (
+  <SafeAreaProvider initialMetrics={initialWindowMetrics}>
   <MenuProvider skipInstanceCheck>
   <LanguageProvider>
     <LocalStateProvider>
@@ -53,7 +61,7 @@ const App = React.memo(() => (
     </LocalStateProvider>                
   </LanguageProvider>
 </MenuProvider>
-
+  </SafeAreaProvider>
 ));
 
 AppRegistry.registerComponent(appName, () => App);

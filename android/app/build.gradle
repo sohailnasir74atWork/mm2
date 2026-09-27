@@ -1,6 +1,14 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
+// Moved above `android {}` on 2026-09-21. The Crashlytics plugin registers its
+// `firebaseCrashlytics {}` extension per build type AT APPLY TIME, so applying
+// it after the android block makes that extension unavailable and configuration
+// fails with "Could not find method firebaseCrashlytics() ... on
+// BuildType$AgpDecorated_Decorated{name=release}". These two lines used to sit
+// at the bottom of this file.
+apply plugin: 'com.google.gms.google-services'
+apply plugin: 'com.google.firebase.crashlytics'
 apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")
 
 
@@ -84,8 +92,8 @@ android {
         applicationId "com.mm2tradesvalues"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 34
-        versionName "1.4.2"
+        versionCode 38
+        versionName "1.4.6"
    ndk {
             // x86_64 is required, not optional: without it SoLoader on an
             // x86_64 device (PC emulators, Google Play Games on PC, Chromebooks,
@@ -125,7 +133,29 @@ android {
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            // Upload native debug symbols so native crashes (SIGSEGV, SIGABRT
+            // from libc.so, Hermes, or any .so) arrive symbolicated. Without
+            // this they land in Crashlytics as a wall of bare `at` frames and
+            // cannot be diagnosed at all - which is the state this app has
+            // been in, since there was no firebaseCrashlytics block here.
+            //
+            // The task-name segment ("mergeReleaseNativeLibs") is NOT optional:
+            // AGP 8 moved intermediates from <type>/out/ to
+            // <type>/<taskName>/out/. Pointing at the old layout fails SILENTLY
+            // - the plugin uploads nothing and never errors. That exact bug was
+            // found in adoptme-jan7 on 2026-09-21; see HANDOFF_2026-09-21.md.
+            // After any AGP bump, confirm the directory still exists before
+            // trusting a native stack trace.
+            //
+            // NOTE: uploadCrashlyticsSymbolFileRelease is NOT wired into
+            // bundleRelease. Run it explicitly for every shipped build:
+            //   ./gradlew :app:bundleRelease
+            //   ./gradlew :app:uploadCrashlyticsSymbolFileRelease
+            firebaseCrashlytics {
+                nativeSymbolUploadEnabled true
+                unstrippedNativeLibsDir "build/intermediates/merged_native_libs/release/mergeReleaseNativeLibs/out/lib"
+            }
         }
     }
 }
@@ -146,5 +176,3 @@ dependencies {
     }
 }
 
-apply plugin: 'com.google.gms.google-services'
-apply plugin: 'com.google.firebase.crashlytics'

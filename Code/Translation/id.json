@@ -344,7 +344,8 @@
         "inbox": "Kotak masuk",
         "youAreBlocked": "Anda diblokir oleh Admin.",
         "inappropriateLanguage": "Pesan Anda mengandung bahasa yang tidak pantas.",
-        "messageTooLong": "Pesan tidak boleh melebihi 100 kata.",
+        "messageTooLong": "Pesan tidak boleh melebihi {{max}} karakter.",
+        "messageTooLongWords": "Pesan tidak boleh melebihi {{max}} kata.",
         "sendingTooQuickly": "Anda mengirim pesan terlalu cepat. Harap tunggu sebentar.",
         "proUsersOnlyLinks": "Hanya pengguna Pro yang dapat mengirimkan link."
     },
@@ -355,5 +356,16 @@
         "recent_posts": "Postingan Terbaru",
         "no_posts_yet": "Belum ada postingan.",
         "load_more_posts": "Muat lebih banyak postingan"
+    },
+    "mystuff": {
+        "select": "Pilih",
+        "select_done": "Selesai",
+        "select_all": "Semua",
+        "select_other": "Lainnya",
+        "selected_count": "{{count}} dipilih",
+        "remove": "Hapus",
+        "remove_selected_title": "Hapus {{count}} item?",
+        "remove_selected_msg": "Item ini akan dihapus dari inventaris Anda. Target dan riwayat trade Anda tidak terpengaruh.",
+        "cancel": "Batal"
     }
 }

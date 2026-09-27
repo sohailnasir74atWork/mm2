@@ -440,7 +440,8 @@
         "inbox": "Boîte de réception",
         "youAreBlocked": "Vous êtes bloqué par un administrateur.",
         "inappropriateLanguage": "Votre message contient un langage inapproprié.",
-        "messageTooLong": "Le message ne peut pas dépasser 100 mots.",
+        "messageTooLong": "Le message ne peut pas dépasser {{max}} caractères.",
+        "messageTooLongWords": "Le message ne peut pas dépasser {{max}} mots.",
         "sendingTooQuickly": "Vous envoyez des messages trop rapidement. Veuillez patienter un moment.",
         "proUsersOnlyLinks": "Seuls les utilisateurs Pro peuvent envoyer des liens."
     },
@@ -939,7 +940,7 @@
             "Les modérateurs se réservent le droit de surveiller et de prendre des mesures contre toute violation, y compris des avertissements ou des interdictions.",
             "Le contenu doit être adapté à tous les groupes d’âge approuvés, conformément aux exigences d’âge de l’application.",
             "Ne partagez pas de liens vers des sites nuisibles, des logiciels malveillants ou du contenu malveillant.",
-            "En utilisant la fonction de chat, vous acceptez les Conditions d’utilisation et la Politique de confidentialité de l’application. https://bloxfruitscalc.com/privacy-policy/"
+            "En utilisant la fonction de chat, vous acceptez les Conditions d’utilisation et la Politique de confidentialité de l’application. https://mm2values.app/privacy"
         ]
     },
     "report_popup": {
@@ -1073,7 +1074,16 @@
         "delete": "Supprimer",
         "delete_entry_title": "Supprimer cet échange ?",
         "delete_entry_msg": "Il sera retiré de ton historique. Action irréversible.",
-        "delete_failed": "Impossible de supprimer cet échange"
+        "delete_failed": "Impossible de supprimer cet échange",
+        "select": "Sélectionner",
+        "select_done": "Terminé",
+        "select_all": "Tous",
+        "select_other": "Autres",
+        "selected_count": "Sélection : {{count}}",
+        "remove": "Retirer",
+        "remove_selected_title": "Retirer {{count}} objets ?",
+        "remove_selected_title_one": "Retirer {{count}} objet ?",
+        "remove_selected_msg": "Ils seront retirés de ton inventaire. Tes objectifs et ton historique d'échanges ne sont pas touchés."
     },
     "profile": {
         "recent_trades": "Échanges récents",

@@ -11,8 +11,17 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
+  Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+// react-native's SafeAreaView was a no-op on Android and only ever inset on
+// iOS; react-native-safe-area-context's insets on both. Pinning the edges
+// per-platform keeps the layout exactly what it was before the swap.
+const LEGACY_SAFE_AREA_EDGES = Platform.OS === 'ios'
+  ? ['top', 'bottom', 'left', 'right']
+  : [];
+
 import { useThemeColors } from '../Helper/themeColors';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
@@ -45,7 +54,7 @@ const GuidesScreen = ({ navigation }) => {
   })) : [];
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: c.bg }]}>
+    <SafeAreaView edges={LEGACY_SAFE_AREA_EDGES} style={[styles.screen, { backgroundColor: c.bg }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: c.divider }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>

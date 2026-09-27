@@ -22,7 +22,6 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import InterstitialAdManager from '../../Ads/IntAd';
 import { useLocalState } from '../../LocalGlobelStats';
-import { mixpanel } from '../../AppHelper/MixPenel';
 import config from '../../Helper/Environment';
 import CreateGroupModal from './CreateGroupModal';
 import { useHaptic } from '../../Helper/HepticFeedBack';
@@ -455,7 +454,6 @@ const OnlineUsersList = ({
           },
         });
       }
-      mixpanel.track("Online Users Chat");
     };
 
     callbackFunction();

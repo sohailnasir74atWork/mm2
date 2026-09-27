@@ -24,12 +24,6 @@ import { useHaptic } from '../Helper/HepticFeedBack';
 import { doc, getDoc, setDoc } from '@react-native-firebase/firestore';
 import { ref, get } from '@react-native-firebase/database';
 import { updateLeaderboardCacheRealtime } from './updateLeaderboardCache';
-import { initGameSounds, playPop, playWoosh, setSoundEnabled, releaseGameSounds } from '../Helper/GameSoundService';
-import { createMMKV } from 'react-native-mmkv';
-
-const soundStorage = createMMKV({ id: 'game-sounds' });
-const SOUND_KEY = 'game_sound_bomb';
-const GAME_KEY = 'bomb';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const WIRE_WIDTH = (SCREEN_WIDTH - 100) / 4;
@@ -92,7 +86,6 @@ const BombDefusal = ({ visible, onClose, screenMode = false }) => {
   const [clue, setClue] = useState({ text: '', type: '' });
   const [cutWire, setCutWire] = useState(null);  
   const [wiresCut, setWiresCut] = useState([]);
-  const [soundOn, setSoundOn] = useState(true);
 
   const timerRef = useRef(null);
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -124,24 +117,6 @@ const BombDefusal = ({ visible, onClose, screenMode = false }) => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
-
-  // ── Init sounds ──
-  useEffect(() => {
-    let enabled = true;
-    try { enabled = soundStorage.getBoolean(SOUND_KEY) !== false; } catch {}
-    setSoundOn(enabled);
-    setSoundEnabled(GAME_KEY, enabled);
-    initGameSounds();
-    return () => { releaseGameSounds(); };
-  }, []);
-
-  const toggleSound = useCallback(() => {
-    const next = !soundOn;
-    setSoundOn(next);
-    try { soundStorage.set(SOUND_KEY, next); } catch {}
-    setSoundEnabled(GAME_KEY, next);
-    triggerHapticFeedback('selection');
-  }, [soundOn, triggerHapticFeedback]);
 
   const getRoundTime = useCallback((r) => {
     return Math.max(MIN_TIME, INITIAL_TIME - Math.floor(r / 2));
@@ -193,14 +168,12 @@ const BombDefusal = ({ visible, onClose, screenMode = false }) => {
           clearInterval(timerRef.current);
           gameActiveRef.current = false;
           triggerHapticFeedback('notificationError');
-          playPop(GAME_KEY);
           if (Platform.OS === 'android') Vibration.vibrate([0, 200, 100, 200]);
           explode();
           return 0;
         }
         if (prev <= 3) {
           triggerHapticFeedback('impactLight');
-          playPop(GAME_KEY);
           Animated.sequence([
             Animated.timing(tickAnim, { toValue: 1.3, duration: 100, useNativeDriver: true }),
             Animated.timing(tickAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
@@ -222,13 +195,11 @@ const BombDefusal = ({ visible, onClose, screenMode = false }) => {
 
     if (wireId === correctWire) {
       triggerHapticFeedback('notificationSuccess');
-      playWoosh(GAME_KEY);
       if (Platform.OS === 'android') Vibration.vibrate([0, 50, 30, 50]);
       setScore(prev => prev + (timeLeft >= 3 ? 20 : 15));
       setPhase('defused');
     } else {
       triggerHapticFeedback('notificationError');
-      playPop(GAME_KEY);
       if (Platform.OS === 'android') Vibration.vibrate([0, 100, 50, 100, 50, 200]);
       explode();
     }
@@ -335,22 +306,12 @@ const BombDefusal = ({ visible, onClose, screenMode = false }) => {
           <View style={styles.header}>
             <Text style={[styles.title, { color: c.text }]}>💣 Bomb Defusal</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TouchableOpacity onPress={toggleSound} style={styles.closeBtn}>
-                <Icon name={soundOn ? 'volume-high' : 'volume-mute'} size={20} color={c.textSecondary} />
-              </TouchableOpacity>
               <TouchableOpacity onPress={() => { gameActiveRef.current = false; if (timerRef.current) clearInterval(timerRef.current); onClose(); }} style={styles.closeBtn}>
                 <Icon name="close" size={22} color={c.textSecondary} />
               </TouchableOpacity>
             </View>
           </View>
         </>
-      )}
-      {screenMode && (
-        <View style={{ position: 'absolute', top: 10, right: 12, zIndex: 20 }}>
-          <TouchableOpacity onPress={toggleSound} style={styles.closeBtn}>
-            <Icon name={soundOn ? 'volume-high' : 'volume-mute'} size={20} color={c.textSecondary} />
-          </TouchableOpacity>
-        </View>
       )}
 
         {phase === 'loading' && (

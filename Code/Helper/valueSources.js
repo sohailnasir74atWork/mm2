@@ -184,6 +184,25 @@ const normalizeName = (name) => {
 
 export const __testing = { normalizeName, applyNameRules, NAME_ALIASES };
 
+// ── Category spelling ──────────────────────────────────────────────────────
+//
+// MM2 names categories in the singular ("Godly"), Supreme in the plural
+// ("Godlies"), and the 115 items only Supreme lists keep the plural, so an
+// exact match against the category chips silently drops them. Compare
+// through this key instead. Don't rewrite `category` in the pool to fix it:
+// it is part of each item's `id`, which saved inventories match on.
+const CATEGORY_ALIASES = {
+  ANCIENTS: 'ANCIENT', UNIQUES: 'UNIQUE', CHROMAS: 'CHROMA', GODLIES: 'GODLY',
+  VINTAGES: 'VINTAGE', LEGENDS: 'LEGEND', LEGENDARY: 'LEGEND', LEGENDARIES: 'LEGEND',
+  RARES: 'RARE', UNCOMMONS: 'UNCOMMON', COMMONS: 'COMMON', PET: 'PETS',
+};
+
+/** Upper-case MM2 category for any spelling either catalogue uses. */
+export const categoryKey = (raw) => {
+  const u = String(raw || '').trim().toUpperCase();
+  return CATEGORY_ALIASES[u] || u;
+};
+
 // ── MM2 image index, for the Supreme fallback ──────────────────────────────
 //
 // Module-level rather than passed through props: the nine call sites that

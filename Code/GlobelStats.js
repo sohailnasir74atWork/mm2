@@ -1,3 +1,5 @@
+import {trackGrowthEvent} from './Helper/growthAnalytics';
+import { fetchCatalog, refreshCatalog, usableCatalog, withDeadline } from './Helper/catalogNetwork';
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { getApp, getApps, initializeApp } from '@react-native-firebase/app';
 import { getAuth, onAuthStateChanged } from '@react-native-firebase/auth';
@@ -12,9 +14,29 @@ import { getFlag } from './Helper/CountryCheck';
 import { getConfigNodes } from './Helper/configCache';
 import { indexMM2Images, indexSupremePrices, unwrapFeed } from './Helper/valueSources';
 import { getServerTime } from './Helper/serverTime';
+import { saveOwnPrivateProfile } from './Helper/privateProfile';
 import { generateOnePieceUsername } from './Helper/RendomNamegen';
+import { getAnalytics, logEvent } from '@react-native-firebase/analytics';
 
 
+
+// ── Startup instrumentation (2026-09-21) ────────────────────────────────
+// Ported from adoptme-jan7; see HANDOFF_2026-09-21.md there for the reasoning.
+//
+// `am start -W` measures time to FIRST DRAW, which is only the splash
+// appearing. What users experience as "the app is slow to open" is the time
+// until isAppReady flips and the real UI renders, which sits behind
+// handleUserLogin's network work. Nothing has ever measured that here.
+//
+// Sent to Analytics rather than Crashlytics on purpose: a Crashlytics log is a
+// breadcrumb visible only if that session later crashes, which is a useless
+// sample for typical startup time. Analytics aggregates across all users.
+const _launchedAt = Date.now();
+const logStartupTiming = (name, params) => {
+  try {
+    logEvent(getAnalytics(), name, params);
+  } catch (_) {}
+};
 
 const app = getApps().length ? getApp() : null;
 const auth = getAuth(app);
@@ -80,6 +102,7 @@ export const GlobalStateProvider = ({ children }) => {
   });
 
   const [loading, setLoading] = useState(false);
+  const [catalogStatus, setCatalogStatus] = useState('ready');
   // const [robloxUsername, setRobloxUsername] = useState('');
   const robloxUsernameRef = useRef('');
 
@@ -254,6 +277,11 @@ export const GlobalStateProvider = ({ children }) => {
       setIsAdmin(makeadmin || existingSnap?.admin === true || existingSnap?.isAdmin === true);
       setCurrentuserEmail(loggedInUser.email)
 
+      // The email staff need for moderation goes to users_private (owner +
+      // staff only), never users/{uid}, which anyone can read. Fire-and-forget:
+      // sign-in must never wait on, or fail because of, this write.
+      saveOwnPrivateProfile(appdatabase, userId, { email: loggedInUser.email }).catch(() => {});
+
       if (snapshot.exists()) {
         // ⏳ USER EXISTS → Keep existing createdAt
         const existing = snapshot.val();
@@ -338,12 +366,16 @@ export const GlobalStateProvider = ({ children }) => {
       }
 
       setTimeout(async () => {
+        const _loginStartedAt = Date.now();
         await handleUserLogin(loggedInUser);
+        logStartupTiming('startup_profile_reads', { ms: Date.now() - _loginStartedAt });
 
         if (loggedInUser?.uid) {
           await registerForNotifications(loggedInUser.uid);
         }
 
+        // Time-to-interactive: process start -> splash hide.
+        logStartupTiming('startup_ready', { ms: Date.now() - _launchedAt });
         await updateLocalState('isAppReady', true);
       }, 0);
     });
@@ -541,6 +573,7 @@ export const GlobalStateProvider = ({ children }) => {
   useEffect(() => { localStateRef.current = localState; }, [localState]);
 
   const fetchStockData = useCallback(async (refresh) => {
+    let catalogRefreshed = true;
     try {
       setLoading(true);
       const ls = localStateRef.current;
@@ -570,8 +603,7 @@ export const GlobalStateProvider = ({ children }) => {
       const CACHE_TTL = 24 * 60 * 60 * 1000;
 
       const hasCachedValues =
-        ls.data && Object.keys(ls.data).length &&
-        ls.suprime && Object.keys(ls.suprime).length;
+        usableCatalog(ls.data) && usableCatalog(ls.suprime);
 
       // `imgurl` is deliberately NOT part of this. It is a config node with a
       // default, cached separately, and MM2 may not publish one at all —
@@ -579,62 +611,38 @@ export const GlobalStateProvider = ({ children }) => {
       const shouldFetch = Boolean(refresh) || !hasCachedValues || timeElapsed > CACHE_TTL;
 
       if (shouldFetch) {
-        let data = {};
-        let suprime = {};
         let image = '';
-
-        // ✅ MM2 CDN URLs
-        // Both zones serve the pipeline's dist build, wrapped as { meta, data }
-        // — meta carries generatedAt and the observed/modeled/none counts.
-        // The filename differs per zone: MM2 publishes dist/data.json, Supreme
-        // publishes dist/supreme.json. unwrap() also accepts a bare categories
-        // object, so an older raw upload still works if one is restored.
-        //
-        // These moved twice on 2026-09-13 (mm2values.json -> mm2.json ->
-        // data.json). A shipped build cannot be re-pointed, so if they move
-        // again, keep the old path alive on the zone as a copy.
-        const suprimeUrl = 'https://mm2api-suprime.b-cdn.net/supreme.json';
-        const cdnUrl = 'https://mm2-api.b-cdn.net/data.json';
-
-        const loadFromCdn = async (url) => {
-          const res = await fetch(url, { method: 'GET', cache: 'no-store' });
-          // Bunny answers a missing file with a 200-looking HTML error page on
-          // some zones and a 404 on others. Check the status before parsing.
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const payload = unwrapFeed(await res.json());
-          // Validate AFTER unwrapping. `{ meta, data }` has two keys, so the
-          // old top-level length check passed even when `data` was empty.
-          if (!payload || typeof payload !== 'object' || payload.error || !Object.keys(payload).length) {
-            throw new Error('CDN returned invalid or error data');
-          }
-          return payload;
-        };
-
-        // Fetched independently, and that is the point. Until 2026-09-13 both
-        // shared one try block while the Supreme URL 404'd, so parsing its HTML
-        // body threw *after* MM2 had already succeeded — discarding good MM2
-        // data and falling back to Firebase on every refresh.
-        const [mm2Result, suprimeResult] = await Promise.allSettled([
-          loadFromCdn(cdnUrl),
-          loadFromCdn(suprimeUrl),
+        const load = async url => unwrapFeed(await fetchCatalog(url));
+        const catalogStartedAt = Date.now();
+        const results = await Promise.all([
+          refreshCatalog({
+            load: () => load('https://mm2-api.b-cdn.net/data.json'), cached: ls.data,
+            save: value => updateLocalStateRef.current('data', JSON.stringify(value)),
+            fallback: async () => {
+              const snapshot = await get(ref(appdatabase, 'mm2Data'));
+              return snapshot.exists() ? unwrapFeed(snapshot.val()) : null;
+            },
+          }),
+          refreshCatalog({
+            load: () => load('https://mm2api-suprime.b-cdn.net/supreme.json'), cached: ls.suprime,
+            save: value => updateLocalStateRef.current('suprime', JSON.stringify(value)),
+            fallback: async () => {
+              const snapshot = await get(ref(appdatabase, 'suprimeData'));
+              return snapshot.exists() ? unwrapFeed(snapshot.val()) : null;
+            },
+          }),
         ]);
-
-        if (mm2Result.status === 'fulfilled') {
-          data = mm2Result.value;
-          console.log('✅ Loaded MM2 data from CDN:', cdnUrl);
-        } else {
-          console.warn('⚠️ MM2 CDN failed, falling back to Firebase:', mm2Result.reason?.message);
-          const dbSnapshot = await get(ref(appdatabase, 'mm2Data'));
-          data = dbSnapshot.exists() ? dbSnapshot.val() : {};
-        }
-
-        if (suprimeResult.status === 'fulfilled') {
-          suprime = suprimeResult.value;
-          console.log('✅ Loaded Supreme data from CDN:', suprimeUrl);
-        } else {
-          console.warn('⚠️ Supreme CDN failed, falling back to Firebase:', suprimeResult.reason?.message);
-          const suprimeSnapshot = await get(ref(appdatabase, 'suprimeData'));
-          suprime = suprimeSnapshot.exists() ? suprimeSnapshot.val() : {};
+        catalogRefreshed = results.every(r => r.fresh);
+        trackGrowthEvent('catalog_load_result', {
+          duration_ms: Date.now() - catalogStartedAt,
+          fresh_feeds: results.filter(r => r.fresh).length,
+          available_feeds: results.filter(r => r.available).length,
+          manual_refresh: refresh ? 1 : 0,
+        });
+        setCatalogStatus(results.every(r => r.fresh) ? 'ready' :
+          results.some(r => r.available) ? 'cached' : 'unavailable');
+        if (results.every(r => r.fresh)) {
+          await updateLocalStateRef.current('valuesFetchedAt', new Date().toISOString());
         }
 
         // `image_url` may not exist in MM2 at all. Cached for 6 hours with the
@@ -645,7 +653,7 @@ export const GlobalStateProvider = ({ children }) => {
           // seasonal-event config costs no extra round trip. Set it from the
           // Firebase console and every install picks the change up without an
           // app release — see Code/Engagement/eventConfig.js.
-          const cfg = await getConfigNodes(appdatabase, ['image_url', 'events']);
+          const cfg = await withDeadline(() => getConfigNodes(appdatabase, ['image_url', 'events']));
           image = cfg.image_url || '';
           if (cfg.events && typeof cfg.events === 'object') {
             await updateLocalStateRef.current('events', cfg.events);
@@ -654,19 +662,15 @@ export const GlobalStateProvider = ({ children }) => {
           // absent or unreachable — empty string, same as before
         }
 
-        // ✅ Store in local state
-        await updateLocalStateRef.current('data', JSON.stringify(data));
-        await updateLocalStateRef.current('suprime', JSON.stringify(suprime));
         if (image) await updateLocalStateRef.current('imgurl', JSON.stringify(image));
-        // Stamp the catalogue's own clock. lastActivity is left to the launch
-        // effect that owns it (and mirrors it to RTDB for presence).
-        await updateLocalStateRef.current('valuesFetchedAt', new Date().toISOString());
       }
     } catch (error) {
+      catalogRefreshed = false;
       console.error("❌ Error fetching stock data:", error);
     } finally {
       setLoading(false);
     }
+    return catalogRefreshed;
   }, [appdatabase]); // ✅ Stable — only depends on appdatabase
 
 
@@ -684,7 +688,7 @@ export const GlobalStateProvider = ({ children }) => {
   }, []);
 
   const reload = useCallback(() => {
-    fetchStockData(true);
+    return fetchStockData(true);
   }, [fetchStockData]);
 
   // ── MM2 image index, for Supreme's art fallback ──
@@ -958,6 +962,7 @@ export const GlobalStateProvider = ({ children }) => {
       updateLocalStateAndDatabase,
       fetchStockData,
       loading,
+      catalogStatus,
       freeTranslation,
       isAdmin,
       reload,
@@ -971,7 +976,7 @@ export const GlobalStateProvider = ({ children }) => {
       modControlsEnabled,  // moderator ban/mute kill switch
       canGrantJmd,         // delegated Junior-Mod grant permission
     }),
-    [user, theme, loading, api, freeTranslation, currentUserEmail, tradingServerLink, isInActiveGame, acceptedInviteRoom, isAdmin, single_offer_wall, fetchStockData, reload, updateLocalStateAndDatabase, strikeInfo, isUserBlocked, modControlsEnabled, canGrantJmd]
+    [user, theme, loading, catalogStatus, api, freeTranslation, currentUserEmail, tradingServerLink, isInActiveGame, acceptedInviteRoom, isAdmin, single_offer_wall, fetchStockData, reload, updateLocalStateAndDatabase, strikeInfo, isUserBlocked, modControlsEnabled, canGrantJmd]
   );
 
   return (

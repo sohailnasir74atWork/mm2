@@ -11,6 +11,7 @@ import {
   Alert,
   StyleSheet,
   TouchableOpacity,          // 👈 add this
+  useWindowDimensions,
 } from 'react-native';
 import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 import { useGlobalState } from '../../GlobelStats';
@@ -23,7 +24,6 @@ import { showSuccessMessage } from '../../Helper/MessageHelper';
 import { useLocalState } from '../../LocalGlobelStats';
 import axios from 'axios';
 import { getDeviceLanguage } from '../../../i18n';
-import { mixpanel } from '../../AppHelper/MixPenel';
 import { FRUIT_KEYWORDS } from '../../Helper/filter';
 import ScamSafetyBox from './Scamwarning';
 import { useNavigation } from '@react-navigation/native';
@@ -32,6 +32,13 @@ import { resolveItemImage } from '../../Helper/valueSources';
 import { sourceLabelForItems } from '../../Helper/valueSources';
 
 
+
+// Bubble geometry, shared by the bubble itself and the image grid it holds so
+// the two cannot drift apart.
+const BUBBLE_MAX_WIDTH_RATIO = 0.8;
+const BUBBLE_PADDING_H = 10;
+const IMAGE_GAP = 4;
+const SINGLE_IMAGE_MAX = 250;
 
 const PrivateMessageList = ({
   messages,
@@ -69,6 +76,13 @@ const PrivateMessageList = ({
   );
   const { t } = useTranslation();
   const deviceLanguage = useMemo(() => getDeviceLanguage(), []);
+
+  // Widest a row of images can be: the bubble is capped at 80% of the screen
+  // and adds 10pt of padding either side. The sizes used to be hard-coded
+  // (250 / 150 / 110), so on a 360pt-wide screen a pair of 150s needed 304pt
+  // of a 268pt box and flex-wrapped into a single stacked column.
+  const { width: screenWidth } = useWindowDimensions();
+  const maxImageRowWidth = Math.floor(screenWidth * BUBBLE_MAX_WIDTH_RATIO) - BUBBLE_PADDING_H * 2;
 
   // ✅ Pre-compile regex patterns for FRUIT_KEYWORDS
   const fruitRegexPatterns = useMemo(() => {
@@ -158,7 +172,6 @@ const PrivateMessageList = ({
       Object.entries(placeholders).forEach(([placeholder, word]) => {
         translated = translated.replace(new RegExp(placeholder, 'g'), word);
       });
-      mixpanel.track("Translation", {lang:targetLang});
 
       return translated;
     } catch (err) {
@@ -233,7 +246,7 @@ const PrivateMessageList = ({
       <View
         style={{
           alignSelf: isMyMessage ? 'flex-end' : 'flex-start',
-          maxWidth: '80%',
+          maxWidth: `${BUBBLE_MAX_WIDTH_RATIO * 100}%`,
           marginBottom: 4,
           marginHorizontal: 10,
         }}
@@ -246,7 +259,7 @@ const PrivateMessageList = ({
           borderRadius: 16,
           borderTopLeftRadius: isMyMessage ? 16 : 4,
           borderTopRightRadius: isMyMessage ? 4 : 16,
-          paddingHorizontal: 10,
+          paddingHorizontal: BUBBLE_PADDING_H,
           paddingVertical: 6,
           shadowColor: '#000',
           shadowOpacity: 0.05,
@@ -267,9 +280,13 @@ const PrivateMessageList = ({
           if (imageArray.length === 0) return null;
 
           return (
-            <View style={{ marginBottom: 4, flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+            <View style={{ marginBottom: 4, flexDirection: 'row', flexWrap: 'wrap', gap: IMAGE_GAP }}>
               {imageArray.map((imageUri, imgIndex) => {
-                const imageSize = imageArray.length === 1 ? 250 : imageArray.length === 2 ? 150 : 110;
+                const perRow = Math.min(imageArray.length, 3);
+                const imageSize = Math.min(
+                  SINGLE_IMAGE_MAX,
+                  Math.floor((maxImageRowWidth - IMAGE_GAP * (perRow - 1)) / perRow),
+                );
 
                 return (
                   <TouchableOpacity
@@ -428,13 +445,18 @@ const PrivateMessageList = ({
       </View>
     );
 
-    // Date separator: in inverted list, next item in array is older
+    // Date separator: in an inverted list the next item in the array is older,
+    // so this is true for the oldest message of each day — the one that shows
+    // highest up the screen in that day's run. The separator therefore has to
+    // render BEFORE the bubble: a row's own children are not inverted, only
+    // the row order is, so emitting it after the bubble (as this did) dropped
+    // each day's heading below its first message and left it sitting in the
+    // middle of the previous day's run.
     const nextMsg = filteredMessages[index + 1];
     const showDateSep = !nextMsg || getDateLabel(item.timestamp) !== getDateLabel(nextMsg.timestamp);
 
     return (
       <>
-        {msgBubble}
         {showDateSep && (
           <View style={{ alignItems: 'center', marginVertical: 10 }}>
             <View style={{
@@ -453,9 +475,10 @@ const PrivateMessageList = ({
             </View>
           </View>
         )}
+        {msgBubble}
       </>
     );
-  }, [userId, selectedUser, user, styles, fruitColors, handleCopy, handleTranslate, handleReport, onReply, navigation, t, filteredMessages, getDateLabel, otherLastRead, localState?.showReadReceipts, isDarkMode]);
+  }, [userId, selectedUser, user, styles, fruitColors, handleCopy, handleTranslate, handleReport, onReply, navigation, t, filteredMessages, getDateLabel, otherLastRead, localState?.showReadReceipts, isDarkMode, maxImageRowWidth]);
 
   // ✅ Memoize keyExtractor
   const keyExtractor = useCallback((item, index) => {
@@ -467,13 +490,21 @@ const PrivateMessageList = ({
       {loading && messages.length === 0 ? (
         <ActivityIndicator size="large" color="#1E88E5" style={styles.loader} />
       ) : (
-        <View style={{paddingBottom:140}}>  
-        <>   
+        /* flex:1, not a content-sized wrapper. A FlatList with no bounded
+            height lays every row out past the viewport: the list then has
+            nothing to scroll (the overflow is simply clipped) and Android's
+            view clipping detaches the tall rows, which is why image bubbles
+            arrived as empty white rectangles. The 140pt bottom padding that
+            used to sit here was dead space above the message input — the
+            input is a sibling in normal flow, so nothing had to be reserved
+            for it. */
+        <View style={{ flex: 1 }}>
         <ScamSafetyBox setShowRatingModal={setShowRatingModal} canRate={canRate} hasRated={hasRated} selectedUserId={selectedUser?.senderId} />
-     
+
         <FlatList
+          style={{ flex: 1 }}
           data={filteredMessages}
-          removeClippedSubviews={true}
+          removeClippedSubviews={false}
           keyExtractor={keyExtractor}
           renderItem={renderMessage}
           inverted
@@ -489,7 +520,6 @@ const PrivateMessageList = ({
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         />
-        </>     
         </View>
 
       )}
@@ -521,10 +551,7 @@ export const fruitStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent:'flex-start',
     marginBottom:3,
-
-    flex:1,
-
-
+    alignSelf: 'stretch',
   },
   fruitImage: {
     width: 20,

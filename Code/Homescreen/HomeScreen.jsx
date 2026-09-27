@@ -11,6 +11,7 @@ import config from '../Helper/Environment';
 import {
   resolveItemImage, summarizeItems, buildItemPool, unwrapFeed, newestGeneratedAt,
   priceOf, displayValueText, isSummable, VALUE_SOURCE, DEFAULT_VALUE_SOURCE,
+  categoryKey,
 } from '../Helper/valueSources';
 import ConditionalKeyboardWrapper from '../Helper/keyboardAvoidingContainer';
 import { useHaptic } from '../Helper/HepticFeedBack';
@@ -20,7 +21,6 @@ import SignInDrawer from '../Firebase/SigninDrawer';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../Translation/LanguageProvider';
 import { showSuccessMessage, showErrorMessage } from '../Helper/MessageHelper';
-import { mixpanel } from '../AppHelper/MixPenel';
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
 import Share from 'react-native-share';
@@ -505,8 +505,9 @@ const HomeScreen = ({ selectedTheme }) => {
         const matchesSearch = item.name?.toLowerCase().includes(debouncedSearchText.toLowerCase());
         const matchesType = selectedPetType === 'INVENTORY' ||
           selectedPetType === 'ALL' ||
-          selectedPetType.toLowerCase() === item.Category?.toLowerCase() ||
-          selectedPetType.toLowerCase() === item.type?.toLowerCase();
+          // categoryKey folds Supreme's plurals ("Godlies") into the chip's name.
+          selectedPetType === categoryKey(item.Category) ||
+          selectedPetType === categoryKey(item.type);
         return matchesSearch && matchesType;
       })
       .sort((a, b) => (b.Value || 0) - (a.Value || 0));
@@ -952,7 +953,6 @@ const HomeScreen = ({ selectedTheme }) => {
 
       // Step 4: Update timestamp and analytics
       setLastTradeTime(now); // ✅ Use Date.now() for cooldown tracking
-      mixpanel.track("Trade Created", { user: user?.id });
 
       // ✅ Store timeout and animation frame IDs for cleanup
       const rafKey1 = `createTrade_raf_${Date.now()}_1`;
@@ -1023,7 +1023,6 @@ const HomeScreen = ({ selectedTheme }) => {
     setShowTradeCompletion(false);
     if (!didSave) return;
     resetState();
-    mixpanel.track("Trade Logged", { user: user?.id, result: tradeStatus });
 
     const callbackfunction = () => {
       if (!isMountedRef.current) return;

@@ -40,12 +40,6 @@ import {
 } from '@react-native-firebase/firestore';
 import { ref, get } from '@react-native-firebase/database';
 import { updateLeaderboardCacheRealtime } from './updateLeaderboardCache';
-import { initGameSounds, playPop, playWoosh, setSoundEnabled, releaseGameSounds } from '../Helper/GameSoundService';
-import { createMMKV } from 'react-native-mmkv';
-
-const soundStorage = createMMKV({ id: 'game-sounds' });
-const SOUND_KEY = 'game_sound_killer';
-const GAME_KEY = 'killer';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const IMAGE_HEIGHT = SCREEN_HEIGHT * 0.42;
@@ -194,7 +188,6 @@ const FindTheKiller = ({ visible, onClose, screenMode = false }) => {
   const [completedLevels, setCompletedLevels] = useState({});
   const [adminEditedClues, setAdminEditedClues] = useState([]);
   const [adminSelectedIndex, setAdminSelectedIndex] = useState(0);
-  const [soundOn, setSoundOn] = useState(true);
 
   const timerRef = useRef(null);
   const revealAnim = useRef(new Animated.Value(0)).current;
@@ -254,24 +247,6 @@ const FindTheKiller = ({ visible, onClose, screenMode = false }) => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
-  // ── Init sounds ──
-  useEffect(() => {
-    let enabled = true;
-    try { enabled = soundStorage.getBoolean(SOUND_KEY) !== false; } catch {}
-    setSoundOn(enabled);
-    setSoundEnabled(GAME_KEY, enabled);
-    initGameSounds();
-    return () => { releaseGameSounds(); };
-  }, []);
-
-  const toggleSound = useCallback(() => {
-    const next = !soundOn;
-    setSoundOn(next);
-    try { soundStorage.set(SOUND_KEY, next); } catch {}
-    setSoundEnabled(GAME_KEY, next);
-    triggerHapticFeedback('selection');
-  }, [soundOn, triggerHapticFeedback]);
-
   // ── Streak multiplier ──
   const streakMultiplier = useMemo(() => {
     if (streak >= 10) return 3;
@@ -302,7 +277,6 @@ const FindTheKiller = ({ visible, onClose, screenMode = false }) => {
     if (foundClues.includes(clueIndex)) return;
     setFoundClues(prev => [...prev, clueIndex]);
     triggerHapticFeedback('impactMedium');
-    playPop(GAME_KEY);
     if (Platform.OS === 'android') Vibration.vibrate(50);
   }, [foundClues, triggerHapticFeedback]);
 
@@ -310,7 +284,6 @@ const FindTheKiller = ({ visible, onClose, screenMode = false }) => {
   const pickSuspect = useCallback((suspectId) => {
     setSelectedSuspect(suspectId);
     triggerHapticFeedback('impactLight');
-    playPop(GAME_KEY);
   }, [triggerHapticFeedback]);
 
   // ── Confirm pick → go to betting ──
@@ -341,13 +314,11 @@ const FindTheKiller = ({ visible, onClose, screenMode = false }) => {
     if (correct) {
       setStreak(prev => prev + 1);
       triggerHapticFeedback('notificationSuccess');
-      playWoosh(GAME_KEY);
       if (Platform.OS === 'android') Vibration.vibrate([0, 50, 30, 50, 30, 50]);
       Animated.spring(confettiAnim, { toValue: 1, tension: 200, friction: 8, useNativeDriver: true }).start();
     } else {
       setStreak(0);
       triggerHapticFeedback('notificationError');
-      playPop(GAME_KEY);
       if (Platform.OS === 'android') Vibration.vibrate([0, 100, 50, 100]);
       Animated.sequence([
         Animated.timing(shakeAnim, { toValue: 15, duration: 50, useNativeDriver: true }),
@@ -910,9 +881,6 @@ const FindTheKiller = ({ visible, onClose, screenMode = false }) => {
           <Text style={[styles.title, { color: c.text }]}>🕵️ {t('killer.title', 'Find the Killer')}</Text>
 
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <TouchableOpacity onPress={toggleSound} style={styles.closeBtn}>
-              <Icon name={soundOn ? 'volume-high' : 'volume-mute'} size={20} color={c.textSecondary} />
-            </TouchableOpacity>
             <TouchableOpacity
               onPress={() => { if (timerRef.current) clearInterval(timerRef.current); onClose(); }}
               style={styles.closeBtn}
@@ -920,13 +888,6 @@ const FindTheKiller = ({ visible, onClose, screenMode = false }) => {
               <Icon name="close" size={22} color={c.textSecondary} />
             </TouchableOpacity>
           </View>
-        </View>
-      )}
-      {screenMode && (
-        <View style={{ position: 'absolute', top: 10, right: 12, zIndex: 20 }}>
-          <TouchableOpacity onPress={toggleSound} style={styles.closeBtn}>
-            <Icon name={soundOn ? 'volume-high' : 'volume-mute'} size={20} color={c.textSecondary} />
-          </TouchableOpacity>
         </View>
       )}
 

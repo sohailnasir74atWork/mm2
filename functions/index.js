@@ -106,3 +106,27 @@ exports.cleanupOldPosts = retention.cleanupOldPosts;
 // nothing ever writes that field.
 // exports.cleanupDeadGroups = require('./cleanupDeadGroups').cleanupDeadGroups;
 exports.expireFeaturedTrades = require('./expireFeaturedTrades').expireFeaturedTrades;
+
+// ── Email privacy, round 2 (2026-09-27) ────────────────────────────────
+// Emails leave every public node: users/{uid} → users_private/{uid}, and
+// chat messages / feed posts stop carrying one. Two deploy moments — each
+// file's header has its deploy command:
+//
+//   reportAutoBan.js    EARLY (with the rules, before the app release). The
+//                       report auto-bans, moved server-side because new
+//                       builds no longer publish the emails they keyed on.
+//   syncStaffClaims.js  EARLY. `staff` custom claim for firestore.rules
+//                       (mod_actions is staff-read); one run + an hour
+//                       before those rules deploy.
+//   privateEmailOnSignup.js  EARLY. New accounts' email → users_private,
+//                       whichever build created them.
+//   emailPrivacy.js     CUTOVER only. Strips the copies old builds keep
+//                       writing — which old builds' moderation still reads.
+const reportAutoBan = require('./reportAutoBan');
+for (const [name, fn] of Object.entries(reportAutoBan)) exports[name] = fn;
+
+exports.syncStaffClaims = require('./syncStaffClaims').syncStaffClaims;
+exports.privateEmailOnSignup = require('./privateEmailOnSignup').privateEmailOnSignup;
+
+const emailPrivacy = require('./emailPrivacy');
+for (const [name, fn] of Object.entries(emailPrivacy)) exports[name] = fn;

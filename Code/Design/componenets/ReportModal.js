@@ -7,6 +7,7 @@ import { showMessage } from 'react-native-flash-message';
 import firestore from '@react-native-firebase/firestore';
 import { useLocalState } from '../../LocalGlobelStats';
 import { useTranslation } from 'react-i18next';
+import { ModalKeyboardView } from '../../Helper/keyboardAvoidingContainer';
 
 const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
   const [reportText, setReportText] = useState('');
@@ -113,9 +114,23 @@ const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
       }
   
       // Side-effects OUTSIDE the transaction to avoid retries breaking things
+      //
+      // Only posts made by older builds still carry `email`. For every other
+      // post the ban runs server-side when `banned` flips to true
+      // (functions/reportAutoBan.js, autoBanOnPostReports), which skips any
+      // post that has an email so the two never both fire.
       if (txResult.shouldBan && txResult.email && txResult.userId) {
         try {
-          await banUserwithEmail(txResult.email, txResult.userId);
+          // Argument order: (email, isAdmin, senderId, userInfo, bannerInfo,
+          // reason, source). userId used to land in the isAdmin slot, which
+          // alerted the REPORTER "User Banned" and saved the record with
+          // userId: null.
+          await banUserwithEmail(
+            txResult.email, false, txResult.userId,
+            { id: txResult.userId, displayName: item?.userName || item?.displayName || null, avatar: item?.userAvatar || item?.avatar || null },
+            { id: 'system', displayName: 'Auto (post reports)', role: 'system' },
+            'Auto-ban: post reported by multiple users', 'report',
+          );
         } catch (err) {
           console.error('Ban error:', err);
           // optional: decide if you want to unset 'banned' on the post here
@@ -134,6 +149,7 @@ const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <ModalKeyboardView style={{ flex: 1 }}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.overlay}>
           <View style={styles.modal}>
@@ -164,6 +180,7 @@ const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
           </View>
         </View>
       </TouchableWithoutFeedback>
+      </ModalKeyboardView>
     </Modal>
   );
 };

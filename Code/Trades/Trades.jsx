@@ -39,7 +39,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { showSuccessMessage, showErrorMessage } from '../Helper/MessageHelper';
 import SubscriptionScreen from '../SettingScreen/OfferWall';
-import { mixpanel } from '../AppHelper/MixPenel';
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
 import NativeAdCard from '../Ads/NativeAdCard';
@@ -783,7 +782,6 @@ const TradeList = ({ route }) => {
     // Close drawer first (iOS doesn't auto-dismiss modals on navigation)
     setIsDrawerVisible(false);
     setTimeout(() => {
-      mixpanel.track("Inbox Trade");
       navigation.navigate('PrivateChatTrade', {
         selectedUser: selectedUser,
         item: selectedTrade,
@@ -1598,7 +1596,6 @@ const TradeList = ({ route }) => {
           setIsSigninDrawerVisible(true);
           return;
         }
-        mixpanel.track("Inbox Trade");
         navigation.navigate('PrivateChatTrade', {
           selectedUser: selectedUser,
           item,
@@ -1728,17 +1725,26 @@ const TradeList = ({ route }) => {
                 length: Math.max(4, Math.ceil(item.hasItems.length / 4) * 4)
               }).map((_, idx) => {
                 const tradeItem = item.hasItems[idx];
+                const tradeItemImage = tradeItem ? getImageUrl(tradeItem) : '';
                 return (
                   <View key={idx} style={styles.gridCell}>
                     {tradeItem ? (
                       <>
-                        <Image
-                          source={{ uri: getImageUrl(tradeItem) }}
-                          style={styles.gridItemImage}
-                          onError={(e) => {
-                            console.warn('Image load error for item:', tradeItem);
-                          }}
-                        />
+                        {/* resolveItemImage returns '' for an item it cannot
+                            resolve. {uri: ''} makes RN warn and paints nothing
+                            anyway, so draw the same-sized empty cell instead —
+                            the grid keeps its layout either way. */}
+                        {tradeItemImage ? (
+                          <Image
+                            source={{ uri: tradeItemImage }}
+                            style={styles.gridItemImage}
+                            onError={() => {
+                              console.warn('Image load error for item:', tradeItem);
+                            }}
+                          />
+                        ) : (
+                          <View style={styles.gridItemImage} />
+                        )}
                         <View style={{ alignItems: 'center', marginTop: 2 }}>
                           <Text style={styles.itemName}>
                             {tradeItem.name?.length > 8 ? tradeItem.name.slice(0, 7) + '...' : tradeItem.name}
@@ -1788,17 +1794,26 @@ const TradeList = ({ route }) => {
                 length: Math.max(4, Math.ceil(item.wantsItems.length / 4) * 4)
               }).map((_, idx) => {
                 const tradeItem = item.wantsItems[idx];
+                const tradeItemImage = tradeItem ? getImageUrl(tradeItem) : '';
                 return (
                   <View key={idx} style={styles.gridCell}>
                     {tradeItem ? (
                       <>
-                        <Image
-                          source={{ uri: getImageUrl(tradeItem) }}
-                          style={styles.gridItemImage}
-                          onError={(e) => {
-                            console.warn('Image load error for item:', tradeItem);
-                          }}
-                        />
+                        {/* resolveItemImage returns '' for an item it cannot
+                            resolve. {uri: ''} makes RN warn and paints nothing
+                            anyway, so draw the same-sized empty cell instead —
+                            the grid keeps its layout either way. */}
+                        {tradeItemImage ? (
+                          <Image
+                            source={{ uri: tradeItemImage }}
+                            style={styles.gridItemImage}
+                            onError={() => {
+                              console.warn('Image load error for item:', tradeItem);
+                            }}
+                          />
+                        ) : (
+                          <View style={styles.gridItemImage} />
+                        )}
                         <View style={{ alignItems: 'center', marginTop: 2 }}>
                           <Text style={styles.itemName}>
                             {tradeItem.name?.length > 8 ? tradeItem.name.slice(0, 7) + '...' : tradeItem.name}

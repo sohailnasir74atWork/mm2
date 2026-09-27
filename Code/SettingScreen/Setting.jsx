@@ -20,6 +20,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../GlobelStats';
 import { getStyles } from './settingstyle';
 import { handleGetSuggestions, handleOpenFacebook, handleOpenWebsite, handleRateApp, handleadoptme, handleShareApp, imageOptions, handleBloxFruit, handleRefresh, handleReport, handleOpenPrivacy, handleOpenChild} from './settinghelper';
+import EmailUpdatesRow from './EmailUpdatesRow';
 import { logoutUser } from '../Firebase/UserLogics';
 import SignInDrawer from '../Firebase/SigninDrawer';
 import auth from '@react-native-firebase/auth';
@@ -2708,6 +2709,15 @@ const formatPlanName = (plan) => {
           </View>
         </View>)}
 
+        {user?.id && (
+          <EmailUpdatesRow
+            uid={user.id}
+            appdatabase={appdatabase}
+            styles={styles}
+            onHaptic={() => triggerHapticFeedback('impactLight')}
+          />
+        )}
+
         {/* Chat availability — two independent doors. Trade chat opens from the
             Trades screen; general chat is everywhere else. Each blocks both
             directions for that door. */}
@@ -3188,11 +3198,11 @@ const formatPlanName = (plan) => {
   handleadoptme(); triggerHapticFeedback('impactLight');
 }}>
  <Image 
-  source={require('../../assets/MM2logo.webp')} 
+  source={require('../../assets/adoptme.png')}
   style={{ width: 40, height: 40,   borderRadius: 5 }} 
 />
 
-  <Text style={styles.optionText}>MM2 Values</Text>
+  <Text style={styles.optionText}>Adopt Me Values</Text>
 </TouchableOpacity>
 
 

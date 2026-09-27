@@ -111,7 +111,10 @@
     "give_offer": "Give offer",
     "display_name": "Display Name",
     "profile_picture": "Profile Picture",
-    "edit_cooldown_title": "Edit Cooldown"
+    "edit_cooldown_title": "Edit Cooldown",
+    "success_deleted": "Your account and all associated data have been permanently deleted.",
+    "joined": "Joined",
+    "buy_plan_unlock": "Upgrade to Pro to unlock this feature."
   },
   "home": {
     "you": "YOU",
@@ -358,7 +361,9 @@
     "error_google_unavailable_title": "Google sign-in unavailable",
     "error_google_unavailable": "Google Play Services isn't available on this device. Please sign in with email instead — tap \"Sign in with Email\" below.",
     "error_network_title": "Connection problem",
-    "error_network": "We couldn't reach the sign-in server. Check your connection and try again. If Google services are restricted on your network, try email sign-in or a different connection."
+    "error_network": "We couldn't reach the sign-in server. Check your connection and try again. If Google services are restricted on your network, try email sign-in or a different connection.",
+    "password_reset_email_sent": "Password reset email sent!",
+    "error_reset_password": "Failed to send password reset email. Please try again."
   },
   "tabs": {
     "calculator": "Calculator",
@@ -413,6 +418,9 @@
     "mod": "MOD"
   },
   "first": {
+    "continue_guest": "Continue as Guest",
+    "try_values": "Try the value calculator",
+    "utility_note": "Compare item values and check trades. This companion app does not grant in-game items.",
     "welcome_title": "Welcome to Fruit Values",
     "welcome_text": "Track fruit values & optimize your trades.",
     "signin_or_guest": "Signin or Continue as Guest",
@@ -451,7 +459,8 @@
     "inbox": "Inbox",
     "youAreBlocked": "You are blocked by an Admin.",
     "inappropriateLanguage": "Your message contains inappropriate language.",
-    "messageTooLong": "Message cannot exceed 100 words.",
+    "messageTooLong": "Message cannot exceed {{max}} characters.",
+    "messageTooLongWords": "Message cannot exceed {{max}} words.",
     "sendingTooQuickly": "You are sending messages too quickly. Please wait a moment.",
     "proUsersOnlyLinks": "Only Pro users can send links."
   },
@@ -954,7 +963,7 @@
       "Moderators reserve the right to monitor and take action on any violations, including warnings or bans.",
       "Content should be suitable for all approved age groups, adhering to app age requirements.",
       "Do not share links to harmful sites, malware, or malicious content.",
-      "By using the chat feature, you agree to the app’s Terms of Service and Privacy Policy. https://bloxfruitscalc.com/privacy-policy/"
+      "By using the chat feature, you agree to the app’s Terms of Service and Privacy Policy. https://mm2values.app/privacy"
     ]
   },
   "report_popup": {
@@ -1098,7 +1107,16 @@
     "delete": "Delete",
     "delete_entry_title": "Delete this trade?",
     "delete_entry_msg": "It will be removed from your history. This cannot be undone.",
-    "delete_failed": "Could not delete that trade"
+    "delete_failed": "Could not delete that trade",
+    "select": "Select",
+    "select_done": "Done",
+    "select_all": "All",
+    "select_other": "Other",
+    "selected_count": "{{count}} selected",
+    "remove": "Remove",
+    "remove_selected_title": "Remove {{count}} items?",
+    "remove_selected_title_one": "Remove {{count}} item?",
+    "remove_selected_msg": "They'll be removed from your inventory. Your goals and trade history are not affected."
   },
   "feed": {
     "create_post": "Create Post",
@@ -1275,5 +1293,12 @@
     "community": "Trusted Members",
     "empty": "No team members listed yet.",
     "signin_required": "Sign in to view profiles."
+  },
+  "catalog": {
+    "updated": "Catalog downloaded: {{date}}",
+    "cached": "Some values could not be refreshed. Available saved values are shown; they may be out of date.",
+    "unavailable": "Values could not be loaded. Check your connection and try again.",
+    "loading": "Trying again…",
+    "retry": "Retry loading values"
   }
 }

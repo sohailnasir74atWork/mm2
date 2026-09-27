@@ -1,18 +1,34 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  View,
   StatusBar,
-  SafeAreaView,
-
   TouchableOpacity,
   Appearance,
-  InteractionManager,
   Platform,
 } from 'react-native';
+import { SafeAreaView, SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
+
+// react-native's SafeAreaView was a no-op on Android and only ever inset on
+// iOS; react-native-safe-area-context's insets on both. Pinning the edges
+// per-platform keeps the layout byte-for-byte what it was before the swap.
+const LEGACY_SAFE_AREA_EDGES = Platform.OS === 'ios'
+  ? ['top', 'bottom', 'left', 'right']
+  : [];
+
+// The root SafeAreaView already pads the notch and home indicator on iOS, so
+// screens inside it must measure insets from that padded box, not the window.
+// Reading the window's insets there is what doubled the tab bar's bottom and
+// the Home / Calculator headers' top. A provider nested inside the padded view
+// measures the box itself: zero on iOS, the window's insets on Android (which
+// the root does not pad). Seeding it with those values avoids a doubled first
+// frame. Onboarding renders outside this view and keeps index.js's provider.
+const NAV_INITIAL_METRICS = initialWindowMetrics && Platform.OS === 'ios'
+  ? { frame: initialWindowMetrics.frame, insets: { top: 0, right: 0, bottom: 0, left: 0 } }
+  : initialWindowMetrics;
 import { NavigationContainer } from '@react-navigation/native';
 import { navigationRef } from './Code/Helper/navigationService';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import SettingsScreen from './Code/SettingScreen/Setting';
+import EmailOptInGate from './Code/AppHelper/EmailOptInGate';
 import MyStuffScreen from './Code/MyStuff/MyStuffScreen';
 import ValueScreen from './Code/ValuesScreen/ValueScreen';
 import { useGlobalState } from './Code/GlobelStats';
@@ -58,7 +74,7 @@ const PrivateChatRootWrapper = (props) => {
 };
 
 function App() {
-  const { theme } = useGlobalState();
+  const { theme, user, appdatabase } = useGlobalState();
   const { t } = useTranslation();
   const isDark = theme === 'dark';
 
@@ -153,12 +169,11 @@ function App() {
 
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: selectedTheme.colors.background }}>
-      <View style={{ flex: 1 }}>
+    <SafeAreaView edges={LEGACY_SAFE_AREA_EDGES} style={{ flex: 1, backgroundColor: selectedTheme.colors.background }}>
+      <SafeAreaProvider initialMetrics={NAV_INITIAL_METRICS}>
         <NavigationContainer ref={navigationRef} theme={selectedTheme}>
           <StatusBar
             barStyle={isDark ? 'light-content' : 'dark-content'}
-            backgroundColor={selectedTheme.colors.background}
           />
 
           <Stack.Navigator
@@ -278,7 +293,15 @@ function App() {
             </Stack.Screen>
           </Stack.Navigator>
         </NavigationContainer>
-      </View>
+      </SafeAreaProvider>
+      {/* Email news-and-updates opt-in: applies the sign-in checkbox, asks
+          undecided users once, and backs the Settings switch. Asks for a
+          date of birth the first time someone opts in (13+ only). */}
+      <EmailOptInGate
+        user={user}
+        appdatabase={appdatabase}
+        isDarkMode={theme === 'dark'}
+      />
     </SafeAreaView>
   );
 }
@@ -301,9 +324,14 @@ export default function AppWrapper() {
   // ✅ Hide splash after UI ready
   useEffect(() => {
     if (localState.isAppReady) {
-      InteractionManager.runAfterInteractions(() => {
+      // Was InteractionManager.runAfterInteractions (deprecated in RN 0.83).
+      // rAF defers to after the next frame commits, which is what this needed
+      // — and unlike requestIdleCallback it cannot be starved, so the splash
+      // can never get stuck on screen.
+      const raf = requestAnimationFrame(() => {
         RNBootSplash.hide({ fade: true });
       });
+      return () => cancelAnimationFrame(raf);
     }
   }, [localState.isAppReady]);
 

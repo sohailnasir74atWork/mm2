@@ -70,6 +70,7 @@ const [reviewText, setReviewText] = useState('');   // 👈 new
 const [startRating,setStartRating] = useState(false)
 const isOnline = useOnlineStatus(selectedUserId);
 const insets = useSafeAreaInsets();
+const [bannerHeight, setBannerHeight] = useState(0); // measured, 0 when no ad is on screen
 const bannerBottomPos = noTabBar ? Math.max(insets.bottom, 8) + 12 : 0; // with the docked tab bar, in-tab screen bottom == tab bar top; full-screen chat (noTabBar) still clears the home indicator
 
   // ✅ Read receipts: listen to other user's lastRead timestamp
@@ -867,11 +868,15 @@ useEffect(() => {
             {/* </View>  */}
             </ConditionalKeyboardWrapper>
 
-          {/* Spacer: reserves space for floating nav bar + ad so content isn't hidden behind them */}
+          {/* Spacer: reserves room for the absolutely-positioned banner, and
+              ONLY when a banner is actually on screen. On a no-fill (or for a
+              Pro member) the banner occupies nothing and the tab bar is docked
+              in the layout flow, so anything reserved here is dead space
+              between the message input and the tab bar. */}
           {noTabBar ? (
             <View style={{ height: Math.max(insets.bottom, 8) }} />
           ) : (
-            <View style={{ height: !localState.isPro ? bannerBottomPos + 60 : Math.max(insets.bottom, 8) + 68 }} />
+            <View style={{ height: bannerHeight ? bannerBottomPos + bannerHeight : 0 }} />
           )}
 
         </View>
@@ -968,7 +973,7 @@ useEffect(() => {
 )}
       {!localState.isPro && !noTabBar && (
         <View style={{ position: 'absolute', bottom: bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
-          <BannerAdComponent />
+          <BannerAdComponent onHeightChange={setBannerHeight} />
         </View>
       )}
       <ProfileBottomDrawer

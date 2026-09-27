@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal,
   View,
@@ -20,8 +20,9 @@ import { useGlobalState } from '../GlobelStats';
 import ConditionalKeyboardWrapper from '../Helper/keyboardAvoidingContainer';
 import { useTranslation } from 'react-i18next';
 import { showSuccessMessage, showErrorMessage, showWarningMessage } from '../Helper/MessageHelper';
-import { mixpanel } from '../AppHelper/MixPenel';
 import { requestPermission } from '../Helper/PermissionCheck';
+import { setPendingSigninChoice, clearPendingSigninChoice } from '../Helper/emailOptIn';
+import { handleOpenPrivacy, handleOpenTerms } from '../SettingScreen/settinghelper';
 import config from '../Helper/Environment';
 // import { showMessage } from 'react-native-flash-message';
 
@@ -46,6 +47,16 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
   const [robloxUsernameError, setRobloxUsernameError] = useState('');
   const [robloxUsernamelocal, setRobloxUsernamelocal] = useState();
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
+  // Email news-and-updates opt-in. Must start unticked: a pre-ticked box is
+  // not valid consent under GDPR/UK law. Applied by EmailOptInGate after
+  // sign-in, which also runs the 13+ check. Read through a ref so the
+  // memoized sign-in handlers always see the current value.
+  const [emailUpdates, setEmailUpdates] = useState(false);
+  const emailUpdatesRef = useRef(false);
+  useEffect(() => { emailUpdatesRef.current = emailUpdates; }, [emailUpdates]);
+  // Consent is per sign-in: a tick left from an earlier, abandoned attempt
+  // must not carry over, so the box resets whenever the drawer closes.
+  useEffect(() => { if (!visible) setEmailUpdates(false); }, [visible]);
 
   const { triggerHapticFeedback } = useHaptic();
   const { theme, robloxUsernameRef } = useGlobalState();
@@ -110,6 +121,7 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
 
   const onAppleButtonPress = useCallback(async () => {
     triggerHapticFeedback('impactLight');
+    setPendingSigninChoice(emailUpdatesRef.current);
 
     try {
       const { identityToken, nonce } = await appleAuth.performRequest({
@@ -124,9 +136,11 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
 
       showSuccessMessage(t('home.alert.success'), t('signin.success_signin'));
       setTimeout(onClose, 200);
-      mixpanel.track(`Login with apple from ${screen}`);
       await requestPermission();
     } catch (error) {
+      // Keep the choice if sign-in itself went through and only a later
+      // step (the notification permission request) threw.
+      if (!auth.currentUser) clearPendingSigninChoice();
       showErrorMessage(
         t('home.alert.error'),
         error?.message || t('signin.error_signin_message')
@@ -152,6 +166,8 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
 
     try {
       if (isRegisterMode) {
+        // Registration signs straight back out; the choice applies at sign-in.
+        clearPendingSigninChoice();
         // 🔐 Register new user
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
@@ -168,10 +184,12 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
         }
       } else {
         // 🔐 Login existing user
+        setPendingSigninChoice(emailUpdatesRef.current);
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
         if (!user.emailVerified) {
+          clearPendingSigninChoice();
           await user.sendEmailVerification();
           await signOut(auth);
 
@@ -182,12 +200,14 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
           return;
         }
 
-        mixpanel.track(`Login with email from ${screen}`);
         Alert.alert(t('signin.alert_welcome_back'), t('signin.success_signin'));
         await requestPermission();
         setTimeout(onClose, 200);
       }
     } catch (error) {
+      // Keep the choice if sign-in itself went through and only a later
+      // step (the notification permission request) threw.
+      if (!auth.currentUser) clearPendingSigninChoice();
       // Error handling for login
 
       let errorMessage = t('signin.error_signin_message');
@@ -214,6 +234,7 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
 
   const handleGoogleSignIn = useCallback(async () => {
     triggerHapticFeedback('impactLight');
+    setPendingSigninChoice(emailUpdatesRef.current);
 
     try {
       setIsLoading(true);
@@ -227,9 +248,11 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
 
       showSuccessMessage(t('signin.alert_welcome_back'), t('signin.success_signin'));
       setTimeout(onClose, 200);
-      mixpanel.track(`Login with google from ${screen}`);
       await requestPermission();
     } catch (error) {
+      // Keep the choice if sign-in itself went through and only a later
+      // step (the notification permission request) threw.
+      if (!auth.currentUser) clearPendingSigninChoice();
       // Every Google failure used to render the same "unexpected error", which
       // told users nothing. The two common real causes are (a) no/outdated
       // Google Play Services — widespread on devices in regions where Google
@@ -360,6 +383,23 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
               </Text>
             </TouchableOpacity>
 
+            {!isForgotPasswordMode && (
+              <TouchableOpacity
+                style={styles.optInRow}
+                onPress={() => setEmailUpdates((v) => !v)}
+                activeOpacity={0.7}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: emailUpdates }}
+              >
+                <View style={[styles.checkbox, emailUpdates && styles.checkboxChecked]}>
+                  {emailUpdates && <Icon name="check" size={12} color="white" />}
+                </View>
+                <Text style={[styles.optInText, { color: selectedTheme.colors.text }]}>
+                  {t('signin.email_updates_optin', { defaultValue: 'Email me news and updates (optional)' })}
+                </Text>
+              </TouchableOpacity>
+            )}
+
             {isForgotPasswordMode ? (
               <TouchableOpacity
                 style={styles.primaryButton}
@@ -445,6 +485,18 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
                   : t('signin.button_switch_register')}
               </Text>
             </TouchableOpacity>
+
+            <Text style={[styles.legalText, { color: selectedTheme.colors.text }]}>
+              {t('signin.legal_prefix', { defaultValue: 'By continuing, you agree to our ' })}
+              <Text style={styles.legalLink} onPress={handleOpenTerms}>
+                {t('signin.legal_terms', { defaultValue: 'Terms' })}
+              </Text>
+              {t('signin.legal_and', { defaultValue: ' and ' })}
+              <Text style={styles.legalLink} onPress={handleOpenPrivacy}>
+                {t('signin.legal_privacy', { defaultValue: 'Privacy Policy' })}
+              </Text>
+              .
+            </Text>
           </View>
         </Pressable>
       </ConditionalKeyboardWrapper>
@@ -453,6 +505,40 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
 };
 
 const styles = StyleSheet.create({
+  optInRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginBottom: 6,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: 'grey',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  checkboxChecked: {
+    backgroundColor: '#007BFF',
+    borderColor: '#007BFF',
+  },
+  optInText: {
+    flex: 1,
+    fontSize: 13,
+  },
+  legalText: {
+    fontSize: 11,
+    textAlign: 'center',
+    opacity: 0.7,
+    marginTop: 8,
+    lineHeight: 16,
+  },
+  legalLink: {
+    textDecorationLine: 'underline',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

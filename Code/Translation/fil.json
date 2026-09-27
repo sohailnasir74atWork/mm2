@@ -344,7 +344,8 @@
         "inbox": "Inbox",
         "youAreBlocked": "Ikaw ay na-block ng isang Admin.",
         "inappropriateLanguage": "Ang iyong mensahe ay naglalaman ng hindi tamang wika.",
-        "messageTooLong": "Ang mensahe ay hindi maaaring lumagpas ng 100 salita.",
+        "messageTooLong": "Ang mensahe ay hindi maaaring lumagpas ng {{max}} character.",
+        "messageTooLongWords": "Ang mensahe ay hindi maaaring lumagpas ng {{max}} salita.",
         "sendingTooQuickly": "Nagpapadala ka ng mga mensahe nang masyadong mabilis. Mangyaring maghintay ng ilang sandali.",
         "proUsersOnlyLinks": "Tanging mga Pro users lamang ang makakapagpadala ng mga link."
     },
@@ -355,5 +356,16 @@
         "recent_posts": "Mga Kamakailang Post",
         "no_posts_yet": "Wala pang mga post.",
         "load_more_posts": "Mag-load ng higit pang posts"
+    },
+    "mystuff": {
+        "select": "Pumili",
+        "select_done": "Tapos na",
+        "select_all": "Lahat",
+        "select_other": "Iba pa",
+        "selected_count": "{{count}} ang napili",
+        "remove": "Alisin",
+        "remove_selected_title": "Alisin ang {{count}} item?",
+        "remove_selected_msg": "Aalisin ang mga ito sa inventory mo. Hindi maaapektuhan ang mga goal at trade history mo.",
+        "cancel": "Kanselahin"
     }
 }

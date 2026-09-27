@@ -14,7 +14,7 @@ export const getAppDownloadLink = () => {
     try {
       const appLink = getAppDownloadLink();
       const shareOptions = {
-        message: `Explore the Adoptme value calculator, check values, and make smarter trades. Download now: ${appLink}`,
+        message: `Explore MM2 Values, compare trades, and check Murder Mystery 2 item values. Download now: ${appLink}`,
         title: 'Share App',
       };
       await Share.open(shareOptions);
@@ -108,7 +108,7 @@ I would like to report ...
 };
 
 export const handleBloxFruit = () => {
-  const websiteUrl = config.otherapplink;
+  const websiteUrl = config.otherapplink2;
   Linking.openURL(websiteUrl).catch(() =>
     Alert.alert('Error', 'Unable to open the website. Please try again later.')
   );
@@ -124,7 +124,7 @@ export const handleBloxFruit = () => {
     );
   };
   export const handleadoptme  = () => {
-    const websiteUrl = config.otherapplink2;
+    const websiteUrl = config.otherapplink;
     Linking.openURL(websiteUrl).catch(() =>
       Alert.alert('Error', 'Unable to open the website. Please try again later.')
     );
@@ -145,14 +145,21 @@ export const handleBloxFruit = () => {
   };
 
   export const handleOpenPrivacy = () => {
-    const websiteUrl = 'https://adoptmevalues.app/privacy-policy/';
+    const websiteUrl = 'https://mm2values.app/privacy';
+    Linking.openURL(websiteUrl).catch(() =>
+      Alert.alert('Error', 'Unable to open the website. Please try again later.')
+    );
+  };
+
+  export const handleOpenTerms = () => {
+    const websiteUrl = 'https://mm2values.app/terms';
     Linking.openURL(websiteUrl).catch(() =>
       Alert.alert('Error', 'Unable to open the website. Please try again later.')
     );
   };
 
   export const handleOpenChild = () => {
-    const websiteUrl = 'https://adoptmevalues.app/child-safety-standards-policy/';
+    const websiteUrl = 'https://mm2values.app/child-safety-standards-policy';
     Linking.openURL(websiteUrl).catch(() =>
       Alert.alert('Error', 'Unable to open the website. Please try again later.')
     );

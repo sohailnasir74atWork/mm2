@@ -24,12 +24,6 @@ import { useHaptic } from '../Helper/HepticFeedBack';
 import { doc, getDoc, setDoc } from '@react-native-firebase/firestore';
 import { ref, get } from '@react-native-firebase/database';
 import { updateLeaderboardCacheRealtime } from './updateLeaderboardCache';
-import { initGameSounds, playPop, playWoosh, setSoundEnabled, releaseGameSounds } from '../Helper/GameSoundService';
-import { createMMKV } from 'react-native-mmkv';
-
-const soundStorage = createMMKV({ id: 'game-sounds' });
-const SOUND_KEY = 'game_sound_memory';
-const GAME_KEY = 'memory';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_MARGIN = 6;
@@ -85,7 +79,6 @@ const MemoryMatch = ({ visible, onClose, screenMode = false }) => {
   const [moves, setMoves] = useState(0);
   const [timer, setTimer] = useState(0);
   const [isChecking, setIsChecking] = useState(false);
-  const [soundOn, setSoundOn] = useState(true);
 
   const timerRef = useRef(null);
   const flipAnims = useRef([]);
@@ -135,24 +128,6 @@ const MemoryMatch = ({ visible, onClose, screenMode = false }) => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [phase]);
 
-  // ── Init sounds ──
-  useEffect(() => {
-    let enabled = true;
-    try { enabled = soundStorage.getBoolean(SOUND_KEY) !== false; } catch {}
-    setSoundOn(enabled);
-    setSoundEnabled(GAME_KEY, enabled);
-    initGameSounds();
-    return () => { releaseGameSounds(); };
-  }, []);
-
-  const toggleSound = useCallback(() => {
-    const next = !soundOn;
-    setSoundOn(next);
-    try { soundStorage.set(SOUND_KEY, next); } catch {}
-    setSoundEnabled(GAME_KEY, next);
-    triggerHapticFeedback('selection');
-  }, [soundOn, triggerHapticFeedback]);
-
   const startGame = useCallback(() => {
     const deck = generateDeck(diff.pairs);
     setCards(deck);
@@ -173,7 +148,6 @@ const MemoryMatch = ({ visible, onClose, screenMode = false }) => {
     if (flippedIds.length >= 2) return;
 
     triggerHapticFeedback('impactLight');
-    playPop(GAME_KEY);
 
     Animated.spring(flipAnims.current[cardId], {
       toValue: 1, tension: 250, friction: 8, useNativeDriver: true,
@@ -194,7 +168,6 @@ const MemoryMatch = ({ visible, onClose, screenMode = false }) => {
       if (newCards[first].emoji === newCards[second].emoji) {
         setTimeout(() => {
           triggerHapticFeedback('notificationSuccess');
-          playWoosh(GAME_KEY);
           if (Platform.OS === 'android') Vibration.vibrate([0, 40, 20, 40]);
 
           const matched = [...newCards];
@@ -213,7 +186,6 @@ const MemoryMatch = ({ visible, onClose, screenMode = false }) => {
             setTimer(finalTime);
             setTimeout(() => {
               triggerHapticFeedback('notificationSuccess');
-              playWoosh(GAME_KEY);
               setTimeout(() => triggerHapticFeedback('impactHeavy'), 200);
               completeGame(moves + 1, finalTime);
             }, 500);
@@ -222,7 +194,6 @@ const MemoryMatch = ({ visible, onClose, screenMode = false }) => {
       } else {
         setTimeout(() => {
           triggerHapticFeedback('impactMedium');
-          playPop(GAME_KEY);
           Animated.parallel([
             Animated.timing(flipAnims.current[first], { toValue: 0, duration: 200, useNativeDriver: true }),
             Animated.timing(flipAnims.current[second], { toValue: 0, duration: 200, useNativeDriver: true }),
@@ -361,22 +332,12 @@ const MemoryMatch = ({ visible, onClose, screenMode = false }) => {
           <View style={styles.header}>
             <Text style={[styles.title, { color: c.text }]}>🃏 Memory Match</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TouchableOpacity onPress={toggleSound} style={styles.closeBtn}>
-                <Icon name={soundOn ? 'volume-high' : 'volume-mute'} size={20} color={c.textSecondary} />
-              </TouchableOpacity>
               <TouchableOpacity onPress={() => { if (timerRef.current) clearInterval(timerRef.current); onClose(); }} style={styles.closeBtn}>
                 <Icon name="close" size={22} color={c.textSecondary} />
               </TouchableOpacity>
             </View>
           </View>
         </>
-      )}
-      {screenMode && (
-        <View style={{ position: 'absolute', top: 10, right: 12, zIndex: 20 }}>
-          <TouchableOpacity onPress={toggleSound} style={styles.closeBtn}>
-            <Icon name={soundOn ? 'volume-high' : 'volume-mute'} size={20} color={c.textSecondary} />
-          </TouchableOpacity>
-        </View>
       )}
 
         {phase === 'loading' && (

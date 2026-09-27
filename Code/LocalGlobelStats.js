@@ -5,7 +5,6 @@ import Purchases from 'react-native-purchases';
 import config from './Helper/Environment';
 import { useTranslation } from 'react-i18next';
 
-import { mixpanel } from './AppHelper/MixPenel';
 import { showErrorMessage, showSuccessMessage } from './Helper/MessageHelper';
 
 const storage = createMMKV();
@@ -80,7 +79,6 @@ export const LocalStateProvider = ({ children }) => {
     valuesFetchedAt: storage.getString('valuesFetchedAt') || null,
     showFlag: storage.getBoolean('showFlag') ?? true, // ✅ Default true (show flag), user can hide to save data
     showOnlineStatus: storage.getBoolean('showOnlineStatus') ?? true, // ✅ Default true (show online), user can hide to save Firebase costs
-    gameMusicEnabled: storage.getBoolean('gameMusicEnabled') ?? true, // ✅ Default true (music on), user can toggle off/on
 
   }));
 
@@ -298,11 +296,6 @@ export const LocalStateProvider = ({ children }) => {
       );
 
       if (track) {
-        mixpanel.track('Purchase Completed', {
-          package: packageToPurchase.identifier,
-          price: packageToPurchase.product.price,
-          currency: packageToPurchase.product.currencyCode,
-        });
       }
 
       showSuccessMessage("Success", "Purchase completed successfully!");

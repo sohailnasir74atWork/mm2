@@ -11,7 +11,6 @@ import { getThemeColors } from '../Helper/themeColors';
 
 import Confetti from '../Design/Confetti';
 import { useNavigation } from '@react-navigation/native';
-import { initGameSounds, playWoosh, playPop, startAmbient, stopAmbient, setSoundEnabled, releaseGameSounds } from '../Helper/GameSoundService';
 
 // Fallback tokens from sailer-piece
 const colors = { bg: '#0F172A', card: '#1E293B', text: '#F8FAFC', success: '#10B981', dev: '#94A3B8' };
@@ -1396,8 +1395,6 @@ const ArrowGameScreen = () => {
     const [failed, setFailed] = useState(false);
     // Key of arrow unlocked via Hint button (shown with glow on levels 4+). null = no hint.
     const [hintKey, setHintKey] = useState(null);
-    // Sound toggle
-    const [soundOn, setSoundOn] = useState(true);
     // Level transition fade
     const gridOpacity = useRef(new Animated.Value(1)).current;
     // Confetti ref
@@ -1450,15 +1447,10 @@ const ArrowGameScreen = () => {
         y: GRID_PAD + r * CELL_SIZE + CELL_SIZE / 2,
     }), [CELL_SIZE]);
 
-    // Init sounds on mount
+    // Init ads on mount
     useEffect(() => {
         // Init ads so they're preloaded for hint/level triggers
         InterstitialAdManager.init();
-        let enabled = true;
-        try { enabled = storage.getBoolean('game_sound_arrow') !== false; } catch {}
-        setSoundOn(enabled);
-        initGameSounds().then(() => { if (enabled) startAmbient(); });
-        return () => { stopAmbient(); releaseGameSounds(); };
     }, []);
 
     // Glow breathing loop
@@ -1555,11 +1547,9 @@ const ArrowGameScreen = () => {
                 confettiRef.current?.start();
             }
             ReactNativeHapticFeedback.trigger('notificationSuccess');
-            playPop('arrow');
             // Tracked + generation-guarded: an untracked 800ms timer here could
             // land after a Restart and flash "Level Clear!" over a fresh board.
             const myGen = genRef.current;
-            pendingTimersRef.current.push(setTimeout(() => playWoosh('arrow'), 200));
             pendingTimersRef.current.push(setTimeout(() => {
                 if (genRef.current === myGen) setWon(true);
             }, 800));
@@ -1579,7 +1569,6 @@ const ArrowGameScreen = () => {
         if (!isPathClear(cells, cell, flying)) {
             // Wrong tap — shake + buzz, cost one life + one star point.
             ReactNativeHapticFeedback.trigger('impactMedium');
-            playPop('arrow');
             setWrongTaps((w) => w + 1);
             setLivesLeft((lv) => {
                 const next = Math.max(0, lv - 1);
@@ -1601,7 +1590,7 @@ const ArrowGameScreen = () => {
             ]).start();
             return;
         }
-        // Correct tap — woosh plays when arrow flies. No haptic click here (the
+        // Correct tap — no haptic click here (the
         // vibration motor is audible on some devices and reads as a "bip" sound).
         // Consume hint if this was the hinted arrow.
         if (hintKey === cell.key) setHintKey(null);
@@ -1675,8 +1664,6 @@ const ArrowGameScreen = () => {
 
             return Animated.parallel([pathAnim, fadeAnim]);
         });
-
-        playWoosh('arrow');
         // If this is the final arrow (no other non-flying arrows left), pop
         // confetti exactly when the last tail cell reaches its off-grid
         // waypoint. We treat in-flight arrows as already-gone so back-to-back
@@ -1742,13 +1729,6 @@ const ArrowGameScreen = () => {
         setLevelIdx(next);
         loadLevel(next);
     };
-    const toggleSound = () => {
-        const next = !soundOn;
-        setSoundOn(next);
-        setSoundEnabled('arrow', next);
-        if (next) startAmbient(); else stopAmbient();
-        ReactNativeHapticFeedback.trigger('selection');
-    };
 
     // Compute star rating for current level
     const currentStars = wrongTaps === 0 ? 3 : wrongTaps === 1 ? 2 : 1;
@@ -1791,9 +1771,6 @@ const ArrowGameScreen = () => {
                         <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>{`Level ${levelIdx + 1} of ${TOTAL_LEVELS}`}</Text>
                     </View>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TouchableOpacity onPress={toggleSound} style={styles.headerBtn}>
-                            <Ionicons name={soundOn ? 'volume-high' : 'volume-mute'} size={18} color="#FFF" />
-                        </TouchableOpacity>
                         <TouchableOpacity onPress={handleRestart} style={styles.headerBtn}>
                             <Ionicons name="refresh" size={20} color="#FFF" />
                         </TouchableOpacity>

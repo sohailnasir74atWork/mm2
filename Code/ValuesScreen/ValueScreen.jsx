@@ -1,3 +1,6 @@
+import useValueSearchTelemetry from '../Helper/useValueSearchTelemetry';
+import {matchesItemName} from '../Helper/itemSearch';
+import CatalogStatus from '../Helper/CatalogStatus';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -22,14 +25,13 @@ import { useHaptic } from '../Helper/HepticFeedBack';
 import { useLocalState } from '../LocalGlobelStats';
 import { useTranslation } from 'react-i18next';
 import { ref, update } from '@react-native-firebase/database';
-import { mixpanel } from '../AppHelper/MixPenel';
 import { Menu, MenuOption, MenuOptions, MenuTrigger } from 'react-native-popup-menu';
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
 import { handleBloxFruit, handleadoptme } from '../SettingScreen/settinghelper';
 import {
   resolveItemImage, buildItemPool, unwrapFeed, priceOf, displayValueText,
-  DEFAULT_VALUE_SOURCE,
+  DEFAULT_VALUE_SOURCE, categoryKey,
 } from '../Helper/valueSources';
 
 
@@ -275,7 +277,7 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
       if (!item?.name) return false;
 
       // ✅ Search match: if search text is empty, show all items
-      const matchesSearch = !searchLower || item.name.toLowerCase().includes(searchLower);
+      const matchesSearch = matchesItemName(item.name, searchLower);
       
       // ✅ Filter match logic
       let matchesFilter = false;
@@ -284,9 +286,10 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
         matchesFilter = true;
       } else if (CATEGORIES.includes(filterUpper)) {
         // Category filter (ANCIENT, UNIQUE, CHROMA, etc.)
-        matchesFilter = item.type?.toUpperCase() === filterUpper ||
-                       item.category?.toUpperCase() === filterUpper ||
-                       item.Category?.toUpperCase() === filterUpper;
+        // categoryKey folds Supreme's plurals ("Godlies") into the chip's name.
+        matchesFilter = categoryKey(item.type) === filterUpper ||
+                       categoryKey(item.category) === filterUpper ||
+                       categoryKey(item.Category) === filterUpper;
       } else {
         // Check if it's a tier filter (numeric value like "1", "1.5", "2", "3.5", "4", "5")
         const itemTier = item.tier || item.Tier || '';
@@ -448,7 +451,8 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await reload(); // Re-fetch stock data
+      const refreshed = await reload();
+      if (refreshed === false) throw new Error('Catalog refresh incomplete'); // Re-fetch stock data
       // Show success feedback (silent — no toast dependency needed)
     } catch (error) {
       console.error('Error refreshing data:', error);
@@ -461,7 +465,6 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
     triggerHapticFeedback('impactLight');
     setHasAdBeenShown(true);
     setIsDrawerVisible(!isDrawerVisible);
-    mixpanel.track("Code Drawer Open");
   }
 
 
@@ -472,6 +475,8 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
   const handleSearchChange = debounce((text) => {
     setSearchText(text);
   }, 300);
+  useValueSearchTelemetry(searchText, filteredData.length, parsedValuesData.length);
+
   const closeDrawer = () => {
     setFilterDropdownVisible(false);
   };
@@ -484,6 +489,7 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
     <>
       <GestureHandlerRootView>
         <View style={styles.container}>
+          <CatalogStatus />
           {(fromChat || fromSetting) && selectedList?.length > 0 && (
             <View style={styles.selectedPetsSection}>
               <View style={styles.selectedPetsHeader}>

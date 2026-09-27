@@ -344,7 +344,8 @@
         "inbox": "Caixa de entrada",
         "youAreBlocked": "Você foi bloqueado por um administrador.",
         "inappropriateLanguage": "Sua mensagem contém linguagem inadequada.",
-        "messageTooLong": "A mensagem não pode exceder 100 palavras.",
+        "messageTooLong": "A mensagem não pode exceder {{max}} caracteres.",
+        "messageTooLongWords": "A mensagem não pode exceder {{max}} palavras.",
         "sendingTooQuickly": "Você está enviando mensagens muito rapidamente. Por favor, aguarde um momento.",
         "proUsersOnlyLinks": "Apenas usuários Pro podem enviar links."
     },
@@ -355,5 +356,17 @@
         "recent_posts": "Publicações Recentes",
         "no_posts_yet": "Nenhuma publicação ainda.",
         "load_more_posts": "Carregar mais publicações"
+    },
+    "mystuff": {
+        "select": "Selecionar",
+        "select_done": "Pronto",
+        "select_all": "Todos",
+        "select_other": "Outros",
+        "selected_count": "Selecionados: {{count}}",
+        "remove": "Remover",
+        "remove_selected_title": "Remover {{count}} itens?",
+        "remove_selected_title_one": "Remover {{count}} item?",
+        "remove_selected_msg": "Eles serão removidos do seu inventário. Suas metas e seu histórico de trocas não são afetados.",
+        "cancel": "Cancelar"
     }
 }

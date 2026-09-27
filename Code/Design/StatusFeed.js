@@ -39,6 +39,7 @@ import { useLocalState } from '../LocalGlobelStats';
 import config from '../Helper/Environment';
 import { createMMKV } from 'react-native-mmkv';
 import ProfileBottomDrawer from '../ChatScreen/GroupChat/BottomDrawer';
+import { ModalKeyboardView } from '../Helper/keyboardAvoidingContainer';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BUBBLE_SIZE = 64;
@@ -50,8 +51,13 @@ const STATUS_CACHE_TTL = 30 * 60 * 1000;       // 30 min — refetch only after 
 const FOLLOWING_CACHE_TTL = 30 * 60 * 1000;    // 30 min
 const FOLLOWING_CHUNK_SIZE = 30;               // Firestore 'in' limit
 // Feed = everyone you follow, then the newest statuses from everyone else.
-const GLOBAL_STATUS_LIMIT = 15;                // Latest N from the wider app
-const GLOBAL_FETCH_LIMIT = 15;                 // One query, exactly what we show
+// The feed groups statuses into ONE BUBBLE PER USER, so a cap on statuses is
+// not a cap on what the user sees: the 15 newest statuses can easily come from
+// a handful of prolific posters, leaving the row with a few bubbles while
+// dozens of users have something live. Cap distinct USERS instead, and read a
+// wide enough window to find them.
+const GLOBAL_USER_LIMIT = 20;                  // Max global (non-following) BUBBLES
+const GLOBAL_FETCH_LIMIT = 60;                 // Window to pick those bubbles from
 // Hard bound on the following query, which previously had none.
 const FOLLOWING_FETCH_LIMIT = 40;
 
@@ -410,7 +416,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
       const followingResults = await fetchFollowingChunk(0);
       followingChunkRef.current = 1;
 
-      // The "latest 15" half is identical for everyone, so when this re-runs
+      // The global half is identical for everyone, so when this re-runs
       // purely because auth resolved, reuse it instead of re-querying.
       let globalResults;
       if (!force && identityChanged && globalCacheRef.current) {
@@ -429,9 +435,19 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
       }
 
       const followingSet = new Set([user?.id, ...followingIds]);
+      // Take whole users, newest-first, until we have GLOBAL_USER_LIMIT of
+      // them — NOT the first N statuses. Slicing statuses let one prolific
+      // poster eat most of the row; this gives every included user their full
+      // story (multiple frames) while still bounding the bubble count.
+      const globalUsers = new Set();
       const globalOnly = (globalResults || [])
         .filter(s => !followingSet.has(s.userId))
-        .slice(0, GLOBAL_STATUS_LIMIT);
+        .filter((s) => {
+          if (globalUsers.has(s.userId)) return true;      // another frame for an included user
+          if (globalUsers.size >= GLOBAL_USER_LIMIT) return false;
+          globalUsers.add(s.userId);
+          return true;
+        });
 
       const allRaw = [...(followingResults || []), ...globalOnly];
       const grouped = groupStatuses(allRaw, user?.id);
@@ -1143,7 +1159,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
 
       {/* ── Status Creator Modal ── */}
       <Modal visible={showCreator} transparent animationType="slide" onRequestClose={() => setShowCreator(false)}>
-        <View style={styles.creatorOverlay}>
+        <ModalKeyboardView style={styles.creatorOverlay}>
           <View style={[styles.creatorCard, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#FFF' }]}>
             <View style={styles.creatorHeader}>
               <Text style={[styles.creatorTitle, { color: textColor }]}>New Status</Text>
@@ -1200,7 +1216,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
               )}
             </TouchableOpacity>
           </View>
-        </View>
+        </ModalKeyboardView>
       </Modal>
     </View>
   );

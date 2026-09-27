@@ -7,7 +7,6 @@ import { useGlobalState } from '../GlobelStats';
 import { useLocalState } from '../LocalGlobelStats';
 import config from '../Helper/Environment';
 import { showErrorMessage } from '../Helper/MessageHelper';
-import { mixpanel } from '../AppHelper/MixPenel';
 import InterstitialAdManager from '../Ads/IntAd';
 import { resolveItemImage } from '../Helper/valueSources';
 
@@ -97,7 +96,6 @@ const ShareTradeModal = ({ visible, onClose, hasItems, wantsItems, hasTotal, wan
     const handleShare = async () => {
         try {
             if (!viewRef.current) return;
-            mixpanel.track("Trade Share");
             const uri = await viewRef.current.capture();
             const callbackfunction = async ()=>{
                 await Share.open({

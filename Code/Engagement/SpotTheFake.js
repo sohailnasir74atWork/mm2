@@ -24,12 +24,6 @@ import { useHaptic } from '../Helper/HepticFeedBack';
 import { doc, getDoc, setDoc } from '@react-native-firebase/firestore';
 import { ref, get } from '@react-native-firebase/database';
 import { updateLeaderboardCacheRealtime } from './updateLeaderboardCache';
-import { initGameSounds, playPop, playWoosh, setSoundEnabled, releaseGameSounds } from '../Helper/GameSoundService';
-import { createMMKV } from 'react-native-mmkv';
-
-const soundStorage = createMMKV({ id: 'game-sounds' });
-const SOUND_KEY = 'game_sound_spot';
-const GAME_KEY = 'spot';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_SIZE = 3;
@@ -66,7 +60,6 @@ const SpotTheFake = ({ visible, onClose, screenMode = false }) => {
   const [grid, setGrid] = useState(Array(9).fill(CHAR_NONE));
   const [feedback, setFeedback] = useState(null);
   const [comboCount, setComboCount] = useState(0);
-  const [soundOn, setSoundOn] = useState(true);
 
   const spawnTimerRef = useRef(null);
   const despawnTimersRef = useRef({});
@@ -104,24 +97,6 @@ const SpotTheFake = ({ visible, onClose, screenMode = false }) => {
     }
   }, [visible]);
 
-  // ── Init sounds ──
-  useEffect(() => {
-    let enabled = true;
-    try { enabled = soundStorage.getBoolean(SOUND_KEY) !== false; } catch {}
-    setSoundOn(enabled);
-    setSoundEnabled(GAME_KEY, enabled);
-    initGameSounds();
-    return () => { releaseGameSounds(); };
-  }, []);
-
-  const toggleSound = useCallback(() => {
-    const next = !soundOn;
-    setSoundOn(next);
-    try { soundStorage.set(SOUND_KEY, next); } catch {}
-    setSoundEnabled(GAME_KEY, next);
-    triggerHapticFeedback('selection');
-  }, [soundOn, triggerHapticFeedback]);
-
   const getSpeed = useCallback(() => {
     const speedLevel = Math.floor(catchesRef.current / SPEED_UP_EVERY);
     const visibleTime = Math.max(MIN_SPAWN_MS, INITIAL_SPAWN_MS - speedLevel * 80);
@@ -138,7 +113,6 @@ const SpotTheFake = ({ visible, onClose, screenMode = false }) => {
     setGrid(Array(9).fill(CHAR_NONE));
     setPhase('gameover');
 
-    playPop(GAME_KEY);
     if (Platform.OS === 'android') Vibration.vibrate([0, 100, 50, 100]);
 
     const finalScore = scoreRef.current;
@@ -213,7 +187,6 @@ const SpotTheFake = ({ visible, onClose, screenMode = false }) => {
         setLives(livesRef.current);
         setComboCount(0);
         triggerHapticFeedback('notificationError');
-        playPop(GAME_KEY);
         setFeedback({ index: cellIndex, type: 'miss' });
         setTimeout(() => setFeedback(null), 400);
         
@@ -258,7 +231,6 @@ const SpotTheFake = ({ visible, onClose, screenMode = false }) => {
       setComboCount(newCombo);
       setFeedback({ index, type: 'hit', points });
       triggerHapticFeedback('impactMedium');
-      playPop(GAME_KEY);
       if (newCombo >= 3) setTimeout(() => triggerHapticFeedback('impactLight'), 80);
     } else if (charType === CHAR_SHERIFF) {
       scoreRef.current += 25;
@@ -268,14 +240,12 @@ const SpotTheFake = ({ visible, onClose, screenMode = false }) => {
       setComboCount(prev => prev + 1);
       setFeedback({ index, type: 'sheriff', points: 25 });
       triggerHapticFeedback('notificationSuccess');
-      playWoosh(GAME_KEY);
     } else if (charType === CHAR_INNOCENT) {
       livesRef.current -= 1;
       setLives(livesRef.current);
       setComboCount(0);
       setFeedback({ index, type: 'wrong' });
       triggerHapticFeedback('notificationError');
-      playPop(GAME_KEY);
       if (Platform.OS === 'android') Vibration.vibrate([0, 60, 40, 60]);
 
       if (livesRef.current <= 0) {
@@ -306,7 +276,6 @@ const SpotTheFake = ({ visible, onClose, screenMode = false }) => {
     gameActiveRef.current = true;
     setPhase('playing');
     triggerHapticFeedback('impactHeavy');
-    playWoosh(GAME_KEY);
     spawnTimerRef.current = setTimeout(spawnCharacter, 700);
   }, [spawnCharacter, triggerHapticFeedback, scaleAnims]);
 
@@ -321,22 +290,12 @@ const SpotTheFake = ({ visible, onClose, screenMode = false }) => {
           <View style={styles.header}>
             <Text style={[styles.title, { color: c.text }]}>🔪 Whack Murderer</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TouchableOpacity onPress={toggleSound} style={styles.closeBtn}>
-                <Icon name={soundOn ? 'volume-high' : 'volume-mute'} size={20} color={c.textSecondary} />
-              </TouchableOpacity>
               <TouchableOpacity onPress={() => { gameActiveRef.current = false; onClose(); }} style={styles.closeBtn}>
                 <Icon name="close" size={22} color={c.textSecondary} />
               </TouchableOpacity>
             </View>
           </View>
         </>
-      )}
-      {screenMode && (
-        <View style={{ position: 'absolute', top: 10, right: 12, zIndex: 20 }}>
-          <TouchableOpacity onPress={toggleSound} style={styles.closeBtn}>
-            <Icon name={soundOn ? 'volume-high' : 'volume-mute'} size={20} color={c.textSecondary} />
-          </TouchableOpacity>
-        </View>
       )}
 
       {phase === 'loading' && (

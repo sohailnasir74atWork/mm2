@@ -86,4 +86,37 @@ const ConditionalKeyboardWrapper = ({ children, style, chatscreen = false, priva
   );
 };
 
+/**
+ * Keyboard avoidance for content INSIDE a <Modal>.
+ *
+ * A KeyboardAvoidingView placed outside a Modal does nothing for what is
+ * inside it: RN renders a Modal into its own window on Android and its own
+ * view controller on iOS, so the two layouts are completely independent.
+ * Every modal that contains a TextInput has to handle the keyboard itself.
+ *
+ * The two platforms need opposite things:
+ *
+ *   Android — nothing. ReactModalHostView sets SOFT_INPUT_ADJUST_RESIZE on the
+ *     dialog window (react-native/ReactAndroid/.../ReactModalHostView.kt), so
+ *     the modal's own layout already shrinks to the space above the keyboard.
+ *     behavior={undefined} leaves KeyboardAvoidingView an inert View; adding
+ *     'padding' on top of the OS resize would move the content twice.
+ *
+ *   iOS — 'padding'. There is no automatic resize; without this the keyboard
+ *     just covers the bottom of the modal, which on a centred report dialog
+ *     means the reason box and the Submit button both disappear.
+ *
+ * `style` should carry the flex:1 overlay style the modal was already using,
+ * so this slots in as a drop-in replacement for that outer View.
+ */
+export const ModalKeyboardView = ({ children, style, offset = 0 }) => (
+  <KeyboardAvoidingView
+    style={style}
+    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    keyboardVerticalOffset={offset}
+  >
+    {children}
+  </KeyboardAvoidingView>
+);
+
 export default ConditionalKeyboardWrapper;

@@ -17,7 +17,7 @@ import { useGlobalState } from '../GlobelStats';
 import { useLocalState } from '../LocalGlobelStats';
 import { useThemeColors } from '../Helper/themeColors';
 import {
-  buildItemPool, unwrapFeed, priceOf, isSummable, DEFAULT_VALUE_SOURCE,
+  buildItemPool, unwrapFeed, priceOf, isSummable, DEFAULT_VALUE_SOURCE, categoryKey,
 } from '../Helper/valueSources';
 import config from '../Helper/Environment';
 import PetModal from '../ChatScreen/PrivateChat/PetsModel';
@@ -57,6 +57,20 @@ const RESULT_META = {
 
 const HISTORY_PAGE = 15;
 
+// Bulk-select groups on the Items tab. What MM2 players call "rarity" is the
+// item category (the Values screen filters by the same list), not Supreme's
+// numeric `rarity` score. categoryKey (valueSources) folds Supreme's plural
+// spellings ("Godlies") into the same group as MM2's ("Godly").
+const CATEGORY_ORDER = ['ANCIENT', 'UNIQUE', 'CHROMA', 'GODLY', 'VINTAGE', 'LEGEND', 'RARE', 'UNCOMMON', 'COMMON', 'PETS'];
+// Known categories in game order, then anything else (Sets, Evos, Misc), then
+// items with no category at all ("Other") last.
+const categoryRank = (key) => {
+  if (!key) return CATEGORY_ORDER.length + 1;
+  const i = CATEGORY_ORDER.indexOf(key);
+  return i === -1 ? CATEGORY_ORDER.length : i;
+};
+const titleCase = (s) => s.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase());
+
 const MyStuffScreen = ({ selectedTheme }) => {
   const { user, firestoreDB } = useGlobalState();
   const { localState, updateLocalState } = useLocalState();
@@ -71,6 +85,10 @@ const MyStuffScreen = ({ selectedTheme }) => {
   const [petModalVisible, setPetModalVisible] = useState(false);
   const [petModalOwned, setPetModalOwned] = useState(true);
   const [signinVisible, setSigninVisible] = useState(false);
+
+  // Bulk select on the Items tab. Indices point into ownedPets.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIdx, setSelectedIdx] = useState(() => new Set());
 
   // ── Trade history (logged from the calculator) ──
   const [history, setHistory] = useState([]);
@@ -212,21 +230,160 @@ const MyStuffScreen = ({ selectedTheme }) => {
     savePetsToReviews(ownedPets, newWishlist);
   }, [ownedPets, wishlistPets, savePetsToReviews]);
 
+  // ── Bulk select (Items tab) ──
+  // Selected indices only mean something against the list they were picked
+  // from. The snapshot listener (another device) and the Edit Items modal can
+  // replace ownedPets and shift every index, so any new list drops the
+  // selection rather than risk removing the wrong items.
+  const ownedPetsRef = useRef(ownedPets);
+  ownedPetsRef.current = ownedPets;
+
+  useEffect(() => {
+    setSelectedIdx(prev => (prev.size ? new Set() : prev));
+    if (ownedPets.length === 0) setSelectMode(false);
+  }, [ownedPets]);
+
+  useEffect(() => {
+    setSelectMode(false);
+    setSelectedIdx(prev => (prev.size ? new Set() : prev));
+  }, [activeTab]);
+
+  // name → category, built once per catalogue load so grouping is a lookup,
+  // not a scan of the pool per owned item.
+  const categoryByName = useMemo(() => {
+    const m = new Map();
+    parsedData.forEach(d => {
+      const n = (d?.name || '').toLowerCase().trim();
+      const cat = d?.category || d?.type || d?.Category;
+      if (n && cat && !m.has(n)) m.set(n, cat);
+    });
+    return m;
+  }, [parsedData]);
+
+  // The catalogue's category wins; the one saved with the item covers names
+  // the catalogue no longer lists.
+  const categoryGroups = useMemo(() => {
+    const byKey = new Map();
+    ownedPets.forEach((p, i) => {
+      const n = (p?.name || '').toLowerCase().trim();
+      const key = categoryKey(categoryByName.get(n) || p?.category || p?.type || p?.Category);
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key).push(i);
+    });
+    return [...byKey.entries()]
+      .map(([key, indices]) => ({ key, indices }))
+      .sort((a, b) => categoryRank(a.key) - categoryRank(b.key) || a.key.localeCompare(b.key));
+  }, [ownedPets, categoryByName]);
+
+  const selectChips = useMemo(() => [
+    { key: 'all', label: t('mystuff.select_all', { defaultValue: 'All' }), indices: ownedPets.map((_, i) => i) },
+    ...categoryGroups.map(g => ({
+      key: `cat-${g.key}`,
+      label: g.key ? titleCase(g.key) : t('mystuff.select_other', { defaultValue: 'Other' }),
+      indices: g.indices,
+    })),
+  ], [ownedPets, categoryGroups, t]);
+
+  const toggleSelectMode = useCallback(() => {
+    setSelectMode(m => !m);
+    setSelectedIdx(prev => (prev.size ? new Set() : prev));
+  }, []);
+
+  const toggleSelected = useCallback((index) => {
+    setSelectedIdx(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }, []);
+
+  // Chips combine: a group not fully selected gets filled in, a fully
+  // selected one is cleared. "All" is just the group of every index.
+  const toggleGroup = useCallback((indices) => {
+    setSelectedIdx(prev => {
+      const allIn = indices.every(i => prev.has(i));
+      const next = new Set(prev);
+      indices.forEach(i => (allIn ? next.delete(i) : next.add(i)));
+      return next;
+    });
+  }, []);
+
+  const removeSelected = useCallback(() => {
+    const count = selectedIdx.size;
+    if (!count) return;
+    const pickedFrom = ownedPets;
+    const picked = selectedIdx;
+    Alert.alert(
+      t('mystuff.remove_selected_title', { count, defaultValue: 'Remove {{count}} items?' }),
+      t('mystuff.remove_selected_msg', {
+        defaultValue: "They'll be removed from your inventory. Your goals and trade history are not affected.",
+      }),
+      [
+        { text: t('mystuff.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
+        {
+          text: t('mystuff.remove', { defaultValue: 'Remove' }),
+          style: 'destructive',
+          onPress: () => {
+            // The list changed while the dialog was open, so these indices no
+            // longer point at what was picked (and the selection is gone).
+            if (ownedPetsRef.current !== pickedFrom) return;
+            const newOwned = pickedFrom.filter((_, i) => !picked.has(i));
+            setOwnedPets(newOwned);
+            savePetsToReviews(newOwned, wishlistPets);
+            setSelectMode(false);
+            setSelectedIdx(new Set());
+          },
+        },
+      ],
+    );
+  }, [selectedIdx, ownedPets, wishlistPets, savePetsToReviews, t]);
+
   const currentList = activeTab === 'items' ? ownedPets : wishlistPets;
 
   // Render compact item card
   const renderItem = useCallback(({ item, index }) => {
     const val = lookupVal(item);
+    const isSelected = selectMode && selectedIdx.has(index);
+    // In select mode the whole card is the tap target. Outside it the card is
+    // inert and invisible to screen readers as a unit, exactly like the plain
+    // View it used to be. Kept the same element type either way so toggling
+    // the mode doesn't remount every cell (and reload every image).
     return (
-      <View style={[$.card, { backgroundColor: C.bgAlt, borderColor: C.border }]}>
-        {/* Remove button */}
-        <TouchableOpacity
-          onPress={() => removeOwnedPet(index)}
-          style={$.cardRemoveBtn}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-        >
-          <FontAwesome name="xmark" size={9} color="#fff" />
-        </TouchableOpacity>
+      <TouchableOpacity
+        disabled={!selectMode}
+        accessible={selectMode}
+        accessibilityRole={selectMode ? 'checkbox' : undefined}
+        accessibilityState={selectMode ? { checked: isSelected } : undefined}
+        onPress={() => toggleSelected(index)}
+        activeOpacity={0.7}
+        style={[
+          $.card,
+          { backgroundColor: C.bgAlt, borderColor: C.border },
+          isSelected && { backgroundColor: config.colors.primary + '14', borderColor: config.colors.primary },
+        ]}
+      >
+        {selectMode ? (
+          <View
+            style={[
+              $.cardCheck,
+              isSelected
+                ? { backgroundColor: config.colors.primary, borderColor: config.colors.primary }
+                : { backgroundColor: C.bg, borderColor: C.textSecondary },
+            ]}
+          >
+            {isSelected && <FontAwesome name="check" size={8} color="#fff" solid />}
+          </View>
+        ) : (
+          /* Remove button */
+          <TouchableOpacity
+            onPress={() => removeOwnedPet(index)}
+            style={$.cardRemoveBtn}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <FontAwesome name="xmark" size={9} color="#fff" />
+          </TouchableOpacity>
+        )}
         <Image
           source={{ uri: item.imageUrl || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
           style={$.cardImage}
@@ -242,9 +399,9 @@ const MyStuffScreen = ({ selectedTheme }) => {
             </Text>
           </View>
         )}
-      </View>
+      </TouchableOpacity>
     );
-  }, [lookupVal, C, removeOwnedPet]);
+  }, [lookupVal, C, removeOwnedPet, selectMode, selectedIdx, toggleSelected]);
 
   // ── Intelligent Goal Card ──
   const renderGoalCard = useCallback(({ item, index }) => {
@@ -757,24 +914,107 @@ const MyStuffScreen = ({ selectedTheme }) => {
             data={currentList}
             keyExtractor={(item, i) => `${item.id || item.name || i}-${i}`}
             renderItem={renderItem}
+            extraData={selectMode ? selectedIdx : null}
             numColumns={GRID_COLS}
             columnWrapperStyle={$.gridRow}
             contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 180 }}
             showsVerticalScrollIndicator={false}
             ListHeaderComponent={
-              <TouchableOpacity
-                style={[$.addBarBtn, { borderColor: config.colors.primary + '50' }]}
-                onPress={() => handleAddItems(true)}
-                activeOpacity={0.7}
-              >
-                <FontAwesome name="pen-to-square" size={12} color={config.colors.primary} solid />
-                <Text style={[$.addBarText, { color: config.colors.primary }]}>
-                  {t('mystuff.edit_items')}
-                </Text>
-              </TouchableOpacity>
+              <View>
+                <View style={$.itemsHeaderRow}>
+                  <TouchableOpacity
+                    style={[$.addBarBtn, $.itemsHeaderEdit, { borderColor: config.colors.primary + '50' }]}
+                    onPress={() => handleAddItems(true)}
+                    activeOpacity={0.7}
+                  >
+                    <FontAwesome name="pen-to-square" size={12} color={config.colors.primary} solid />
+                    <Text style={[$.addBarText, { color: config.colors.primary }]}>
+                      {t('mystuff.edit_items')}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      $.selectBtn,
+                      selectMode
+                        ? { backgroundColor: config.colors.primary, borderColor: config.colors.primary }
+                        : { borderColor: config.colors.primary + '50' },
+                    ]}
+                    onPress={toggleSelectMode}
+                    activeOpacity={0.7}
+                  >
+                    <FontAwesome
+                      name={selectMode ? 'check' : 'list-check'}
+                      size={12}
+                      color={selectMode ? '#fff' : config.colors.primary}
+                      solid
+                    />
+                    <Text style={[$.addBarText, selectMode ? $.onPrimaryText : { color: config.colors.primary }]}>
+                      {selectMode
+                        ? t('mystuff.select_done', { defaultValue: 'Done' })
+                        : t('mystuff.select', { defaultValue: 'Select' })}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Select all, or a whole category at once — chips combine */}
+                {selectMode && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={$.chipScroll}
+                    contentContainerStyle={$.chipRow}
+                  >
+                    {selectChips.map((chip) => {
+                      const active = chip.indices.length > 0 && chip.indices.every(i => selectedIdx.has(i));
+                      return (
+                        <TouchableOpacity
+                          key={chip.key}
+                          style={[
+                            $.chip,
+                            active
+                              ? { backgroundColor: config.colors.primary, borderColor: config.colors.primary }
+                              : { backgroundColor: C.bgAlt, borderColor: C.border },
+                          ]}
+                          onPress={() => toggleGroup(chip.indices)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[$.chipText, active ? $.onPrimaryText : { color: C.text }]}>
+                            {chip.label} ({chip.indices.length})
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                )}
+              </View>
             }
           />
         )
+      )}
+
+      {/* Bulk action bar — pinned under the grid while selecting */}
+      {activeTab === 'items' && selectMode && ownedPets.length > 0 && (
+        <View
+          style={[
+            $.selectBar,
+            { backgroundColor: C.bgAlt, borderTopColor: C.border, paddingBottom: 10 + insets.bottom },
+          ]}
+        >
+          <Text style={[$.selectBarCount, { color: C.text }]}>
+            {t('mystuff.selected_count', { count: selectedIdx.size, defaultValue: '{{count}} selected' })}
+          </Text>
+          <TouchableOpacity
+            style={[$.selectBarRemove, !selectedIdx.size && $.selectBarRemoveDisabled]}
+            onPress={removeSelected}
+            disabled={!selectedIdx.size}
+            activeOpacity={0.8}
+          >
+            <FontAwesome name="trash-can" size={12} color="#fff" solid />
+            <Text style={$.selectBarRemoveText}>
+              {t('mystuff.remove', { defaultValue: 'Remove' })}
+            </Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* ── GOALS TAB ── */}
@@ -944,6 +1184,57 @@ const $ = StyleSheet.create({
     fontSize: 8,
     fontWeight: '800',
   },
+  cardCheck: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    zIndex: 5,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Bulk select — header buttons, category chips, bottom action bar
+  itemsHeaderRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  itemsHeaderEdit: { flex: 1, marginBottom: 0 },
+  selectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  chipScroll: { marginHorizontal: -16, marginBottom: 8 },
+  chipRow: { paddingHorizontal: 16, gap: 6 },
+  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: 1 },
+  chipText: { fontSize: 11, fontWeight: '700' },
+  onPrimaryText: { color: '#fff' },
+  selectBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  selectBarCount: { fontSize: 13, fontWeight: '800' },
+  selectBarRemove: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  selectBarRemoveDisabled: { opacity: 0.4 },
+  selectBarRemoveText: { color: '#fff', fontSize: 13, fontWeight: '800' },
 
   // Goal Card
   // Trade history stats panel

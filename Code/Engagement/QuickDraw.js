@@ -24,12 +24,6 @@ import { useHaptic } from '../Helper/HepticFeedBack';
 import { doc, getDoc, setDoc } from '@react-native-firebase/firestore';
 import { ref, get } from '@react-native-firebase/database';
 import { updateLeaderboardCacheRealtime } from './updateLeaderboardCache';
-import { initGameSounds, playPop, playWoosh, setSoundEnabled, releaseGameSounds } from '../Helper/GameSoundService';
-import { createMMKV } from 'react-native-mmkv';
-
-const soundStorage = createMMKV({ id: 'game-sounds' });
-const SOUND_KEY = 'game_sound_draw';
-const GAME_KEY = 'draw';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const TOTAL_ROUNDS = 5;
@@ -57,7 +51,6 @@ const QuickDraw = ({ visible, onClose, screenMode = false }) => {
   const [roundTimes, setRoundTimes] = useState([]); 
   const [currentTime, setCurrentTime] = useState(0);
   const [tappedEarly, setTappedEarly] = useState(false);
-  const [soundOn, setSoundOn] = useState(true);
 
   const drawTimeRef = useRef(0);    
   const waitTimerRef = useRef(null); 
@@ -83,24 +76,6 @@ const QuickDraw = ({ visible, onClose, screenMode = false }) => {
     })();
   }, [visible, firestoreDB, uid]);
 
-  // ── Init sounds ──
-  useEffect(() => {
-    let enabled = true;
-    try { enabled = soundStorage.getBoolean(SOUND_KEY) !== false; } catch {}
-    setSoundOn(enabled);
-    setSoundEnabled(GAME_KEY, enabled);
-    initGameSounds();
-    return () => { releaseGameSounds(); };
-  }, []);
-
-  const toggleSound = useCallback(() => {
-    const next = !soundOn;
-    setSoundOn(next);
-    try { soundStorage.set(SOUND_KEY, next); } catch {}
-    setSoundEnabled(GAME_KEY, next);
-    triggerHapticFeedback('selection');
-  }, [soundOn, triggerHapticFeedback]);
-
   const startRound = useCallback(() => {
     setTappedEarly(false);
     setCurrentTime(0);
@@ -115,7 +90,6 @@ const QuickDraw = ({ visible, onClose, screenMode = false }) => {
       drawTimeRef.current = Date.now();
       setPhase('draw');
       triggerHapticFeedback('impactHeavy');
-      playWoosh(GAME_KEY);
       if (Platform.OS === 'android') Vibration.vibrate(100);
 
       Animated.parallel([
@@ -131,7 +105,6 @@ const QuickDraw = ({ visible, onClose, screenMode = false }) => {
       setTappedEarly(true);
       setPhase('early');
       triggerHapticFeedback('notificationError');
-      playPop(GAME_KEY);
       if (Platform.OS === 'android') Vibration.vibrate([0, 80, 40, 80]);
 
       const newTimes = [...roundTimes, 999];
@@ -142,7 +115,6 @@ const QuickDraw = ({ visible, onClose, screenMode = false }) => {
       setCurrentTime(reactionTime);
       setPhase('roundResult');
       triggerHapticFeedback('notificationSuccess');
-      playPop(GAME_KEY);
 
       const newTimes = [...roundTimes, reactionTime];
       setRoundTimes(newTimes);
@@ -265,22 +237,12 @@ const QuickDraw = ({ visible, onClose, screenMode = false }) => {
           <View style={styles.header}>
             <Text style={[styles.title, { color: c.text }]}>⚡ Quick Draw</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TouchableOpacity onPress={toggleSound} style={styles.closeBtn}>
-                <Icon name={soundOn ? 'volume-high' : 'volume-mute'} size={20} color={c.textSecondary} />
-              </TouchableOpacity>
               <TouchableOpacity onPress={() => { if (waitTimerRef.current) clearTimeout(waitTimerRef.current); onClose(); }} style={styles.closeBtn}>
                 <Icon name="close" size={22} color={c.textSecondary} />
               </TouchableOpacity>
             </View>
           </View>
         </>
-      )}
-      {screenMode && (
-        <View style={{ position: 'absolute', top: 10, right: 12, zIndex: 20 }}>
-          <TouchableOpacity onPress={toggleSound} style={styles.closeBtn}>
-            <Icon name={soundOn ? 'volume-high' : 'volume-mute'} size={20} color={c.textSecondary} />
-          </TouchableOpacity>
-        </View>
       )}
 
         {phase === 'loading' && (

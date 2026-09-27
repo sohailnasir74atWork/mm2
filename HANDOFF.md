@@ -9,6 +9,84 @@ Detail lives in `PLAN_2026-09.md` (§1–9) and
 
 ---
 
+## 0a. 2026-09-23 — Admin Dashboard brought level with Adopt Me
+
+The ask: staff must be able to remove anyone's review/rating, and the console
+should match Adopt Me's. Adopt Me keeps its audit log in Supabase; here it is
+Firestore, per the standing Firebase-only rule. **Nothing below is deployed.**
+
+### What an admin gets now
+
+| Tab | What it does |
+|---|---|
+| Restrictions | Paged (40 per page, keyset on `bannedAt`) so it reaches every restricted user. Mutes visible with a MUTED chip and their own filter. |
+| Users | Search by display name, **exact email** (new `email` index on `users`), or user ID. Live BANNED / MUTED / ACTIVE chip per row, checked once and cached. |
+| Mod Log | **By moderator** leaderboard (actions and distinct users touched, 7/30/90 days) and a **Recent actions** feed filterable by type and moderator. Tap an entry to open the user. |
+| Chats (admin) | Pick two users by name/email/ID. Paged 100 per page with "Load older". Renders images, galleries, quoted replies, attachments. Delete the whole conversation for both sides. |
+| User Chats (admin) | Find a user, list every private conversation (paged on `timestamp`), tap to read it. |
+| Statuses | Newest first, paged. Admins and moderators can delete; logged. |
+| Access | Grant JMD-granting power by name/email/ID instead of a pasted uid. |
+
+**User sheet:** facts strip (member since, rating + review count, Roblox),
+**Reviews received** with a trash icon (admins remove any; moderators remove
+any except reviews written by staff), **Moderation record** (what is in force
+now, tallies, full timeline with reason / who / role / source), then actions.
+Every ban, strike, mute and unban goes through a **reason prompt** with
+one-tap common reasons.
+
+### Review removal — how it works
+
+`AdminDashboard.deleteReview`: one Firestore transaction deletes
+`reviews/{id}` and adjusts `user_ratings_summary/{uid}` (count − 1, average
+recomputed, last review resets to 0/0). The two can never disagree. A
+`review_delete` row is appended to the audit log with the reviewer, rating
+and text, so the user's record shows who removed what and why.
+
+### The audit log — `Code/Helper/modLog.js`
+
+Firestore `mod_actions`, append-only by convention (the stage-1 catch-all
+rules cannot enforce it; the intended stage-2 rule is written in
+`firestore.rules`). Every writer in `ChatScreen/utils.js` — ban, strike,
+mute, unban — now appends a row, fire-and-forget: a log failure never fails a
+ban. Rows carry denormalised names, so timelines cost no profile reads.
+Per-user tallies use `getCountFromServer`; the leaderboard reads at most the
+latest 500 rows of the window. No listeners anywhere.
+
+**History starts when this build ships.** Earlier actions were never recorded
+anywhere and cannot be backfilled.
+
+### Bugs fixed on the way
+
+- **Report auto-ban alerted the reporter.** `ReportModal.js` passed `userId`
+  into the `isAdmin` slot. The reporting user saw "User Banned" and the record
+  saved `userId: null`. Same bug in `PostCard.js`'s Ban User menu.
+- **A mute silently released a permanent ban.** Mute and ban share one record
+  written with `set()`. `muteUser` now refuses to shorten a longer live
+  sanction and says why.
+- **Strike history could never show more than one row** — it read the single
+  live record. Now the live record and the history are separate, labelled
+  things.
+- Junior mods' mute cap, the moderator kill switch and staff-only sanctioning
+  are all funnelled through one `requestAction` gate.
+
+### Deploy checklist (in order)
+
+```
+firebase deploy --only firestore:indexes --project mm2vlaues-ed80c   # 5 new mod_actions indexes
+firebase deploy --only database --project mm2vlaues-ed80c            # users.email + chat_meta_data timestamp indexes
+```
+
+Until the indexes build, the Mod Log and a profile's history show
+"Could not load history" with Firestore's index link in the message — that is
+the index, not a bug. Email search and User Chats work without their RTDB
+indexes but scan server-side and log a warning until the rules deploy.
+
+Call-site signatures are additive: every existing `banUserwithEmail`,
+`setUserStrike`, `muteUser`, `unbanUserWithEmail` caller keeps working. New
+trailing params: `source`, and for unban `bannerInfo, reason, source`.
+
+---
+
 ## 0. 2026-09-13 — what changed, and what it means for you
 
 Four commits on this branch since 1.3.7: `ce480c0`, `1466b2d`, `efe386d`,
@@ -120,11 +198,20 @@ Data after retention (measured 2026-09-06): 17,374 chat messages, 8,799 trades,
 ### The build
 
 `android/app/build/outputs/bundle/release/app-release.aab`
-versionName **1.4.2**, versionCode **34**, signed with
-`android/app/solanalab.keystore`. iOS is **3.8 (39)**.
+versionName **1.4.4**, versionCode **36**, built 2026-09-21 for internal
+testing, signed with `android/app/solanalab.keystore`. iOS is **3.8 (39)**.
 
-Earlier builds are kept beside it (`.v26`, `.v27`, `.v29`, `.v30`,
-`.PREV-2026-07-29`) rather than overwritten. Delete them once 1.4.2 is live.
+Earlier builds are kept beside it (`.v35`, and previously `.v26`, `.v27`,
+`.v29`, `.v30`, `.PREV-2026-07-29`) rather than overwritten. Delete them once
+1.4.4 is live.
+
+This entry read "1.4.2 (34)" until 2026-09-21, but the bundle on disk was
+already **1.4.3 (35)** — built 2026-09-16 and never recorded here. That is why
+36 was used rather than 35: a second bundle at 35 would have been rejected by
+Play as a duplicate versionCode if 35 had ever been uploaded. Read the AAB, do
+not trust this line:
+
+    python3 -c "import zipfile;d=zipfile.ZipFile('app-release.aab').read('base/manifest/AndroidManifest.xml');i=d.find(b'versionCode');print(d[i:i+20])"
 
 **1.3.6, 1.3.7 and 1.3.8 were built and never uploaded.** Do not treat an
 unuploaded bundle as shipped — users are still on whatever is live on Play.

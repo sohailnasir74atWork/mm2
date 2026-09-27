@@ -31,9 +31,9 @@ import { getSafeTextColor, RainbowText, isMultiColorText, getMultiColorPalette }
 import axios from 'axios';
 import { useLocalState } from '../../LocalGlobelStats';
 import { getDeviceLanguage } from '../../../i18n';
-import { mixpanel } from '../../AppHelper/MixPenel';
 import { FRUIT_KEYWORDS } from '../../Helper/filter';
 import { banUserwithEmail, unbanUserWithEmail } from '../utils';
+import { getUserEmail } from '../../Helper/privateProfile';
 import { sourceLabelForItems } from '../../Helper/valueSources';
 
 const MessagesList = ({
@@ -236,7 +236,6 @@ const MessagesList = ({
       Object.entries(placeholders).forEach(([placeholder, word]) => {
         translated = translated.replace(new RegExp(placeholder, 'g'), word);
       });
-      mixpanel.track("Translation", { lang: targetLang });
 
 
       return translated;
@@ -308,6 +307,42 @@ const MessagesList = ({
       });
     }
   }, [triggerHapticFeedback, setMessages]);
+
+  // Staff Block / Unblock. Messages no longer carry the sender's email — it
+  // was readable by anyone opening the room — so it is resolved from
+  // users_private, which only staff can read. Messages sent by older builds
+  // still carry currentUserEmail until the cutover scrub; that is the fallback.
+  const resolveSenderEmail = useCallback(async (item) => (
+    (await getUserEmail(appdatabase, item?.senderId)) || item?.currentUserEmail || null
+  ), [appdatabase]);
+
+  const staffActor = useCallback(() => ({
+    id: user?.id, displayName: user?.displayName, avatar: user?.avatar,
+    role: isAdmin ? 'admin' : (user?.isModerator ? 'moderator' : (user?.isBabyMod ? 'baby_mod' : null)),
+  }), [user?.id, user?.displayName, user?.avatar, user?.isModerator, user?.isBabyMod, isAdmin]);
+
+  const handleBlockSender = useCallback(async (item) => {
+    const email = await resolveSenderEmail(item);
+    if (!email) {
+      Alert.alert('No email on record', 'Bans are keyed by email, and this account has none.');
+      return;
+    }
+    banUserwithEmail(
+      email, isAdmin, item.senderId,
+      { id: item.senderId, displayName: item.sender, avatar: item.avatar },
+      staffActor(),
+      null, 'group_chat',
+    );
+  }, [resolveSenderEmail, isAdmin, staffActor]);
+
+  const handleUnblockSender = useCallback(async (item) => {
+    const email = await resolveSenderEmail(item);
+    if (!email) {
+      Alert.alert('No email on record', 'Bans are keyed by email, and this account has none.');
+      return;
+    }
+    unbanUserWithEmail(email, isAdmin, staffActor(), null, 'group_chat');
+  }, [resolveSenderEmail, isAdmin, staffActor]);
 
   // ✅ Memoize handleProfileClick
   const handleProfileClick = useCallback((item) => {
@@ -710,10 +745,10 @@ const MessagesList = ({
                   <MenuOption onSelect={() => onDeleteAllMessage(item?.senderId)}>
                     <Text style={styles.menuOptionTextDanger}>Delete All</Text>
                   </MenuOption>
-                  <MenuOption onSelect={() => banUserwithEmail(item.currentUserEmail, isAdmin, item.senderId)}>
+                  <MenuOption onSelect={() => handleBlockSender(item)}>
                     <Text style={styles.menuOptionTextDanger}>Block</Text>
                   </MenuOption>
-                  <MenuOption onSelect={() => unbanUserWithEmail(item.currentUserEmail, isAdmin)}>
+                  <MenuOption onSelect={() => handleUnblockSender(item)}>
                     <Text style={styles.menuOptionText}>Unblock</Text>
                   </MenuOption>
                   <MenuOption onSelect={() => onPinMessage(item)}>
@@ -729,7 +764,7 @@ const MessagesList = ({
     );
     // isDarkMode: FramedAvatar needs the theme. Repaint-on-profiles-landing is
     // handled by the FlatList's extraData, not here.
-  }, [messages, highlightedMessageId, user?.id, styles, getReplyPreview, handleCopy, handleTranslate, handleReport, handleLongPress, handleProfileClick, scrollToMessage, isAdmin, t, fruitColors, onReply, onDeleteMessage, onDeleteAllMessage, onPinMessage, banUserwithEmail, unbanUserWithEmail, isDarkMode]);
+  }, [messages, highlightedMessageId, user?.id, styles, getReplyPreview, handleCopy, handleTranslate, handleReport, handleLongPress, handleProfileClick, scrollToMessage, isAdmin, t, fruitColors, onReply, onDeleteMessage, onDeleteAllMessage, onPinMessage, isDarkMode, handleBlockSender, handleUnblockSender]);
 
   return (
     <>
@@ -832,9 +867,7 @@ export const fruitStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent:'flex-start',
-   
-    flex:1,
-
+    alignSelf: 'stretch',
   },
   fruitImage: {
     width: 20,

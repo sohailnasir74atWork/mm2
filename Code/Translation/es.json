@@ -439,7 +439,8 @@
         "inbox": "Bandeja de entrada",
         "youAreBlocked": "Estás bloqueado por un administrador.",
         "inappropriateLanguage": "Tu mensaje contiene lenguaje inapropiado.",
-        "messageTooLong": "El mensaje no puede exceder las 100 palabras.",
+        "messageTooLong": "El mensaje no puede exceder los {{max}} caracteres.",
+        "messageTooLongWords": "El mensaje no puede exceder las {{max}} palabras.",
         "sendingTooQuickly": "Estás enviando mensajes demasiado rápido. Espera un momento.",
         "proUsersOnlyLinks": "Solo los usuarios Pro pueden enviar enlaces."
     },
@@ -938,7 +939,7 @@
             "Los moderadores se reservan el derecho de monitorear y tomar medidas ante cualquier violación, incluyendo advertencias o prohibiciones.",
             "El contenido debe ser adecuado para todos los grupos de edad aprobados, adhiriéndose a los requisitos de edad de la aplicación.",
             "No comparta enlaces a sitios dañinos, malware o contenido malicioso.",
-            "Al utilizar la función de chat, acepta los Términos de Servicio y la Política de Privacidad de la aplicación. https://bloxfruitscalc.com/privacy-policy/"
+            "Al utilizar la función de chat, acepta los Términos de Servicio y la Política de Privacidad de la aplicación. https://mm2values.app/privacy"
         ]
     },
     "report_popup": {
@@ -1072,7 +1073,16 @@
         "delete": "Eliminar",
         "delete_entry_title": "¿Eliminar este trade?",
         "delete_entry_msg": "Se quitará de tu historial. No se puede deshacer.",
-        "delete_failed": "No se pudo eliminar ese trade"
+        "delete_failed": "No se pudo eliminar ese trade",
+        "select": "Seleccionar",
+        "select_done": "Listo",
+        "select_all": "Todos",
+        "select_other": "Otros",
+        "selected_count": "Seleccionados: {{count}}",
+        "remove": "Quitar",
+        "remove_selected_title": "¿Quitar {{count}} artículos?",
+        "remove_selected_title_one": "¿Quitar {{count}} artículo?",
+        "remove_selected_msg": "Se quitarán de tu inventario. Tus metas y tu historial de trades no se ven afectados."
     },
     "profile": {
         "recent_trades": "Intercambios recientes",

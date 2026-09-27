@@ -440,7 +440,8 @@
         "inbox": "Posteingang",
         "youAreBlocked": "Sie wurden von einem Administrator blockiert.",
         "inappropriateLanguage": "Ihre Nachricht enthält unangemessene Sprache.",
-        "messageTooLong": "Die Nachricht darf 100 Wörter nicht überschreiten.",
+        "messageTooLong": "Die Nachricht darf {{max}} Zeichen nicht überschreiten.",
+        "messageTooLongWords": "Die Nachricht darf {{max}} Wörter nicht überschreiten.",
         "sendingTooQuickly": "Sie senden Nachrichten zu schnell. Bitte warten Sie einen Moment.",
         "proUsersOnlyLinks": "Nur Pro-Nutzer können Links senden."
     },
@@ -939,7 +940,7 @@
             "Moderatoren behalten sich das Recht vor, Verstöße zu überwachen und Maßnahmen zu ergreifen, einschließlich Verwarnungen oder Sperren.",
             "Inhalte sollten für alle genehmigten Altersgruppen geeignet sein und den Altersanforderungen der App entsprechen.",
             "Teilen Sie keine Links zu schädlichen Websites, Malware oder bösartigen Inhalten.",
-            "Durch die Nutzung der Chat-Funktion stimmen Sie den Nutzungsbedingungen und der Datenschutzrichtlinie der App zu. https://bloxfruitscalc.com/privacy-policy/"
+            "Durch die Nutzung der Chat-Funktion stimmen Sie den Nutzungsbedingungen und der Datenschutzrichtlinie der App zu. https://mm2values.app/privacy"
         ]
     },
     "report_popup": {
@@ -1073,7 +1074,16 @@
         "delete": "Löschen",
         "delete_entry_title": "Diesen Trade löschen?",
         "delete_entry_msg": "Er wird aus deinem Verlauf entfernt. Nicht rückgängig zu machen.",
-        "delete_failed": "Trade konnte nicht gelöscht werden"
+        "delete_failed": "Trade konnte nicht gelöscht werden",
+        "select": "Auswählen",
+        "select_done": "Fertig",
+        "select_all": "Alle",
+        "select_other": "Sonstige",
+        "selected_count": "{{count}} ausgewählt",
+        "remove": "Entfernen",
+        "remove_selected_title": "{{count}} Items entfernen?",
+        "remove_selected_title_one": "{{count}} Item entfernen?",
+        "remove_selected_msg": "Sie werden aus deinem Inventar entfernt. Deine Ziele und dein Trade-Verlauf bleiben unberührt."
     },
     "profile": {
         "recent_trades": "Letzte Trades",

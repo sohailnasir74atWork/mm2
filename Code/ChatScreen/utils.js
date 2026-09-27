@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { getServerTime } from '../Helper/serverTime';
 import { invalidateFullProfile, setRoleOverride } from '../Helper/profileCache';
 import { CHAT_CHANNEL_PATHS } from './chatChannels';
+import { logModAction } from '../Helper/modLog';
 
 // Initialize the database reference
 const database = getDatabase();
@@ -137,7 +138,7 @@ export const rulesen = [
   "Moderators reserve the right to monitor and take action on any violations, including warnings or bans.",
   "Content should be suitable for all approved age groups, adhering to app age requirements.",
   "Do not share links to harmful sites, malware, or malicious content.",
-  "By using the chat feature, you agree to the app’s Terms of Service and Privacy Policy.https://bloxfruitscalc.com/privacy-policy/",
+  "By using the chat feature, you agree to the app’s Terms of Service and Privacy Policy.https://mm2values.app/privacy",
 ];
 
 export const rulesde  = [
@@ -152,7 +153,7 @@ export const rulesde  = [
     "Moderatoren behalten sich das Recht vor, Verstöße zu überwachen und Maßnahmen zu ergreifen, einschließlich Verwarnungen oder Sperren.",
     "Inhalte sollten für alle genehmigten Altersgruppen geeignet sein und den Altersanforderungen der App entsprechen.",
     "Teilen Sie keine Links zu schädlichen Websites, Malware oder bösartigen Inhalten.",
-    "Durch die Nutzung der Chat-Funktion stimmen Sie den Nutzungsbedingungen und der Datenschutzrichtlinie der App zu. https://bloxfruitscalc.com/privacy-policy/"
+    "Durch die Nutzung der Chat-Funktion stimmen Sie den Nutzungsbedingungen und der Datenschutzrichtlinie der App zu. https://mm2values.app/privacy"
   ]
 
 
@@ -168,7 +169,7 @@ export const rulesde  = [
     "Người điều hành có quyền giám sát và thực hiện hành động đối với bất kỳ vi phạm nào, bao gồm cảnh báo hoặc cấm.",
     "Nội dung phải phù hợp với tất cả các nhóm tuổi được phê duyệt, tuân theo yêu cầu về độ tuổi của ứng dụng.",
     "Không chia sẻ liên kết đến các trang web độc hại, phần mềm độc hại hoặc nội dung độc hại.",
-    "Bằng cách sử dụng tính năng trò chuyện, bạn đồng ý với Điều khoản dịch vụ và Chính sách quyền riêng tư của ứng dụng. https://bloxfruitscalc.com/privacy-policy/"
+    "Bằng cách sử dụng tính năng trò chuyện, bạn đồng ý với Điều khoản dịch vụ và Chính sách quyền riêng tư của ứng dụng. https://mm2values.app/privacy"
   ]
 
   export const rulesid  = [
@@ -183,7 +184,7 @@ export const rulesde  = [
     "Moderator berhak untuk memantau dan mengambil tindakan terhadap pelanggaran, termasuk peringatan atau larangan.",
     "Konten harus sesuai untuk semua kelompok umur yang disetujui, sesuai dengan persyaratan usia aplikasi.",
     "Jangan bagikan tautan ke situs berbahaya, malware, atau konten berbahaya.",
-    "Dengan menggunakan fitur obrolan, Anda menyetujui Ketentuan Layanan dan Kebijakan Privasi aplikasi. https://bloxfruitscalc.com/privacy-policy/"
+    "Dengan menggunakan fitur obrolan, Anda menyetujui Ketentuan Layanan dan Kebijakan Privasi aplikasi. https://mm2values.app/privacy"
   ]
 
   export const rulesfr  = [
@@ -198,7 +199,7 @@ export const rulesde  = [
     "Les modérateurs se réservent le droit de surveiller et de prendre des mesures contre toute violation, y compris des avertissements ou des interdictions.",
     "Le contenu doit être adapté à tous les groupes d’âge approuvés, conformément aux exigences d’âge de l’application.",
     "Ne partagez pas de liens vers des sites nuisibles, des logiciels malveillants ou du contenu malveillant.",
-    "En utilisant la fonction de chat, vous acceptez les Conditions d’utilisation et la Politique de confidentialité de l’application. https://bloxfruitscalc.com/privacy-policy/"
+    "En utilisant la fonction de chat, vous acceptez les Conditions d’utilisation et la Politique de confidentialité de l’application. https://mm2values.app/privacy"
    ]
 
    export const rulesfil  = [
@@ -213,7 +214,7 @@ export const rulesde  = [
     "Ang mga moderator ay may karapatang subaybayan at gumawa ng aksyon laban sa anumang paglabag, kabilang ang mga babala o pagbabawal.",
     "Ang nilalaman ay dapat na angkop para sa lahat ng pinapayagang pangkat ng edad, alinsunod sa mga kinakailangan sa edad ng app.",
     "Huwag magbahagi ng mga link sa nakakapinsalang mga site, malware, o mapanirang nilalaman.",
-    "Sa paggamit ng tampok na chat, sumasang-ayon ka sa Mga Tuntunin ng Serbisyo at Patakaran sa Privacy ng app. https://bloxfruitscalc.com/privacy-policy/"
+    "Sa paggamit ng tampok na chat, sumasang-ayon ka sa Mga Tuntunin ng Serbisyo at Patakaran sa Privacy ng app. https://mm2values.app/privacy"
    ]
 
    export const rulesru  = [
@@ -228,7 +229,7 @@ export const rulesde  = [
     "Модераторы имеют право контролировать и применять меры против нарушений, включая предупреждения или блокировки.",
     "Контент должен быть подходящим для всех одобренных возрастных групп, соответствуя требованиям приложения по возрасту.",
     "Не делитесь ссылками на вредоносные сайты, вредоносное ПО или вредоносный контент.",
-    "Используя чат, вы соглашаетесь с Условиями использования и Политикой конфиденциальности приложения. https://bloxfruitscalc.com/privacy-policy/"
+    "Используя чат, вы соглашаетесь с Условиями использования и Политикой конфиденциальности приложения. https://mm2values.app/privacy"
    ]
    export const rulespt = [
     "Comunique-se sempre com respeito. Discursos de ódio, discriminação e assédio são estritamente proibidos.",
@@ -242,7 +243,7 @@ export const rulesde  = [
     "Os moderadores têm o direito de monitorar e tomar medidas contra qualquer violação, incluindo advertências ou banimentos.",
     "O conteúdo deve ser adequado para todas as faixas etárias aprovadas, de acordo com os requisitos de idade do aplicativo.",
     "Não compartilhe links para sites prejudiciais, malware ou conteúdos maliciosos.",
-    "Ao usar o recurso de chat, você concorda com os Termos de Serviço e a Política de Privacidade do aplicativo. https://bloxfruitscalc.com/privacy-policy/"
+    "Ao usar o recurso de chat, você concorda com os Termos de Serviço e a Política de Privacidade do aplicativo. https://mm2values.app/privacy"
    ]
 
 // export const banUserInChat = async (currentUserId, selectedUser) => {
@@ -558,6 +559,15 @@ const buildBanRecord = ({ strikeCount, bannedUntil, reason, userInfo, bannerInfo
   bannerAvatar: bannerInfo?.avatar || null,
 });
 
+// Audit-log fields shared by every writer below. `bannerInfo.role` is
+// optional — the dashboard sets it; older call sites do not, and the log
+// simply records no role for them.
+const actorFields = (bannerInfo) => ({
+  actorUid: bannerInfo?.id || null,
+  actorName: bannerInfo?.displayName || null,
+  actorRole: bannerInfo?.role || null,
+});
+
 /**
  * Central gate for moderator ban/mute/strike powers.
  * Admins are NEVER affected. Moderators and Junior Mods lose ban/mute/strike
@@ -581,6 +591,7 @@ export const banUserwithEmail = async (
   userInfo = null,
   bannerInfo = null,
   customReason = null,
+  source = 'unknown',
 ) => {
   if (!email || typeof email !== 'string' || email.trim().length === 0) {
     console.error('❌ Invalid email for banUserwithEmail');
@@ -603,15 +614,23 @@ export const banUserwithEmail = async (
     }
 
     const { bannedUntil, banDuration } = strikeSentence(strikeCount);
-
-    await set(banRef, buildBanRecord({
+    const reason = typeof customReason === 'string' && customReason.trim() ? customReason.trim() : `Strike ${strikeCount}`;
+    const record = buildBanRecord({
       strikeCount,
       bannedUntil,
-      reason: customReason || `Strike ${strikeCount}`,
+      reason,
       userInfo: { ...(userInfo || {}), id: senderId || userInfo?.id || null },
       bannerInfo,
       email,
-    }));
+    });
+
+    await set(banRef, record);
+
+    // History, not awaited: a log failure must never fail a real ban.
+    logModAction({
+      action: 'ban', targetEmail: email, targetUid: record.userId, targetName: record.displayName,
+      reason, strikeCount, bannedUntil, source, ...actorFields(bannerInfo),
+    });
 
     if (isAdmin) {
       Alert.alert('User Banned', `Strike ${strikeCount} applied (${banDuration}).`);
@@ -636,6 +655,7 @@ export const setUserStrike = async (
   bannerInfo = null,
   userInfo = null,
   customReason = null,
+  source = 'unknown',
 ) => {
   if (!email || typeof email !== 'string' || email.trim().length === 0) {
     if (showAlert) Alert.alert('Error', 'Invalid email address.');
@@ -649,15 +669,22 @@ export const setUserStrike = async (
   try {
     const db = getDatabase();
     const { bannedUntil, banDuration } = strikeSentence(strikeCount);
-
-    await set(ref(db, `banned_users_by_email/${encodeEmailForBan(email)}`), buildBanRecord({
+    const reason = typeof customReason === 'string' && customReason.trim() ? customReason.trim() : `Strike ${strikeCount}`;
+    const record = buildBanRecord({
       strikeCount,
       bannedUntil,
-      reason: customReason || `Strike ${strikeCount}`,
+      reason,
       userInfo: { ...(userInfo || {}), id: senderId || userInfo?.id || null },
       bannerInfo,
       email,
-    }));
+    });
+
+    await set(ref(db, `banned_users_by_email/${encodeEmailForBan(email)}`), record);
+
+    logModAction({
+      action: 'strike', targetEmail: email, targetUid: record.userId, targetName: record.displayName,
+      reason, strikeCount, bannedUntil, source, ...actorFields(bannerInfo),
+    });
 
     if (showAlert) Alert.alert('Strike Applied', `Strike ${strikeCount} applied (${banDuration}).`);
     return true;
@@ -680,6 +707,7 @@ export const muteUser = async (
   bannerInfo = null,
   showAlert = true,
   customReason = null,
+  source = 'unknown',
 ) => {
   if (!email || typeof email !== 'string' || email.trim().length === 0) {
     if (showAlert) Alert.alert('Error', 'Invalid email address.');
@@ -694,16 +722,44 @@ export const muteUser = async (
     const db = getDatabase();
     const banRef = ref(db, `banned_users_by_email/${encodeEmailForBan(email)}`);
     const snap = await get(banRef);
-    const existingStrikeCount = snap.exists() ? (snap.val()?.strikeCount || 0) : 0;
+    const existing = snap.exists() ? (snap.val() || {}) : {};
+    const existingStrikeCount = existing.strikeCount || 0;
+    const bannedUntil = Date.now() + minutes * 60 * 1000;
 
-    await set(banRef, buildBanRecord({
+    // Mute and ban share one record and this is a set(), so a 5-minute
+    // mute on someone serving a permanent ban used to silently REPLACE the
+    // ban with a 5-minute timeout. Refuse to shorten a longer live sanction
+    // and say why — lifting a ban is unban's job, not mute's.
+    const until = existing.bannedUntil;
+    const longerLive = until === 'permanent' || (typeof until === 'number' && until > bannedUntil);
+    if (longerLive) {
+      if (showAlert) {
+        Alert.alert(
+          'Already restricted',
+          until === 'permanent'
+            ? 'This user is permanently banned. A mute would have replaced that ban with a short timeout, so nothing was changed.'
+            : 'This user already has a longer restriction in force. Unban first if you mean to shorten it.',
+        );
+      }
+      return false;
+    }
+
+    const reason = typeof customReason === 'string' && customReason.trim() ? customReason.trim() : `Muted for ${minutes} min`;
+    const record = buildBanRecord({
       strikeCount: existingStrikeCount,
-      bannedUntil: Date.now() + minutes * 60 * 1000,
-      reason: customReason || `Muted for ${minutes} min`,
+      bannedUntil,
+      reason,
       userInfo,
       bannerInfo,
       email,
-    }));
+    });
+
+    await set(banRef, record);
+
+    logModAction({
+      action: 'mute', targetEmail: email, targetUid: record.userId, targetName: record.displayName,
+      reason, durationMinutes: minutes, bannedUntil, source, ...actorFields(bannerInfo),
+    });
 
     if (showAlert) Alert.alert('User Muted', `Muted for ${minutes} minute${minutes !== 1 ? 's' : ''}.`);
     return true;
@@ -714,8 +770,12 @@ export const muteUser = async (
   }
 };
 
-/** Lift a ban or mute. Clears both key casings, since older rows may differ. */
-export const unbanUserWithEmail = async (email, showAlert = true) => {
+/**
+ * Lift a ban or mute. Clears both key casings, since older rows may differ.
+ * Additive signature: (email, showAlert) callers keep working; the dashboard
+ * passes who lifted it and why so the history can say so.
+ */
+export const unbanUserWithEmail = async (email, showAlert = true, bannerInfo = null, reason = null, source = 'unknown') => {
   if (!email || typeof email !== 'string' || email.trim().length === 0) {
     console.error('❌ Invalid email for unbanUserWithEmail');
     if (showAlert) Alert.alert('Error', 'Invalid email address.');
@@ -727,10 +787,28 @@ export const unbanUserWithEmail = async (email, showAlert = true) => {
     const key = encodeEmailForBan(email);
     const keyLower = encodeEmailForBan(email.toLowerCase());
 
+    // Read before delete so the log can name the person and what was lifted.
+    let prior = null;
+    try {
+      const snap = await get(ref(db, `banned_users_by_email/${key}`));
+      prior = snap.exists() ? snap.val() : null;
+      if (!prior && keyLower !== key) {
+        const s2 = await get(ref(db, `banned_users_by_email/${keyLower}`));
+        prior = s2.exists() ? s2.val() : null;
+      }
+    } catch (e) { /* the delete still proceeds */ }
+
     await set(ref(db, `banned_users_by_email/${key}`), null);
     if (keyLower !== key) {
       await set(ref(db, `banned_users_by_email/${keyLower}`), null);
     }
+
+    logModAction({
+      action: 'unban', targetEmail: email, targetUid: prior?.userId || null, targetName: prior?.displayName || null,
+      reason: typeof reason === 'string' && reason.trim() ? reason.trim() : null,
+      strikeCount: prior?.strikeCount ?? null,
+      source, ...actorFields(bannerInfo),
+    });
 
     if (showAlert) Alert.alert('User Unbanned', 'Ban has been lifted.');
     return true;

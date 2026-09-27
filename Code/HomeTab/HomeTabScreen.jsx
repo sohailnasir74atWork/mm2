@@ -111,7 +111,6 @@ const HomeTabScreen = ({ selectedTheme }) => {
 
   useFocusEffect(useCallback(() => {
     StatusBar.setBarStyle(dark ? 'light-content' : 'dark-content', true);
-    if (Platform.OS === 'android') StatusBar.setBackgroundColor(dark ? '#0F172A' : '#FFFFFF', true);
   }, [dark]));
 
 
@@ -551,7 +550,7 @@ const $ = StyleSheet.create({
     elevation: 4,
   },
   gameTileOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: 14,
     backgroundColor: 'rgba(0,0,0,0.12)',
   },

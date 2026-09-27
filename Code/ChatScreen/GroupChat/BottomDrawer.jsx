@@ -23,7 +23,6 @@ import { getStyles } from '../../SettingScreen/settingstyle';
 import { useLocalState } from '../../LocalGlobelStats';
 import { useTranslation } from 'react-i18next';
 import { showSuccessMessage } from '../../Helper/MessageHelper';
-import { mixpanel } from '../../AppHelper/MixPenel';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useHaptic } from '../../Helper/HepticFeedBack';
 import SwipeableBottomDrawer from '../../Helper/SwipeableBottomDrawer';
@@ -58,6 +57,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import FramedAvatar from './FramedAvatar';
 import { getCachedProfile, warmProfileCache, invalidateFullProfile, getRoleOverride, getOrFetchFullProfile } from '../../Helper/profileCache';
+import { getUserEmail } from '../../Helper/privateProfile';
 import { resolveItemImage } from '../../Helper/valueSources';
 
 dayjs.extend(relativeTime);
@@ -157,6 +157,10 @@ const ProfileBottomDrawer = ({
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
 
   const selectedUserId = selectedUser?.senderId || selectedUser?.id || null;
+
+  // Staff = admin, moderator or Junior Mod. Declared up here because the
+  // profile fetch below uses it: only staff look up another user's email.
+  const isStaff = isAdmin || !!user?.isModerator || !!user?.isBabyMod;
 
   // ✅ FIXED: Real-time online status listener instead of stale one-shot prop
   const isOnline = useOnlineStatus(isVisible ? selectedUserId : null);
@@ -277,8 +281,8 @@ const ProfileBottomDrawer = ({
     if (!isVisible || !selectedUserId || !appdatabase) return;
 
     // No early return on a known roblox username any more: this effect now
-    // also supplies role flags, the email the mod actions need, and ban
-    // state, none of which selectedUser carries.
+    // also supplies role flags, the email the mod actions need (staff
+    // viewers only), and ban state, none of which selectedUser carries.
 
     let isMounted = true;
 
@@ -286,9 +290,17 @@ const ProfileBottomDrawer = ({
       try {
         // ONE read of users/{uid}, shared with the chat/online-list cache
         // (PLAN_2026-09.md F1). This used to be 5 parallel leaf reads, and it
-        // could not see the role flags or the email at all — which is why the
-        // mod tools below need the whole record anyway.
-        const record = await getOrFetchFullProfile(appdatabase, selectedUserId);
+        // could not see the role flags at all — which is why the mod tools
+        // below need the whole record anyway.
+        //
+        // Another user's email is staff-only: it comes from users_private,
+        // which nobody else can read, and only the mod tools use it. Every
+        // other viewer skips the lookup — and with it the ban check, whose
+        // chip lives in the staff-only Mod Tools panel anyway.
+        const [record, privateEmail] = await Promise.all([
+          getOrFetchFullProfile(appdatabase, selectedUserId),
+          isStaff ? getUserEmail(appdatabase, selectedUserId) : Promise.resolve(null),
+        ]);
         if (!isMounted) return;
 
         if (!record) { setUserData(null); return; }
@@ -296,6 +308,7 @@ const ProfileBottomDrawer = ({
         // Roles we granted seconds ago beat the cached record, so a freshly
         // awarded badge shows up without waiting out the cache TTL.
         const roleOv = getRoleOverride(selectedUserId) || {};
+        const email = isStaff ? (privateEmail || selectedUser?.email || null) : null;
 
         setUserData({
           robloxUsername: record.robloxUsername ?? null,
@@ -303,7 +316,7 @@ const ProfileBottomDrawer = ({
           robloxUsernameVerified: !!record.robloxUsernameVerified,
           isPro: !!record.isPro,
           lastGameWinAt: record.lastGameWinAt ?? null,
-          email: record.email ?? record.decodedEmail ?? null,
+          email,
           // RTDB stores the owner flag as `admin`; the app reads `isAdmin`.
           isAdmin: !!record.admin || !!record.isAdmin,
           isModerator: roleOv.isModerator ?? !!record.isModerator,
@@ -315,9 +328,8 @@ const ProfileBottomDrawer = ({
 
         // Ban state for the Unban chip. checkBanStatus validates against
         // server time, so an expired ban does not keep showing as active.
-        const emailToCheck = record.email || record.decodedEmail || selectedUser?.email;
-        if (emailToCheck) {
-          const banStatus = await checkBanStatus(emailToCheck);
+        if (email) {
+          const banStatus = await checkBanStatus(email);
           if (isMounted) setIsBanned(banStatus.isBanned);
         } else if (isMounted) {
           setIsBanned(false);
@@ -334,7 +346,7 @@ const ProfileBottomDrawer = ({
     return () => {
       isMounted = false;
     };
-  }, [isVisible, selectedUserId, selectedUser?.email, appdatabase]);
+  }, [isVisible, selectedUserId, selectedUser?.email, appdatabase, isStaff]);
 
   // ✅ Check if current user is following this user (Firestore)
   useEffect(() => {
@@ -440,8 +452,9 @@ const ProfileBottomDrawer = ({
     if (!userData) return selectedUser;
     return {
       ...selectedUser,
-      // Roles and email come only from the RTDB record — selectedUser is
-      // built from a chat message, which never carries them.
+      // Roles come only from the RTDB record, and the email (staff only)
+      // from users_private — selectedUser is built from a chat message,
+      // which never carries them.
       email: userData.email ?? selectedUser?.email ?? null,
       isAdmin: userData.isAdmin,
       isModerator: userData.isModerator,
@@ -464,7 +477,6 @@ const ProfileBottomDrawer = ({
     triggerHapticFeedback('impactLight');
     Clipboard.setString(code);
     showSuccessMessage(t('value.copy'), 'Copied to Clipboard');
-    mixpanel.track('Code UserName', { UserName: code });
   };
 
   // ─────────────────────────────────────────────
@@ -622,9 +634,10 @@ const ProfileBottomDrawer = ({
   // Who can do what. Admins qualify for everything. A user holding ONLY the
   // delegated Junior-Mod grant is not staff — they get the Junior Mod chip
   // and nothing else.
+  // `isStaff` is declared at the top of the component (the profile fetch
+  // needs it).
   const canManageBabyMod = isAdmin || !!canGrantJmd;
   const canManageBadges = isAdmin || !!user?.isModerator;
-  const isStaff = isAdmin || !!user?.isModerator || !!user?.isBabyMod;
 
   // Strike / mute / ban all route through the reason modal, so every entry in
   // the Admin Dashboard's ban list says WHY it happened.
@@ -663,15 +676,20 @@ const ProfileBottomDrawer = ({
 
     setShowReasonModal(false);
 
-    const bannerInfo = { id: user?.id, displayName: user?.displayName || 'Admin', avatar: user?.avatar };
+    const bannerInfo = {
+      id: user?.id, displayName: user?.displayName || 'Admin', avatar: user?.avatar,
+      // Recorded on the audit row: a moderator strike and an admin strike
+      // are not the same event, and the history should not have to guess.
+      role: isAdmin ? 'admin' : (user?.isModerator ? 'moderator' : (user?.isBabyMod ? 'baby_mod' : null)),
+    };
     const reason = adminReason.trim() || undefined;
     const { type, value, email } = reasonActionType;
 
     let ok = false;
     if (type === 'strike') {
-      ok = await setUserStrike(email, value, selectedUserId, true, bannerInfo, mergedUser, reason);
+      ok = await setUserStrike(email, value, selectedUserId, true, bannerInfo, mergedUser, reason, 'group_chat');
     } else if (type === 'mute') {
-      ok = await muteUser(email, value, mergedUser, bannerInfo, true, reason);
+      ok = await muteUser(email, value, mergedUser, bannerInfo, true, reason, 'group_chat');
     }
 
     if (ok) {
@@ -690,11 +708,15 @@ const ProfileBottomDrawer = ({
       ]);
     });
     if (!confirmed) return;
-    if (await unbanUserWithEmail(mergedUser.email)) {
+    const bannerInfo = {
+      id: user?.id, displayName: user?.displayName || 'Admin', avatar: user?.avatar,
+      role: isAdmin ? 'admin' : (user?.isModerator ? 'moderator' : (user?.isBabyMod ? 'baby_mod' : null)),
+    };
+    if (await unbanUserWithEmail(mergedUser.email, true, bannerInfo, null, 'group_chat')) {
       invalidateFullProfile(selectedUserId);
       setIsBanned(false);
     }
-  }, [mergedUser?.email, userName, selectedUserId]);
+  }, [mergedUser?.email, userName, selectedUserId, user, isAdmin]);
 
   // Role grants. One confirm dialog, one writer (utils.writeRoleFlag handles
   // the cache invalidation), one local state patch so the pill updates without

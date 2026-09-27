@@ -5,7 +5,6 @@ import {
 import Icon from 'react-native-vector-icons/FontAwesome';
 import FontAwesome6 from 'react-native-vector-icons/FontAwesome6';
 import InterstitialAdManager from '../../Ads/IntAd';
-import { mixpanel } from '../../AppHelper/MixPenel';
 import { useNavigation } from '@react-navigation/native';
 import CommentModal from './CommentsModal';
 import config from '../../Helper/Environment';
@@ -19,6 +18,7 @@ import ProfileBottomDrawer from '../../ChatScreen/GroupChat/BottomDrawer';
 import { isUserOnline } from '../../ChatScreen/utils';
 import FramedAvatar from '../../ChatScreen/GroupChat/FramedAvatar';
 import { getCachedProfile } from '../../Helper/profileCache';
+import { getUserEmail } from '../../Helper/privateProfile';
 import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
 
 const REACTION_EMOJIS = ['❤️', '🔥', '😍', '💀', '🎯'];
@@ -83,7 +83,12 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
 
   const getTagConfig = (tag) => TAG_CONFIG[tag.toLowerCase()] || { color: config.colors.primary, icon: 'tag' };
 
-  const banUserwithEmail = async (email, userId) => {
+  // Both callers (the staff menu below and ReportModal) pass the chat ban's
+  // argument order — (email, isAdmin, senderId, userInfo, bannerInfo, reason,
+  // source) — so the author's uid is the THIRD argument. Taking it second
+  // handed true/false to onDeleteAll and the author's posts were never
+  // removed. Strike maths still follows this viewer's own isAdmin.
+  const banUserwithEmail = async (email, _isAdminArg, userId) => {
     const encodeEmail = (email) => email.replace(/\./g, '(dot)');
     try {
       const db = getDatabase();
@@ -113,13 +118,20 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
         else if (strikeCount >= 3) bannedUntil = "permanent";
       }
       await set(banRef, { strikeCount, bannedUntil, reason: `Strike ${strikeCount}` });
-      await onDeleteAll(userId);
+      if (userId) await onDeleteAll(userId);
       if (isAdmin) { Alert.alert('User Banned', `Strike ${strikeCount} applied.`); }
     } catch (err) {
       console.error('Ban error:', err);
       if (isAdmin) { Alert.alert('Error', 'Could not ban user.'); }
     }
   };
+
+  // Staff "Ban User" on a post. Posts no longer carry the author's email
+  // (designPosts is world-readable), so it comes from users_private, which
+  // only staff can read. Posts made by older builds still carry `email`
+  // until the cutover scrub removes it; that is the fallback.
+  const resolveAuthorEmail = async () =>
+    (await getUserEmail(appdatabase || getDatabase(), item.userId)) || item.email || null;
 
   const closeProfileDrawer = () => setIsDrawerVisible(false);
 
@@ -156,7 +168,6 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
       // Close drawer first (iOS doesn't auto-dismiss modals on navigation)
       setIsDrawerVisible(false);
       setTimeout(() => {
-        mixpanel.track('Design Screen');
         navigation.navigate('PrivateChatDesign', { selectedUser, item });
       }, 300);
     };
@@ -280,7 +291,21 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
               </MenuOption>
             )}
             {isAdmin && (
-              <MenuOption onSelect={() => banUserwithEmail(item.email, item.userId)}>
+              <MenuOption onSelect={async () => {
+                const authorEmail = await resolveAuthorEmail();
+                if (!authorEmail) {
+                  Alert.alert('No email on record', 'Bans are keyed by email, and this account has none.');
+                  return;
+                }
+                banUserwithEmail(
+                // (email, isAdmin, senderId, userInfo, bannerInfo, reason, source).
+                // userId used to sit in the isAdmin slot and senderId was never
+                // passed, so the record saved userId: null.
+                authorEmail, true, item.userId,
+                { id: item.userId, displayName: item.displayName, avatar: item.avatar },
+                null, 'Banned from a feed post', 'feed',
+                );
+              }}>
                 <View style={[s.menuItem, { borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#f1f5f9' }]}>
                   <FontAwesome6 name="ban" size={12} color="#EF4444" solid />
                   <Text style={[s.menuItemText, { color: '#EF4444' }]}>Ban User</Text>
@@ -617,7 +642,7 @@ const getStyles = (isDark) =>
       resizeMode: 'cover',
     },
     moreOverlay: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       backgroundColor: 'rgba(0,0,0,0.55)',
       justifyContent: 'center',
       alignItems: 'center',

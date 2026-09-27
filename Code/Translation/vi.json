@@ -344,7 +344,8 @@
         "inbox": "Hộp thư đến",
         "youAreBlocked": "Bạn bị chặn bởi quản trị viên.",
         "inappropriateLanguage": "Tin nhắn của bạn chứa ngôn ngữ không phù hợp.",
-        "messageTooLong": "Tin nhắn không được vượt quá 100 từ.",
+        "messageTooLong": "Tin nhắn không được vượt quá {{max}} ký tự.",
+        "messageTooLongWords": "Tin nhắn không được vượt quá {{max}} từ.",
         "sendingTooQuickly": "Bạn đang gửi tin nhắn quá nhanh. Vui lòng chờ một chút.",
         "proUsersOnlyLinks": "Chỉ người dùng Pro mới có thể gửi liên kết."
     },
@@ -355,5 +356,16 @@
         "recent_posts": "Bài đăng gần đây",
         "no_posts_yet": "Chưa có bài đăng nào.",
         "load_more_posts": "Tải thêm bài đăng"
+    },
+    "mystuff": {
+        "select": "Chọn",
+        "select_done": "Xong",
+        "select_all": "Tất cả",
+        "select_other": "Khác",
+        "selected_count": "Đã chọn {{count}}",
+        "remove": "Xóa",
+        "remove_selected_title": "Xóa {{count}} mặt hàng?",
+        "remove_selected_msg": "Chúng sẽ bị xóa khỏi kho đồ của bạn. Mục tiêu và lịch sử giao dịch của bạn không bị ảnh hưởng.",
+        "cancel": "Hủy"
     }
 }

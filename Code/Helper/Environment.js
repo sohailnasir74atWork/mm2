@@ -33,12 +33,11 @@ const config = {
 
   isNoman: isNoman ? true : false,
   
-  IOsShareLink: isNoman ? 'https://apps.apple.com/us/app/app-name/id6737775801' : '',
-  IOsShareLink: isNoman ? 'https://apps.apple.com/us/app/app-name/id6737775801' : '',
+  IOsShareLink: isNoman ? 'https://apps.apple.com/app/id6747306748' : '',
   webSite: isNoman ? 'https://mm2values.app/' : 'https://bloxfruitvalue.today',
 
-  otherapplink: Platform.OS == 'android' ? 'https://play.google.com/store/apps/details?id=com.adoptmevaluescalc' : 'https://apps.apple.com/us/app/adoptme-values/id6745400111',
-  otherapplink2: Platform.OS == 'android' ? 'https://play.google.com/store/apps/details?id=com.bloxfruitevalues' : 'https://apps.apple.com/us/app/fruits-values-calculator/id6737775801',
+  otherapplink: Platform.OS == 'android' ? 'https://play.google.com/store/apps/details?id=com.adoptmevaluescalc' : 'https://apps.apple.com/app/id6745400111',
+  otherapplink2: Platform.OS == 'android' ? 'https://play.google.com/store/apps/details?id=com.bloxfruitevalues' : 'https://apps.apple.com/app/id6737775801',
   colors: isNoman
     ? {
       // Primary brand colors

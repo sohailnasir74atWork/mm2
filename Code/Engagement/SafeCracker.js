@@ -25,12 +25,6 @@ import { useHaptic } from '../Helper/HepticFeedBack';
 import { doc, getDoc, setDoc } from '@react-native-firebase/firestore';
 import { ref, get } from '@react-native-firebase/database';
 import { updateLeaderboardCacheRealtime } from './updateLeaderboardCache';
-import { initGameSounds, playPop, playWoosh, setSoundEnabled, releaseGameSounds } from '../Helper/GameSoundService';
-import { createMMKV } from 'react-native-mmkv';
-
-const soundStorage = createMMKV({ id: 'game-sounds' });
-const SOUND_KEY = 'game_sound_safe';
-const GAME_KEY = 'safe';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DIAL_SIZE = Math.min(SCREEN_WIDTH - 80, 280);
@@ -61,7 +55,6 @@ const SafeCracker = ({ visible, onClose, screenMode = false }) => {
   const [targetNum, setTargetNum] = useState(1);
   const [lockResults, setLockResults] = useState([null, null, null]); 
   const [stoppedSegment, setStoppedSegment] = useState(null);
-  const [soundOn, setSoundOn] = useState(true);
 
   const spinAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -95,24 +88,6 @@ const SafeCracker = ({ visible, onClose, screenMode = false }) => {
     }
   }, [visible]);
 
-  // ── Init sounds ──
-  useEffect(() => {
-    let enabled = true;
-    try { enabled = soundStorage.getBoolean(SOUND_KEY) !== false; } catch {}
-    setSoundOn(enabled);
-    setSoundEnabled(GAME_KEY, enabled);
-    initGameSounds();
-    return () => { releaseGameSounds(); };
-  }, []);
-
-  const toggleSound = useCallback(() => {
-    const next = !soundOn;
-    setSoundOn(next);
-    try { soundStorage.set(SOUND_KEY, next); } catch {}
-    setSoundEnabled(GAME_KEY, next);
-    triggerHapticFeedback('selection');
-  }, [soundOn, triggerHapticFeedback]);
-
   const getSpinDuration = useCallback(() => {
     return Math.max(MIN_SPIN_DURATION, BASE_SPIN_DURATION - safesOpened * 200);
   }, [safesOpened]);
@@ -123,7 +98,6 @@ const SafeCracker = ({ visible, onClose, screenMode = false }) => {
 
   const endGame = useCallback(async () => {
     setPhase('gameover');
-    playPop(GAME_KEY);
     if (Platform.OS === 'android') Vibration.vibrate([0, 100, 50, 100, 50, 100]);
 
     const finalScore = score;
@@ -187,7 +161,6 @@ const SafeCracker = ({ visible, onClose, screenMode = false }) => {
     };
     doSpin();
     triggerHapticFeedback('impactLight');
-    playPop(GAME_KEY);
 
     const doPulse = () => {
       Animated.sequence([
@@ -214,7 +187,6 @@ const SafeCracker = ({ visible, onClose, screenMode = false }) => {
 
       if (hitNum === targetNum) {
         triggerHapticFeedback('notificationSuccess');
-        playPop(GAME_KEY);
         if (Platform.OS === 'android') Vibration.vibrate([0, 50, 30, 50]);
 
         const newResults = [...lockResults];
@@ -227,7 +199,6 @@ const SafeCracker = ({ visible, onClose, screenMode = false }) => {
           setSafesOpened(prev => prev + 1);
           setScore(prev => prev + 100);
           triggerHapticFeedback('notificationSuccess');
-          playWoosh(GAME_KEY);
           setTimeout(() => triggerHapticFeedback('impactHeavy'), 200);
         } else {
           setPhase('checking');
@@ -238,7 +209,6 @@ const SafeCracker = ({ visible, onClose, screenMode = false }) => {
         }
       } else {
         triggerHapticFeedback('notificationError');
-        playPop(GAME_KEY);
         const newResults = [...lockResults];
         newResults[currentLock] = 'fail';
         setLockResults(newResults);
@@ -337,22 +307,12 @@ const SafeCracker = ({ visible, onClose, screenMode = false }) => {
           <View style={styles.header}>
             <Text style={[styles.title, { color: c.text }]}>🔐 Crack the Safe</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TouchableOpacity onPress={toggleSound} style={styles.closeBtn}>
-                <Icon name={soundOn ? 'volume-high' : 'volume-mute'} size={20} color={c.textSecondary} />
-              </TouchableOpacity>
               <TouchableOpacity onPress={() => { spinningRef.current = false; if (spinRef.current) spinRef.current.stop(); onClose(); }} style={styles.closeBtn}>
                 <Icon name="close" size={22} color={c.textSecondary} />
               </TouchableOpacity>
             </View>
           </View>
         </>
-      )}
-      {screenMode && (
-        <View style={{ position: 'absolute', top: 10, right: 12, zIndex: 20 }}>
-          <TouchableOpacity onPress={toggleSound} style={styles.closeBtn}>
-            <Icon name={soundOn ? 'volume-high' : 'volume-mute'} size={20} color={c.textSecondary} />
-          </TouchableOpacity>
-        </View>
       )}
 
         {phase === 'loading' && (

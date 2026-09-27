@@ -38,14 +38,46 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Staff, as the STAFF expression in database.rules.json defines it.
+    // Firestore rules cannot read RTDB, so the role flags arrive as a `staff`
+    // custom claim that functions/syncStaffClaims.js keeps in step; the
+    // founder emails are checked here directly, as everywhere else.
+    function isStaff() {
+      return signedIn() && (
+        request.auth.token.staff == true
+        || (request.auth.token.email_verified == true
+            && request.auth.token.email in ['thesolanalabs@gmail.com', 'sohailnasir74business@gmail.com', 'sohailnasir74@gmail.com'])
+      );
+    }
+
     // Reads stay open: the app browses trades, posts and leaderboards before
     // the user signs in, and locking reads here would blank those screens for
     // every existing build in the field.
     //
     // Writes require an account. Nothing in the app writes while signed out.
-    match /{document=**} {
-      allow read: if true;
+    //
+    // 2026-09-27 (round 2): reads open on every collection EXCEPT
+    // mod_actions. Rules only ever add access — a second match cannot narrow
+    // what this one allows — so the catch-all itself has to leave mod_actions
+    // out. `/{collection}/{document=**}` matches every document the old
+    // `/{document=**}` did (all documents live in a collection); the one shape
+    // it would not cover is a collection-group query, and no client makes one.
+    match /{collection}/{document=**} {
+      allow read: if collection != 'mod_actions';
       allow write: if signedIn();
+    }
+
+    // Moderation audit log (Code/Helper/modLog.js). Every row carries the
+    // target's email, and its only reader is the Admin Dashboard — Mod Log
+    // tab and user sheet — which only admins, moderators and Junior Mods can
+    // open. Writes stay as they were (the catch-all above): build 1.4.6
+    // logs report auto-bans from the REPORTER's device.
+    //
+    // Deploy only after syncStaffClaims has run once AND an hour has passed,
+    // so every staff member's ID token has refreshed with the claim.
+    // Otherwise the Mod Log shows "failed" for them until it does.
+    match /mod_actions/{actionId} {
+      allow read: if isStaff();
     }
   }
 }
@@ -77,6 +109,14 @@ service cloud.firestore {
 //    groups                 createdBy, plus member writes
 //    streaks                user1 / user2
 //    polls                  admin-only write, public read
+//    mod_actions            append-only moderation audit log (Code/Helper/modLog.js):
+//                           create if signed-in staff, NO update, NO delete —
+//                           a moderator must not be able to erase their own row.
+//                           Under the stage-1 catch-all this is a convention only.
+//                           READ is already staff-only (round 2, above). Note
+//                           build 1.4.6 creates rows from ordinary users'
+//                           devices (report auto-ban), so "create if staff"
+//                           breaks that logging until 1.4.6 is gone.
 //    mystery_levels         read-only from the client
 //    leaderboard,
 //    game_leaderboard_cache Cloud Function writes only

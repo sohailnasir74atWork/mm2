@@ -455,8 +455,13 @@ const PrivateMessageList = ({
     const nextMsg = filteredMessages[index + 1];
     const showDateSep = !nextMsg || getDateLabel(item.timestamp) !== getDateLabel(nextMsg.timestamp);
 
+    // ONE wrapping View, not a Fragment: since RN 0.7x an inverted list lays
+    // each cell out with column-reverse before flipping it, so a Fragment's
+    // two children came out swapped and the day label sat BELOW the message
+    // ("Today" under the message you just sent). A single child keeps its own
+    // top-to-bottom order.
     return (
-      <>
+      <View>
         {showDateSep && (
           <View style={{ alignItems: 'center', marginVertical: 10 }}>
             <View style={{
@@ -476,7 +481,7 @@ const PrivateMessageList = ({
           </View>
         )}
         {msgBubble}
-      </>
+      </View>
     );
   }, [userId, selectedUser, user, styles, fruitColors, handleCopy, handleTranslate, handleReport, onReply, navigation, t, filteredMessages, getDateLabel, otherLastRead, localState?.showReadReceipts, isDarkMode, maxImageRowWidth]);
 

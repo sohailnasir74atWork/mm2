@@ -3,6 +3,7 @@ import { View, Platform } from 'react-native';
 import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import getAdUnitId from './ads';
 import { useLocalState } from '../LocalGlobelStats';
+import { useAdsReady } from './adsGate';
 
 // NPA gating: only force non-personalized ads when we truly have to.
 // Forcing NPA on every user (the old behaviour) cut eCPM ~40-60% for ~80%
@@ -20,11 +21,6 @@ const npaRequiredFor = (status) =>
 const BannerAdComponent = ({
   adType = 'banner',
   visible = true,
-  // OPT-IN per screen (matches Blox Fruit / adoptme): pass `collapsible` on
-  // bottom-anchored MAIN screens only. Keep it OFF (default) on chat screens
-  // whose input bar sits directly above the banner, and NEVER render a banner
-  // inside the arrow game at all.
-  collapsible = false,
   // Called with the banner's MEASURED height in dp whenever it changes, and
   // with 0 whenever nothing is on screen (no-fill, Pro member, hidden slot,
   // unmount). The banner is absolutely positioned, so screens reserve its
@@ -79,23 +75,14 @@ const BannerAdComponent = ({
   // BannerAd component below doesn't see a new object reference on every
   // render (which would otherwise force a fresh ad request).
   //
-  // networkExtras.collapsible enables Google's Collapsible Banner format:
-  // the first impression renders as a larger expanded ad that the user
-  // can collapse to a small inline strip. Higher eCPM (~2-3× a static
-  // banner). The SDK only treats the FIRST request as collapsible per
-  // session; auto-refreshes downgrade back to standard banners.
-  //
-  // 2026-07-20 (owner decision): the "Encouraging accidental clicks: Layout"
-  // enforcement traced to the banner INSIDE the arrow game (removed there
-  // entirely), not to the collapsible format itself. The old blanket
-  // Android force-off is replaced by per-screen opt-in on both platforms —
-  // main screens pass `collapsible`; chat screens don't.
+  // No collapsible networkExtras any more: 2026-09-27 the owner chose a fixed
+  // standard banner over the collapsible format (higher eCPM, but it opened as
+  // a large expanded ad over the content).
   const requestOptions = useMemo(
     () => ({
       requestNonPersonalizedAdsOnly: npaRequiredFor(localState?.consentStatus),
-      ...(collapsible ? { networkExtras: { collapsible: 'bottom' } } : {}),
     }),
-    [localState?.consentStatus, collapsible],
+    [localState?.consentStatus],
   );
 
   // Every reason this slot renders nothing at all: Pro users and an explicitly
@@ -106,7 +93,11 @@ const BannerAdComponent = ({
   // this is 0 until an ad loads and exactly the ad's height afterwards.
   const [measuredHeight, setMeasuredHeight] = useState(0);
 
-  const suppressed = !!localState?.isPro || !visible;
+  // Not before consent + SDK init (adsGate.js). Mounting a BannerAd creates
+  // the ad WebView on the UI thread, so doing it during Home's first render
+  // also cost the first frame on low-end Android.
+  const adsReady = useAdsReady();
+  const suppressed = !!localState?.isPro || !visible || !adsReady;
   const showingAd = !suppressed && isAdLoaded;
 
   // Hold the callback in a ref so an inline arrow from the parent can't make
@@ -144,7 +135,11 @@ const BannerAdComponent = ({
       <BannerAd
         key={reloadKey}
         unitId={unitId}
-        size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+        // Fixed 320x50 on every screen (owner decision 2026-09-27). Adaptive
+        // banners change height per device, and the collapsible format opened
+        // as a large expanded ad over the content; both read as the banner
+        // "stretching". A standard banner is the same small strip everywhere.
+        size={BannerAdSize.BANNER}
         requestOptions={requestOptions}
         onAdLoaded={handleAdLoaded}
         onAdFailedToLoad={handleAdFailedToLoad}

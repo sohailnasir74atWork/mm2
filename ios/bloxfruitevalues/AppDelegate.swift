@@ -4,6 +4,7 @@ import React_RCTAppDelegate
 import ReactAppDependencyProvider
 import Firebase
 import GoogleSignIn // Import Google Sign-In if needed
+import RNBootSplash
 
 @main
 class AppDelegate: RCTAppDelegate {
@@ -17,6 +18,14 @@ class AppDelegate: RCTAppDelegate {
     self.initialProps = [:]
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // Keeps the BootSplash launch screen over the root view until JS calls
+  // RNBootSplash.hide() in App.js. Without it the splash vanished as soon as
+  // the native launch finished, leaving a blank screen while JS loaded.
+  override func customize(_ rootView: RCTRootView) {
+    super.customize(rootView)
+    RNBootSplash.initWithStoryboard("BootSplash", rootView: rootView)
   }
 
   override func sourceURL(for bridge: RCTBridge) -> URL? {

@@ -73,8 +73,6 @@ const insets = useSafeAreaInsets();
 const [bannerHeight, setBannerHeight] = useState(0); // measured, 0 when no ad is on screen
 const bannerBottomPos = noTabBar ? Math.max(insets.bottom, 8) + 12 : 0; // with the docked tab bar, in-tab screen bottom == tab bar top; full-screen chat (noTabBar) still clears the home indicator
 
-  // ✅ Read receipts: listen to other user's lastRead timestamp
-  const otherLastRead = useOtherLastRead(chatKey, selectedUserId);
 
   const closeProfileDrawer = () => {
     setIsDrawerVisible(false);
@@ -165,6 +163,13 @@ const bannerBottomPos = noTabBar ? Math.max(insets.bottom, 8) + 12 : 0; // with 
         : `${selectedUserId}_${myUserId}`,
     [myUserId, selectedUserId]
   );
+
+  // Read receipts: listen to the other user's lastRead timestamp. Must come
+  // AFTER chatKey: it used to be called ~80 lines above this declaration, and
+  // because Babel compiles const to var without a TDZ check it read
+  // `undefined` instead of throwing — so the listener never attached,
+  // otherLastRead stayed 0 and the ticks never turned blue.
+  const otherLastRead = useOtherLastRead(chatKey, selectedUserId);
 
   // const navigation = useNavigation();
   useFocusEffect(
@@ -816,7 +821,7 @@ useEffect(() => {
     isBanned={isBanned}
     selectedUser={selectedUser}
     user={user}
-    onReply={(message) => setReplyTo(message)}
+    onReply={setReplyTo} // stable, so memo(PrivateMessageList) holds while typing
     canRate={canRate}
     hasRated={hasRated}
     setShowRatingModal={setShowRatingModal}

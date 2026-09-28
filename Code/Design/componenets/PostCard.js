@@ -18,8 +18,10 @@ import ProfileBottomDrawer from '../../ChatScreen/GroupChat/BottomDrawer';
 import { isUserOnline } from '../../ChatScreen/utils';
 import FramedAvatar from '../../ChatScreen/GroupChat/FramedAvatar';
 import { getCachedProfile } from '../../Helper/profileCache';
+import { getUserRoles } from '../../Helper/roleRoster';
 import { getUserEmail } from '../../Helper/privateProfile';
 import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
+import { logModAction, resolveActorRole } from '../../Helper/modLog';
 
 const REACTION_EMOJIS = ['❤️', '🔥', '😍', '💀', '🎯'];
 
@@ -73,12 +75,18 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
   const [heartScale] = useState(new Animated.Value(1));
   const [bannedUsers, setBannedUsers] = useState([]);
   const [isOnline, setIsOnline] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     setBannedUsers(localState.bannedUsers);
   }, [localState.bannedUsers]);
 
-  const { theme, isAdmin } = useGlobalState();
+  const { theme, isAdmin, user } = useGlobalState();
+  // Moderators may delete ANY post (owner decision 2026-09-27); JMDs may not.
+  // This is a UI gate only: firestore.rules lets any signed-in user delete a
+  // designPosts document, so real enforcement needs a rules change.
+  const isMod = !!user?.isModerator;
+  const isOwnPost = userId === item.userId;
   const isDark = theme === 'dark';
 
   const getTagConfig = (tag) => TAG_CONFIG[tag.toLowerCase()] || { color: config.colors.primary, icon: 'tag' };
@@ -207,6 +215,16 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
   const formattedTime = item.createdAt ? dayjs(item.createdAt.toDate()).fromNow() : 'Anonymous';
   const hasNoImages = !Array.isArray(item.imageUrl) || item.imageUrl.length === 0;
 
+  // Posts arrive with padding blank lines that turned a two-line post into a
+  // screen-tall card; trim them and collapse runs of blank lines to one.
+  const descText = useMemo(
+    () => (typeof item?.desc === 'string' ? item.desc.trim().replace(/\n\s*\n(\s*\n)+/g, '\n\n') : ''),
+    [item?.desc],
+  );
+  const DESC_MAX_LINES = 6;
+  const isLongDesc = descText.length > 280 || descText.split('\n').length > DESC_MAX_LINES;
+  const tags = Array.isArray(item.selectedTags) ? item.selectedTags.filter(Boolean) : [];
+
   return (
     <View style={s.card}>
       {/* ── Header ── */}
@@ -235,11 +253,11 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
               <Image source={require('../../../assets/verification.png')} style={s.badge} />
             )}
 
-            {/* Role pills, resolved from the profile cache — trade and post
-                documents predate the role fields, so stamping them on the
-                document would leave older rows badge-less. */}
+            {/* Role pills from the roster (Code/Helper/roleRoster.js), never
+                from flags on the document: those are client-written, so they
+                could be faked. Works for old and new rows alike. */}
             {(() => {
-              const rp = getCachedProfile(item.userId) || {};
+              const rp = getUserRoles(item.userId);
               const firstBadge = getFirstBadgeType(rp);
               return (
                 <>
@@ -262,7 +280,18 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
               ) : null;
             })()}
           </View>
-          <Text style={s.time}>{formattedTime}</Text>
+          <View style={s.metaRow}>
+            <Text style={s.time}>{formattedTime}</Text>
+            {tags.map((tag) => {
+              const cfg = getTagConfig(tag);
+              return (
+                <View key={tag} style={[s.tagChip, { backgroundColor: `${cfg.color}${isDark ? '2E' : '1A'}`, borderColor: `${cfg.color}${isDark ? '55' : '33'}` }]}>
+                  <FontAwesome6 name={cfg.icon} size={8} color={cfg.color} solid />
+                  <Text style={[s.tagChipText, { color: cfg.color }]} numberOfLines={1}>{tag}</Text>
+                </View>
+              );
+            })}
+          </View>
         </TouchableOpacity>
 
         {/* Kebab menu */}
@@ -279,10 +308,27 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
                 <Text style={[s.menuItemText, { color: '#F59E0B' }]}>Report</Text>
               </View>
             </MenuOption>
-            {(userId === item.userId || isAdmin) && (
+            {(isOwnPost || isAdmin || isMod) && (
               <MenuOption onSelect={() => Alert.alert('Delete Post', 'Are you sure you want to delete this post?', [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Delete', onPress: () => onDelete(item.id), style: 'destructive' },
+                { text: 'Delete', onPress: () => {
+                  onDelete(item.id);
+                  // Removing someone ELSE's post is a moderation action: record
+                  // it in the Mod Log (Admin dashboard) like review/status removals.
+                  if (!isOwnPost) {
+                    logModAction({
+                      action: 'post_delete',
+                      targetUid: item.userId || null,
+                      targetName: item.displayName || null,
+                      reason: item.desc ? `Removed post: "${String(item.desc).slice(0, 140)}"` : 'Removed an image post',
+                      source: 'feed',
+                      actorUid: user?.id || null,
+                      actorName: user?.displayName || null,
+                      actorRole: resolveActorRole({ isAdmin, isModerator: user?.isModerator, isBabyMod: user?.isBabyMod }),
+                      meta: { postId: item.id, imageUrl: Array.isArray(item.imageUrl) ? item.imageUrl[0] || null : item.imageUrl || null },
+                    });
+                  }
+                }, style: 'destructive' },
               ])}>
                 <View style={[s.menuItem, { borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#f1f5f9' }]}>
                   <FontAwesome6 name="trash" size={12} color="#EF4444" solid />
@@ -327,50 +373,23 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
         </Menu>
       </View>
 
-      {/* ── Text-only: desc + tags ── */}
-      {hasNoImages && (
-        <View style={s.textOnlyWrapper}>
-          {item.selectedTags?.length > 0 && (
-            <View style={s.tagOverlay}>
-              {item.selectedTags.map((tag, idx) => {
-                const cfg = getTagConfig(tag);
-                return (
-                  <View key={idx} style={[s.overlayPill, { backgroundColor: cfg.color }]}>
-                    <FontAwesome6 name={cfg.icon} size={9} color="#fff" solid />
-                    <Text style={s.overlayPillText}>{tag}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-          {!!item?.desc && (
-            <Text style={[s.desc, item.selectedTags?.length > 0 && { paddingRight: 80 }]}>
-              {item.desc}
+      {/* ── Body text ── */}
+      {!!descText && (
+        <View style={s.body}>
+          <Text style={s.desc} numberOfLines={expanded || !isLongDesc ? undefined : DESC_MAX_LINES}>
+            {descText}
+          </Text>
+          {isLongDesc && (
+            <Text style={s.showMore} onPress={() => setExpanded(v => !v)} suppressHighlighting>
+              {expanded ? 'Show less' : 'Show more'}
             </Text>
           )}
         </View>
       )}
 
-      {/* ── Image(s) with overlay tags ── */}
+      {/* ── Image(s) ── */}
       {!hasNoImages && (
         <View style={s.imageWrapper}>
-          {/* Desc above image */}
-          {!!item?.desc && (
-            <Text style={[s.desc, { paddingHorizontal: 14, paddingBottom: 8 }]}>{item.desc}</Text>
-          )}
-          {/* Tag overlay */}
-          <View style={s.tagOverlay}>
-            {item.selectedTags?.map((tag, idx) => {
-              const cfg = getTagConfig(tag);
-              return (
-                <View key={idx} style={[s.overlayPill, { backgroundColor: cfg.color }]}>
-                  <FontAwesome6 name={cfg.icon} size={9} color="#fff" solid />
-                  <Text style={s.overlayPillText}>{tag}</Text>
-                </View>
-              );
-            })}
-          </View>
-
           <View style={s.imageContainer}>
             {item.imageUrl.length === 1 ? (
               <TouchableOpacity
@@ -410,17 +429,25 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
         <ReportModal visible={showReportModal} onClose={() => setShowReportModal(false)} item={item} banUserwithEmail={banUserwithEmail} />
       )}
 
-      {/* ── Reaction summary chips ── */}
-      {reactionCounts.length > 0 && (
+      {/* ── Reaction summary ── */}
+      {totalReactions > 0 && (
         <View style={s.reactionSummary}>
-          {reactionCounts.map(([emoji, count]) => (
-            <View key={emoji} style={[s.reactionChip, mergedReactions[userId] === emoji && s.reactionChipActive]}>
-              <Text style={{ fontSize: 11 }}>{emoji}</Text>
-              <Text style={s.reactionChipCount}>{count}</Text>
-            </View>
-          ))}
-          {totalReactions > 0 && (
-            <Text style={s.totalReactionsText}>{totalReactions} {totalReactions === 1 ? 'reaction' : 'reactions'}</Text>
+          <View style={s.reactionStack}>
+            {reactionCounts.map(([emoji], idx) => (
+              <View key={emoji} style={[s.reactionBubble, idx > 0 && { marginLeft: -6 }, { zIndex: 3 - idx }]}>
+                <Text style={{ fontSize: 10 }}>{emoji}</Text>
+              </View>
+            ))}
+          </View>
+          <Text style={s.totalReactionsText}>
+            {myReaction && totalReactions > 1
+              ? `You and ${totalReactions - 1} ${totalReactions - 1 === 1 ? 'other' : 'others'}`
+              : myReaction ? 'You reacted' : `${totalReactions} ${totalReactions === 1 ? 'reaction' : 'reactions'}`}
+          </Text>
+          {!!item.commentCount && (
+            <Text style={[s.totalReactionsText, { marginLeft: 'auto' }]}>
+              {item.commentCount} {item.commentCount === 1 ? 'comment' : 'comments'}
+            </Text>
           )}
         </View>
       )}
@@ -434,18 +461,20 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
             onPress={() => setShowEmojiPicker(v => !v)}
             activeOpacity={0.75}
           >
-            <Text style={{ fontSize: 14 }}>{myReaction || '🤍'}</Text>
-            {totalReactions > 0 && (
-              <Text style={[s.actionBtnLabel, myReaction && { color: '#EF4444' }]}>{totalReactions}</Text>
-            )}
+            {myReaction
+              ? <Text style={{ fontSize: 15 }}>{myReaction}</Text>
+              : <Icon name="heart-o" size={15} color={isDark ? '#94a3b8' : '#64748b'} />}
+            <Text style={[s.actionBtnLabel, myReaction && { color: config.colors.primary }]}>
+              {myReaction ? 'Reacted' : 'React'}
+            </Text>
           </TouchableOpacity>
         </Animated.View>
 
         {/* Comment button */}
         <TouchableOpacity style={s.actionBtn} onPress={() => setShowComments(true)} activeOpacity={0.75}>
-          <Icon name="comment-o" size={14} color={isDark ? '#94a3b8' : '#64748b'} />
+          <Icon name="comment-o" size={15} color={isDark ? '#94a3b8' : '#64748b'} />
           <Text style={s.actionBtnLabel}>
-            {item.commentCount ? `${item.commentCount} comments` : '0 Comments'}
+            {item.commentCount ? `Comment · ${item.commentCount}` : 'Comment'}
           </Text>
         </TouchableOpacity>
 
@@ -453,7 +482,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
 
         {/* Chat / DM button */}
         <TouchableOpacity style={s.chatBtn} onPress={openProfileDrawer} activeOpacity={0.8}>
-          <Icon name="paper-plane" size={11} color="#fff" />
+          <Icon name="paper-plane" size={12} color="#fff" />
           <Text style={s.chatBtnLabel}>Chat</Text>
         </TouchableOpacity>
       </View>
@@ -493,20 +522,22 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
   );
 };
 
-const getStyles = (isDark) =>
-  StyleSheet.create({
+const getStyles = (isDark) => {
+  const border = isDark ? '#22304d' : '#eef1f6';
+  const muted = isDark ? '#8b9ab4' : '#64748b';
+  return StyleSheet.create({
     card: {
       marginHorizontal: 12,
       marginVertical: 6,
-      borderRadius: 20,
-      backgroundColor: isDark ? '#1a2540' : '#ffffff',
-      borderWidth: 1,
-      borderColor: isDark ? '#243050' : '#f0f4ff',
-      shadowColor: isDark ? '#000' : '#1a1a2e',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: isDark ? 0.35 : 0.07,
-      shadowRadius: 12,
-      elevation: isDark ? 6 : 3,
+      borderRadius: 18,
+      backgroundColor: isDark ? '#111c33' : '#ffffff',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: border,
+      shadowColor: '#0f172a',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.3 : 0.06,
+      shadowRadius: 10,
+      elevation: 2,
       overflow: 'hidden',
     },
 
@@ -516,45 +547,55 @@ const getStyles = (isDark) =>
       alignItems: 'center',
       paddingHorizontal: 14,
       paddingTop: 14,
-      paddingBottom: 10,
+      paddingBottom: 8,
     },
     avatarWrapper: {
       shadowColor: config.colors.primary,
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 6,
-    },
-    avatar: {
-      width: 42,
-      height: 42,
-      borderRadius: 21,
-      borderWidth: 2.5,
-      borderColor: config.colors.primary,
+      shadowOpacity: 0.2,
+      shadowRadius: 5,
     },
     badge: {
-      width: 11,
-      height: 11,
+      width: 12,
+      height: 12,
     },
     name: {
-      fontWeight: '800',
-      fontSize: 14,
-      color: isDark ? '#e2e8f0' : config.colors.backgroundDark,
-      letterSpacing: 0.1,
+      fontWeight: '700',
+      fontSize: 15,
+      color: isDark ? '#f1f5f9' : '#0f172a',
+      flexShrink: 1,
+    },
+    metaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginTop: 3,
     },
     time: {
-      fontSize: 11,
-      color: isDark ? '#475569' : '#94a3b8',
-      marginTop: 2,
+      fontSize: 12,
+      color: isDark ? '#64748b' : '#94a3b8',
+    },
+    tagChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 6,
+      borderWidth: 1,
+    },
+    tagChipText: {
+      fontSize: 10.5,
+      fontWeight: '700',
+      letterSpacing: 0.2,
     },
     menuBtn: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      backgroundColor: isDark ? '#243050' : '#f8fafc',
+      width: 32,
+      height: 32,
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: isDark ? '#334155' : '#e2e8f0',
     },
     menuItem: {
       flexDirection: 'row',
@@ -568,57 +609,37 @@ const getStyles = (isDark) =>
       fontWeight: '600',
     },
 
-    /* Description */
-    desc: {
-      fontSize: 14,
-      color: isDark ? '#cbd5e1' : config.colors.surfaceElevatedDark,
-      lineHeight: 21,
-    },
-
-    /* Text-only wrapper */
-    textOnlyWrapper: {
-      position: 'relative',
-      minHeight: 44,
+    /* Body */
+    body: {
       paddingHorizontal: 14,
-      paddingBottom: 10,
+      paddingBottom: 12,
+    },
+    desc: {
+      fontSize: 15,
+      lineHeight: 22,
+      color: isDark ? '#d6deeb' : '#1e293b',
+    },
+    showMore: {
+      marginTop: 4,
+      fontSize: 13,
+      fontWeight: '700',
+      color: config.colors.primary,
+      alignSelf: 'flex-start',
     },
 
     /* Images */
     imageWrapper: {
       marginHorizontal: 14,
-      marginBottom: 8,
-      borderRadius: 16,
-      overflow: 'hidden',
-    },
-    tagOverlay: {
-      position: 'absolute',
-      top: 8,
-      right: 8,
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 4,
-      zIndex: 10,
-    },
-    overlayPill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      paddingHorizontal: 9,
-      paddingVertical: 4,
-      borderRadius: 999,
-    },
-    overlayPillText: {
-      fontSize: 10,
-      color: '#fff',
-      fontWeight: '800',
+      marginBottom: 12,
     },
     imageContainer: {
-      borderRadius: 16,
+      borderRadius: 14,
       overflow: 'hidden',
+      backgroundColor: isDark ? '#0b1426' : '#f1f5f9',
     },
     singleImage: {
       width: '100%',
-      height: 230,
+      height: 240,
       resizeMode: 'cover',
     },
     multiGrid: {
@@ -629,7 +650,6 @@ const getStyles = (isDark) =>
     gridCell: {
       width: '49.3%',
       height: 140,
-      borderRadius: 10,
       overflow: 'hidden',
     },
     gridCellWide: {
@@ -657,86 +677,69 @@ const getStyles = (isDark) =>
     reactionSummary: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 5,
+      gap: 6,
       paddingHorizontal: 14,
-      paddingBottom: 6,
-      flexWrap: 'wrap',
+      paddingBottom: 10,
     },
-    reactionChip: {
+    reactionStack: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 3,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 999,
-      backgroundColor: isDark ? config.colors.surfaceDark : '#f1f5f9',
-      borderWidth: 1,
-      borderColor: isDark ? '#334155' : '#e2e8f0',
     },
-    reactionChipActive: {
-      backgroundColor: isDark ? '#1e3a5f' : '#eff6ff',
-      borderColor: isDark ? '#6A5ACD' : '#bfdbfe',
-    },
-    reactionChipCount: {
-      fontSize: 10,
-      fontWeight: '700',
-      color: isDark ? '#94a3b8' : '#64748b',
+    reactionBubble: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? '#1c2a47' : '#f1f5f9',
+      borderWidth: 1.5,
+      borderColor: isDark ? '#111c33' : '#ffffff',
     },
     totalReactionsText: {
-      fontSize: 10,
-      color: isDark ? '#475569' : '#94a3b8',
-      marginLeft: 2,
+      fontSize: 12,
+      color: muted,
     },
 
     /* Action bar */
     actionBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      paddingHorizontal: 14,
-      paddingBottom: 12,
-      paddingTop: 6,
-      borderTopWidth: 1,
-      borderTopColor: isDark ? '#243050' : '#f1f5f9',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: border,
     },
     actionBtn: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 5,
+      gap: 6,
       paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 999,
-      backgroundColor: isDark ? config.colors.backgroundDark : '#f8fafc',
-      borderWidth: 1,
-      borderColor: isDark ? '#334155' : '#e2e8f0',
+      paddingVertical: 8,
+      borderRadius: 10,
     },
     actionBtnActive: {
-      backgroundColor: isDark ? config.colors.surfaceDark : '#fff1f2',
-      borderColor: '#EF4444',
+      backgroundColor: isDark ? 'rgba(106,90,205,0.18)' : 'rgba(106,90,205,0.08)',
     },
     actionBtnLabel: {
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: '600',
-      color: isDark ? '#94a3b8' : '#64748b',
+      color: muted,
     },
     chatBtn: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 5,
-      paddingHorizontal: 13,
-      paddingVertical: 7,
-      borderRadius: 999,
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      marginRight: 6,
+      borderRadius: 10,
       backgroundColor: config.colors.primary,
-      shadowColor: config.colors.primary,
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.35,
-      shadowRadius: 6,
-      elevation: 4,
     },
     chatBtnLabel: {
       color: '#ffffff',
-      fontWeight: '800',
-      fontSize: 11,
+      fontWeight: '700',
+      fontSize: 13,
     },
 
     /* Emoji picker */
@@ -769,6 +772,7 @@ const getStyles = (isDark) =>
       borderColor: config.colors.primary,
     },
   });
+};
 
 export default memo(PostCard, (prevProps, nextProps) => {
   return (
@@ -778,6 +782,8 @@ export default memo(PostCard, (prevProps, nextProps) => {
     prevProps.item.commentCount === nextProps.item.commentCount &&
     prevProps.item.imageUrl === nextProps.item.imageUrl &&
     prevProps.userId === nextProps.userId &&
+    // Role badges come from the roster, outside the props; this bumps when it loads.
+    prevProps.roleRosterVersion === nextProps.roleRosterVersion &&
     prevProps.localState?.isPro === nextProps.localState?.isPro &&
     prevProps.appdatabase === nextProps.appdatabase &&
     prevProps.onReaction === nextProps.onReaction &&

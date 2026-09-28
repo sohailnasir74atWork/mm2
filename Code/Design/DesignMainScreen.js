@@ -48,6 +48,7 @@ import BannerAdComponent from '../Ads/bannerAds';
 import { ABOVE_BANNER, bannerAware, FLOATING_BUTTON_ICON_SIZE, FLOATING_BUTTON_RIGHT } from '../Helper/floatingButtonLayout';
 import PostsHeader from './componenets/PostsHeader';
 import { useTranslation } from 'react-i18next';
+import { useRoleRosterVersion } from '../Helper/roleRoster';
 
 // Insert a native-ad slot every AD_FREQUENCY real items. Module-scoped so its
 // identity is stable across renders (lets dataToRender be safely memoized).
@@ -69,6 +70,7 @@ function interleaveAds(items, showAds) {
 const DesignFeedScreen = ({ route }) => {
   const { selectedTheme } = route.params;
   const { appdatabase, user, theme, firestoreDB } = useGlobalState();
+  const roleRosterVersion = useRoleRosterVersion(appdatabase);
   const { localState } = useLocalState();
   const isDarkMode = theme === 'dark';
   const navigation = useNavigation();
@@ -560,6 +562,7 @@ const DesignFeedScreen = ({ route }) => {
         onLike={handleLike}
         localState={localState}
         appdatabase={appdatabase}
+        roleRosterVersion={roleRosterVersion}
         onDelete={handleDeletePost}
         onDeleteAll={deleteUsersLatestPosts}
 
@@ -625,6 +628,7 @@ const DesignFeedScreen = ({ route }) => {
         data={dataToRender}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
+        extraData={roleRosterVersion}
         onEndReached={loadMorePosts}
         onEndReachedThreshold={0.5}
         refreshing={refreshing}
@@ -705,7 +709,7 @@ const DesignFeedScreen = ({ route }) => {
       />
       {!localState.isPro && (
         <View style={{ position: 'absolute', bottom: bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
-          <BannerAdComponent collapsible />
+          <BannerAdComponent />
         </View>
       )}
 

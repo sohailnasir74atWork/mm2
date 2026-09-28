@@ -36,8 +36,6 @@ import { useLocalState } from './Code/LocalGlobelStats';
 import { AdsConsent, AdsConsentStatus } from 'react-native-google-mobile-ads';
 import MainTabs from './Code/AppHelper/MainTabs';
 import SocialDashboard from './Code/AppHelper/SocialDashboard';
-import GameScreen from './Code/Engagement/GameScreen';
-import ArrowGameScreen from './Code/Engagement/ArrowGameScreen';
 import { getTrackingStatus, requestTrackingPermission } from 'react-native-tracking-transparency';
 import {
   MyDarkTheme,
@@ -50,6 +48,7 @@ import { useTranslation } from 'react-i18next';
 import InterstitialAdManager from './Code/Ads/IntAd';
 import AppOpenAdManager from './Code/Ads/openApp';
 import { ensureAdsInitialized } from './Code/Ads/init';
+import { markAdsReady, whenAdsReady } from './Code/Ads/adsGate';
 import RNBootSplash from "react-native-bootsplash";
 import SystemNavigationBar from 'react-native-system-navigation-bar';
 import { checkForUpdate } from './Code/AppHelper/InAppUpdateChecker';
@@ -131,6 +130,10 @@ function App() {
       } catch (error) {
         // Still init ads even if consent fails, to avoid no ads at all
         InterstitialAdManager.init();
+      } finally {
+        // Banners and the App Open manager wait for this (Code/Ads/adsGate.js),
+        // so nothing requests an ad before ATT + consent have run.
+        markAdsReady();
       }
     };
 
@@ -181,6 +184,9 @@ function App() {
                 animation: 'fade',
                 animationDuration: 300,
                 contentStyle: { backgroundColor: selectedTheme.colors.background },
+                // Arrow only on every pushed screen: the label was the previous
+                // route's NAME, which read "MainTabs" (Settings, Values, ...).
+                headerBackButtonDisplayMode: 'minimal',
               }}
             >
             <Stack.Screen name="MainTabs" options={{ headerShown: false }} >
@@ -251,7 +257,7 @@ function App() {
                 headerTitleStyle: { fontFamily: 'Lato-Bold', fontSize: 20 },
               }}
             >
-              {() => <ValueScreen selectedTheme={selectedTheme} />}
+              {(props) => <ValueScreen {...props} selectedTheme={selectedTheme} />}
             </Stack.Screen>
 
             <Stack.Screen
@@ -259,7 +265,9 @@ function App() {
               // The screen draws its own header (SafeAreaView + plainHeader),
               // so the native one must stay off or the game shows two headers.
               options={{ headerShown: false }}
-              component={ArrowGameScreen}
+              // Lazy: the game screens (and their six mini-games) are no longer on
+              // Home, so there is no reason to evaluate them at startup.
+              getComponent={() => require('./Code/Engagement/ArrowGameScreen').default}
             />
 
             <Stack.Screen
@@ -270,7 +278,7 @@ function App() {
                 headerTintColor: '#fff',
                 headerTitleStyle: { fontFamily: 'Lato-Bold', fontSize: 20, color: '#fff' },
               })}
-              component={GameScreen}
+              getComponent={() => require('./Code/Engagement/GameScreen').default}
             />
 
             <Stack.Screen
@@ -316,14 +324,36 @@ export default function AppWrapper() {
   // Pro-gated, and de-duped against interstitial/rewarded ads via the shared
   // full-screen flag. Pro state is re-read from MMKV on every show, so a
   // purchase mid-session immediately stops App Open ads.
+  //
+  // The manager itself starts only once consent has run (whenAdsReady). The
+  // cold-start decision is made right away, though, because the splash hide
+  // below waits on it: the cold-start ad is shown FROM the splash or not at
+  // all (budget, first-launch and 4h rules live in Code/Ads/openApp.js).
+  const [splashAdGateOpen, setSplashAdGateOpen] = useState(false);
+  const coldStartPrepared = useRef(false);
   useEffect(() => {
+    if (!coldStartPrepared.current) {
+      coldStartPrepared.current = true;
+      if (localState.showOnBoardingScreen || localState.isPro) {
+        AppOpenAdManager.skipColdStart();
+      } else {
+        AppOpenAdManager.prepareColdStart();
+      }
+      AppOpenAdManager.splashGate.then(() => setSplashAdGateOpen(true));
+      // Belt and braces: whatever the ad SDK does, the splash never stays
+      // more than 6s.
+      setTimeout(() => setSplashAdGateOpen(true), 6000);
+    }
     if (localState.showOnBoardingScreen || localState.isPro) return;
-    AppOpenAdManager.start();
+    let cancelled = false;
+    whenAdsReady().then(() => { if (!cancelled) AppOpenAdManager.start(); });
+    return () => { cancelled = true; };
   }, [localState.isPro, localState.showOnBoardingScreen]);
 
-  // ✅ Hide splash after UI ready
+  // ✅ Hide splash after UI ready — and after the cold-start ad has either
+  // opened over it or been skipped.
   useEffect(() => {
-    if (localState.isAppReady) {
+    if (localState.isAppReady && splashAdGateOpen) {
       // Was InteractionManager.runAfterInteractions (deprecated in RN 0.83).
       // rAF defers to after the next frame commits, which is what this needed
       // — and unlike requestIdleCallback it cannot be starved, so the splash
@@ -333,7 +363,7 @@ export default function AppWrapper() {
       });
       return () => cancelAnimationFrame(raf);
     }
-  }, [localState.isAppReady]);
+  }, [localState.isAppReady, splashAdGateOpen]);
 
   const selectedTheme = useMemo(() => {
     return theme === 'dark' ? MyDarkTheme : MyLightTheme;

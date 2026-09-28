@@ -21,7 +21,7 @@ import ConditionalKeyboardWrapper from '../Helper/keyboardAvoidingContainer';
 import { useTranslation } from 'react-i18next';
 import { showSuccessMessage, showErrorMessage, showWarningMessage } from '../Helper/MessageHelper';
 import { requestPermission } from '../Helper/PermissionCheck';
-import { setPendingSigninChoice, clearPendingSigninChoice } from '../Helper/emailOptIn';
+import { setPendingSigninChoice, clearPendingSigninChoice, emailOptInDefault } from '../Helper/emailOptIn';
 import { handleOpenPrivacy, handleOpenTerms } from '../SettingScreen/settinghelper';
 import config from '../Helper/Environment';
 // import { showMessage } from 'react-native-flash-message';
@@ -47,16 +47,18 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
   const [robloxUsernameError, setRobloxUsernameError] = useState('');
   const [robloxUsernamelocal, setRobloxUsernamelocal] = useState();
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
-  // Email news-and-updates opt-in. Must start unticked: a pre-ticked box is
-  // not valid consent under GDPR/UK law. Applied by EmailOptInGate after
-  // sign-in, which also runs the 13+ check. Read through a ref so the
-  // memoized sign-in handlers always see the current value.
-  const [emailUpdates, setEmailUpdates] = useState(false);
-  const emailUpdatesRef = useRef(false);
+  // Email news-and-updates opt-in. Starts ticked outside the EU/EEA/UK/CH and
+  // unticked inside them, where a pre-ticked box is not valid consent (see
+  // emailOptInDefault). Applied by EmailOptInGate after sign-in, which also
+  // runs the 13+ check. Read through a ref so the memoized sign-in handlers
+  // always see the current value.
+  const [emailUpdates, setEmailUpdates] = useState(emailOptInDefault);
+  const emailUpdatesRef = useRef(emailUpdates);
   useEffect(() => { emailUpdatesRef.current = emailUpdates; }, [emailUpdates]);
-  // Consent is per sign-in: a tick left from an earlier, abandoned attempt
-  // must not carry over, so the box resets whenever the drawer closes.
-  useEffect(() => { if (!visible) setEmailUpdates(false); }, [visible]);
+  // Consent is per sign-in: a choice left from an earlier, abandoned attempt
+  // must not carry over, so the box resets to its default whenever the drawer
+  // closes.
+  useEffect(() => { if (!visible) setEmailUpdates(emailOptInDefault()); }, [visible]);
 
   const { triggerHapticFeedback } = useHaptic();
   const { theme, robloxUsernameRef } = useGlobalState();
@@ -275,7 +277,7 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
         showErrorMessage(
           t('signin.error_google_unavailable_title', { defaultValue: 'Google sign-in unavailable' }),
           t('signin.error_google_unavailable', {
-            defaultValue: 'Google Play Services isn\'t available on this device. Please sign in with email instead — tap "Sign in with Email" below.',
+            defaultValue: 'Google Play Services isn\'t available on this device. Please sign in with your email below instead.',
           })
         );
       } else if (networkish) {

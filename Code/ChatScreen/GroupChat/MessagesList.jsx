@@ -35,6 +35,7 @@ import { FRUIT_KEYWORDS } from '../../Helper/filter';
 import { banUserwithEmail, unbanUserWithEmail } from '../utils';
 import { getUserEmail } from '../../Helper/privateProfile';
 import { sourceLabelForItems } from '../../Helper/valueSources';
+import { getUserRoles, useRoleRosterVersion } from '../../Helper/roleRoster';
 
 const MessagesList = ({
   channelPath,
@@ -73,6 +74,8 @@ const MessagesList = ({
 
   const { t } = useTranslation();
   const { isAdmin, api, freeTranslation, appdatabase } = useGlobalState();
+  // Re-renders rows when the role rosters load or change (badges).
+  const roleRosterVersion = useRoleRosterVersion(appdatabase);
 
   // Warm the profile cache for the senders in view so avatar frames render.
   // Public-chat messages are slim — they carry no cosmetics — so without this
@@ -482,32 +485,30 @@ const MessagesList = ({
     />
   )}
 
-  {/* Role pills. Authority ranks are stamped on the message itself;
-      community badges come from the profile cache, because older messages
-      predate those fields entirely. */}
+  {/* Role pills from the roster (Code/Helper/roleRoster.js), not from
+      flags on the message: chat_new is open to any write, so a stamped
+      isAdmin / isModerator could be faked by anyone. */}
   {(() => {
-    const firstBadge = getFirstBadgeType({
-      isAdmin: item.isAdmin, isModerator: item.isModerator, isBabyMod: item.isBabyMod,
-      isTrusted: msgProfile.isTrusted, isCMSR: msgProfile.isCMSR, isHelper: msgProfile.isHelper,
-    });
+    const roles = getUserRoles(item.senderId);
+    const firstBadge = getFirstBadgeType(roles);
     return (
       <>
-        {!!item.isAdmin && (
+        {roles.isAdmin && (
           <UserBadgePill type="admin" size="sm" isDarkMode={isDarkMode} labelOverride={t('chat.admin')} glow={firstBadge === 'admin'} />
         )}
-        {!item.isAdmin && item.isModerator && (
+        {!roles.isAdmin && roles.isModerator && (
           <UserBadgePill type="mod" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'mod'} />
         )}
-        {!item.isAdmin && !item.isModerator && item.isBabyMod && (
+        {!roles.isAdmin && !roles.isModerator && roles.isBabyMod && (
           <UserBadgePill type="jmd" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'jmd'} />
         )}
-        {msgProfile.isTrusted && (
+        {roles.isTrusted && (
           <UserBadgePill type="trusted" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
         )}
-        {msgProfile.isCMSR && (
+        {roles.isCMSR && (
           <UserBadgePill type="cmsr" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
         )}
-        {msgProfile.isHelper && (
+        {roles.isHelper && (
           <UserBadgePill type="helper" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
         )}
       </>
@@ -770,12 +771,16 @@ const MessagesList = ({
     <>
       <FlatList
         data={messages}
-        keyExtractor={(item, index) => `${item.id}-${index}`}
-        renderItem={({ item, index }) => renderMessage({ item, index })}
+        // Stable per-message key. The index used to be part of it, and since
+        // new messages are prepended to this inverted list every existing key
+        // shifted on each arrival — remounting every visible row (avatar
+        // frame, images, popup menus). Ids are deduped on arrival (Trader.jsx).
+        keyExtractor={(item, index) => (item?.id != null ? String(item.id) : `row-${index}`)}
+        renderItem={renderMessage}
         contentContainerStyle={styles.chatList}
         inverted
         // profileCacheVersion so rows repaint once frames/colours land
-        extraData={`${highlightedMessageId}-${profileCacheVersion}`}
+        extraData={`${highlightedMessageId}-${profileCacheVersion}-${roleRosterVersion}`}
         ref={flatListRef}
         scrollEventThrottle={16}
         removeClippedSubviews={false}

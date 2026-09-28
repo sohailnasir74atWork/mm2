@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { Text, StyleSheet } from 'react-native';
+import { Text, StyleSheet, View, Platform } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import config from '../Helper/Environment';
 import { useGlobalState } from '../GlobelStats';
@@ -70,7 +70,24 @@ export const DesignStack = ({ selectedTheme }) => {
       name="DesignScreen"
       component={DesignFeedScreen}
       initialParams={sharedParams}
-      options={{ title: 'Feed' }}
+      options={{
+        title: 'Feed',
+        // iOS: the native navigation bar renders ~64pt tall here (the root
+        // SafeAreaView in App.js already clears the status bar), 20pt taller
+        // than the 44pt JS header the Calculator tab gets, so Feed's lone
+        // centred title floated in empty space. Draw the same compact bar.
+        // Android keeps the native header, which already matches.
+        ...(Platform.OS === 'ios' ? {
+          header: () => (
+            <View style={[styles.compactHeader, {
+              backgroundColor: selectedTheme.colors.background,
+              borderBottomColor: selectedTheme.colors.border,
+            }]}>
+              <Text style={[styles.compactHeaderTitle, { color: selectedTheme.colors.text }]}>Feed</Text>
+            </View>
+          ),
+        } : {}),
+      }}
     />
 
     <Stack.Screen name="PrivateChatDesign" options={getPrivateChatOptions}>
@@ -95,6 +112,11 @@ export const DesignStack = ({ selectedTheme }) => {
 };
 
 const styles = StyleSheet.create({
+  compactHeader: {
+    height: 44, alignItems: 'center', justifyContent: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  compactHeaderTitle: { fontFamily: 'Lato-Bold', fontSize: 24 },
   highlightedText: {
     fontFamily: 'Lato-Bold',
     color: config.colors.primary,

@@ -21,6 +21,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { doc, updateDoc } from '@react-native-firebase/firestore';
 import { getThemeColors } from '../Helper/themeColors';
+import { SCREEN_GUTTER } from '../Helper/layout';
 
 dayjs.extend(relativeTime);
 
@@ -193,6 +194,8 @@ const PollCard = ({ poll, user, firestoreDB, isDarkMode, onRequireSignIn }) => {
 const styles = StyleSheet.create({
   card: {
     borderRadius: 14, borderWidth: 1, overflow: 'hidden', marginBottom: 12,
+    // Same edge gap as the post cards around it (it used to run edge to edge).
+    marginHorizontal: SCREEN_GUTTER,
   },
   header: {
     flexDirection: 'row', alignItems: 'center', padding: 14, gap: 8,

@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
 import HomeScreen from '../Homescreen/HomeScreen';
-import ValueScreen from '../ValuesScreen/ValueScreen';
 import HomeTabNavigator from '../HomeTab/HomeTabNavigator';
 // import TimerScreen from '../StockScreen/TimerScreen';
 import { ChatStack } from '../ChatScreen/ChatNavigator';
@@ -13,7 +12,6 @@ import { useTranslation } from 'react-i18next';
 import config from '../Helper/Environment';
 import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 import { useGlobalState } from '../GlobelStats';
-import DesignUploader from '../Design/DesignMainScreen';
 import DesignStack from '../Design/DesignNavigation';
 
 
@@ -91,6 +89,10 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
         headerStyle: { backgroundColor: selectedTheme.colors.background },
         headerTintColor: selectedTheme.colors.text,
         headerTitleStyle: { fontFamily: 'Lato-Bold', fontSize: 24 },
+        // Tabs stay mounted; without this a hidden Home / Calculator (2,400
+        // lines, not memoised) re-rendered on every global/local state change.
+        // Frozen tabs catch up the moment they are focused again.
+        freezeOnBlur: true,
       }}
       tabBar={({ state, descriptors, navigation }) => {
         return (

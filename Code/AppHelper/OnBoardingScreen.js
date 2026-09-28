@@ -1,5 +1,5 @@
 import {trackGrowthEvent} from '../Helper/growthAnalytics';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -61,18 +61,26 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
     }
   };
 
+  // Every first-launch path ends at the offer wall, signed in or not (owner
+  // decision 2026-09-27: the first-run offer is the most important one).
+  // SubscriptionScreen calls onFinish when the paywall closes.
   const handleGuest = () => {
     trackGrowthEvent("onboarding_guest_continue");
-    onFinish(); // Let users try values and the calculator before an offer.
+    setScreenIndex(2);
   };
   
+  // SignInDrawer calls onClose for BOTH a successful sign-in and a plain
+  // dismiss (overlay tap / back button); both go on to the offer wall (owner
+  // decision 2026-09-27). It used to switch immediately, so RevenueCat's
+  // native paywall presented while the sheet was still sliding out and the
+  // two flipped over each other. Wait for the close animation first; the ref
+  // stops a double onClose from scheduling it twice.
+  const offerScheduled = useRef(false);
   const handleLoginSuccess = () => {
     setOpenSignin(false);
-    // if (Platform.OS === 'ios') {
-    //   onFinish();
-    // } else {
-      setScreenIndex(2);
-    // }
+    if (offerScheduled.current) return;
+    offerScheduled.current = true;
+    setTimeout(() => setScreenIndex(2), 450);
   };
 
   // const createSlideAnimation = (direction) => {

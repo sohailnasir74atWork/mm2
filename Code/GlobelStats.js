@@ -311,8 +311,10 @@ export const GlobalStateProvider = ({ children }) => {
 
       setUser(userData);
 
-      // 🔥 Refresh and update FCM token
-      await Promise.all([registerForNotifications(userId)]);
+      // (FCM token registration is NOT done here: the `user?.id` effect below
+      // does it once. It used to run here, in that effect, AND after login in
+      // onAuthStateChanged — three permission requests + getToken + RTDB reads
+      // per launch, two of them awaited before the app was marked ready.)
 
     } catch (error) {
       // ⚠️ A failed profile read must NOT look like a logout.
@@ -369,10 +371,6 @@ export const GlobalStateProvider = ({ children }) => {
         const _loginStartedAt = Date.now();
         await handleUserLogin(loggedInUser);
         logStartupTiming('startup_profile_reads', { ms: Date.now() - _loginStartedAt });
-
-        if (loggedInUser?.uid) {
-          await registerForNotifications(loggedInUser.uid);
-        }
 
         // Time-to-interactive: process start -> splash hide.
         logStartupTiming('startup_ready', { ms: Date.now() - _launchedAt });
@@ -617,7 +615,7 @@ export const GlobalStateProvider = ({ children }) => {
         const results = await Promise.all([
           refreshCatalog({
             load: () => load('https://mm2-api.b-cdn.net/data.json'), cached: ls.data,
-            save: value => updateLocalStateRef.current('data', JSON.stringify(value)),
+            save: value => updateLocalStateRef.current('data', value), // object: stored once as JSON, kept parsed in state
             fallback: async () => {
               const snapshot = await get(ref(appdatabase, 'mm2Data'));
               return snapshot.exists() ? unwrapFeed(snapshot.val()) : null;
@@ -625,7 +623,7 @@ export const GlobalStateProvider = ({ children }) => {
           }),
           refreshCatalog({
             load: () => load('https://mm2api-suprime.b-cdn.net/supreme.json'), cached: ls.suprime,
-            save: value => updateLocalStateRef.current('suprime', JSON.stringify(value)),
+            save: value => updateLocalStateRef.current('suprime', value), // object: stored once as JSON, kept parsed in state
             fallback: async () => {
               const snapshot = await get(ref(appdatabase, 'suprimeData'));
               return snapshot.exists() ? unwrapFeed(snapshot.val()) : null;
@@ -843,9 +841,10 @@ export const GlobalStateProvider = ({ children }) => {
     let currentAppState = AppState.currentState; // 'active' | 'background' | 'inactive'
     let armedOnDisconnect = false;
 
-    const setLocalOnline = (val) => {
-      setUser((prev) => (prev?.id ? { ...prev, online: val } : prev));
-    };
+    // (No local `user.online` any more: nothing reads it, and setting it made
+    // `user` a new object — re-rendering every useGlobalState() consumer — on
+    // each foreground/background switch and connection flap. Presence lives
+    // in RTDB presence/{uid}.)
 
     const forceOffline = async () => {
       try {
@@ -853,7 +852,6 @@ export const GlobalStateProvider = ({ children }) => {
       } catch (e) {
         // log if you want: console.log("forceOffline error", e);
       }
-      setLocalOnline(false);
     };
 
     let onDisconnectHandler = null;
@@ -898,7 +896,6 @@ export const GlobalStateProvider = ({ children }) => {
   
         await armOnDisconnect();
         await set(presenceRef, true);
-        setLocalOnline(true);
   
       } catch (e) {
         // console.log("updatePresence error", e);
@@ -944,7 +941,6 @@ export const GlobalStateProvider = ({ children }) => {
       // ✅ Mark offline in RTDB (using closure to capture the old uid)
       // This ensures when user.id changes to null (logout), the previous user is marked offline
       set(presenceRef, false).catch(() => {});
-      setLocalOnline(false);
     };
   }, [user?.id, appdatabase, localState?.showOnlineStatus]);
 

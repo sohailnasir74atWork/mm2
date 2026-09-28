@@ -28,6 +28,7 @@ import ShareTradeModal from '../Trades/ShareTradeModal';
 import TradeCompletion from '../Engagement/TradeCompletion';
 import { addDoc, collection, serverTimestamp, doc, getDoc, setDoc } from '@react-native-firebase/firestore';
 import SubscriptionScreen from '../SettingScreen/OfferWall';
+import { SCREEN_GUTTER } from '../Helper/layout';
 
 const GRID_STEPS = [4, 8, 12, 16];
 
@@ -667,7 +668,9 @@ const HomeScreen = ({ selectedTheme }) => {
         )}
       </TouchableOpacity>
     );
-  }, [selectItem, toggleFavorite, localState.favorites, isAddingToFavorites, isDarkMode, getImageUrl]);
+  // valueSource + styles: without them switching Supreme/MM2 left grid cells
+  // showing the old catalogue's numbers.
+  }, [selectItem, toggleFavorite, localState.favorites, isAddingToFavorites, isDarkMode, getImageUrl, valueSource, styles]);
 
   // Update renderFavoritesHeader function
   const renderFavoritesHeader = useCallback(() => {
@@ -1028,7 +1031,7 @@ const HomeScreen = ({ selectedTheme }) => {
       if (!isMountedRef.current) return;
       showSuccessMessage(
         '📋 ' + t('home.trade_logged', { defaultValue: 'Trade Logged!' }),
-        t('home.trade_logged_message', { defaultValue: 'Saved to your Trade Journal.' })
+        t('home.trade_logged_message', { defaultValue: 'Saved to your trade history in My Stuff.' })
       );
     };
 
@@ -1379,32 +1382,8 @@ const HomeScreen = ({ selectedTheme }) => {
                 <Text style={styles.tradeBtnText} numberOfLines={1}>{t('home.share_trade')}</Text>
               </TouchableOpacity>
             </View>
-            {!localState.isPro && <View style={styles.createtradeAds}>
-              <TouchableOpacity
-                style={styles.removeAdsButton}
-                activeOpacity={0.9}
-                onPress={() => setShowofferwall(true)}
-              >
-                <View style={styles.removeAdsContent}>
-                  {/* Crown icon / image */}
-                  <View style={styles.crownWrapper}>
-                    {/* <Icon name="trophy" size={18} color="#3b2500" /> */}
-
-                    <Image
-                      source={require('../../assets/pro.png')}
-                      style={{ width: 20, height: 20 }}
-                      resizeMode="contain"
-                    />
-
-                  </View>
-
-                  <View style={styles.removeAdsTextWrapper}>
-                    <Text style={styles.removeAdsTitle}>{t('home.remove_ads')}</Text>
-                    {/* <Text style={styles.removeAdsSubtitle}>Unlock a clean experience</Text> */}
-                  </View>
-                </View>
-              </TouchableOpacity>
-            </View>}
+            {/* Remove Ads button removed 2026-09-27 (owner): the Pro offer
+                lives in Settings, not under the calculator. */}
 
             {/* ✅ Last Updated / Refresh Button */}
             <TouchableOpacity
@@ -1489,7 +1468,7 @@ const HomeScreen = ({ selectedTheme }) => {
                 <View style={styles.gridContainer}>
                   {renderFavoritesHeader()}
                   <FlatList
-                    key={`${selectedPetType}-${isAddingToFavorites ? 'add' : 'view'}-${(localState.favorites || []).length}`}
+                    key={`${selectedPetType}-${isAddingToFavorites ? 'add' : 'view'}`} // no favourites count: toggling one remounted the whole grid and lost the scroll position
                     data={filteredData}
                     keyExtractor={keyExtractor}
                     renderItem={selectedPetType === 'INVENTORY' && !isAddingToFavorites ? renderFavoriteItem : renderGridItem}
@@ -1563,7 +1542,7 @@ const HomeScreen = ({ selectedTheme }) => {
       </GestureHandlerRootView>
       {!localState.isPro && (
         <View style={{ position: 'absolute', bottom: bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
-          <BannerAdComponent collapsible />
+          <BannerAdComponent />
         </View>
       )}
       <ShareTradeModal
@@ -2079,7 +2058,9 @@ const getStyles = (isDarkMode, isGG) =>
       color: 'white',
     },
     screenshotView: {
-      padding: 10,
+      // Shared edge gap, Helper/layout.js (was 10).
+      paddingVertical: 10,
+      paddingHorizontal: SCREEN_GUTTER,
       flex: 1,
     },
 

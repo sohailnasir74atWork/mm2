@@ -139,6 +139,7 @@ const ACTION_META = {
   unban: { label: 'Unbanned', noun: 'Unbans', icon: 'checkmark-circle', color: HUE.success },
   review_delete: { label: 'Review removed', noun: 'Reviews', icon: 'star-half', color: HUE.gold },
   status_delete: { label: 'Status removed', noun: 'Statuses', icon: 'image', color: HUE.accent },
+  post_delete: { label: 'Post removed', noun: 'Posts', icon: 'trash', color: HUE.danger },
 };
 const SOURCE_LABEL = {
   admin_dashboard: 'Dashboard', group_chat: 'Chat', feed: 'Feed', report: 'Auto (reports)', auto: 'Auto', unknown: '—',
@@ -1401,7 +1402,7 @@ const AdminDashboard = () => {
             />
           ) : (
             <View style={{ flex: 1 }}>
-              {pills([[null, 'All'], ['ban', 'Bans'], ['strike', 'Strikes'], ['mute', 'Mutes'], ['unban', 'Unbans'], ['review_delete', 'Reviews'], ['status_delete', 'Statuses']], feedAction, setFeedAction)}
+              {pills([[null, 'All'], ['ban', 'Bans'], ['strike', 'Strikes'], ['mute', 'Mutes'], ['unban', 'Unbans'], ['review_delete', 'Reviews'], ['status_delete', 'Statuses'], ['post_delete', 'Posts']], feedAction, setFeedAction)}
               {feedActor && (
                 <TouchableOpacity onPress={() => setFeedActor(null)} style={[s.chipRow]}>
                   <Icon name="person" size={12} color={c.primary} />

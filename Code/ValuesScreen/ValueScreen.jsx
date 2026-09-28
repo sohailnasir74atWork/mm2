@@ -31,8 +31,10 @@ import BannerAdComponent from '../Ads/bannerAds';
 import { handleBloxFruit, handleadoptme } from '../SettingScreen/settinghelper';
 import {
   resolveItemImage, buildItemPool, unwrapFeed, priceOf, displayValueText,
-  DEFAULT_VALUE_SOURCE, categoryKey,
+  DEFAULT_VALUE_SOURCE, categoryKey, VALUE_SOURCE,
 } from '../Helper/valueSources';
+import ValueCard from './ValueCard';
+import { SCREEN_GUTTER } from '../Helper/layout';
 
 
 // ✅ MM2: Removed VALUE_TYPES and MODIFIERS - MM2 doesn't use these
@@ -55,8 +57,22 @@ const getStabilityColor = (stability) => {
   return '#888';
 };
 
-const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSelectedFruits, onRequestClose, fromSetting, ownedPets, setOwnedPets, wishlistPets, setWishlistPets, owned }) => {
-  const [searchText, setSearchText] = useState('');
+const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSelectedFruits, onRequestClose, fromSetting, ownedPets, setOwnedPets, wishlistPets, setWishlistPets, owned, route }) => {
+  // Seeded from route params so Home's search bar lands the user on results.
+  // The screen is also embedded (chat picker, settings) with no route at all.
+  const [searchText, setSearchText] = useState(() => route?.params?.q || '');
+  // What the box shows, updated on every keystroke; `searchText` (what filters
+  // the list) trails it through the debounce below.
+  const [inputText, setInputText] = useState(() => route?.params?.q || '');
+  // React Navigation reuses a screen already in the stack instead of
+  // remounting it, so a second search from Home arrives as new params only.
+  const routeQuery = route?.params?.q;
+  useEffect(() => {
+    if (typeof routeQuery === 'string') {
+      setSearchText(routeQuery);
+      setInputText(routeQuery);
+    }
+  }, [routeQuery]);
   const [selectedFilter, setSelectedFilter] = useState('ALL'); // ✅ MM2: Default to ALL
   // ✅ MM2: Removed selectedValueType, isFlySelected, isRideSelected - MM2 doesn't use modifiers
   const [filterDropdownVisible, setFilterDropdownVisible] = useState(false);
@@ -65,7 +81,7 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
   const insets = useSafeAreaInsets();
   const bannerBottomPos = Math.max(insets.bottom, 8) + 6;
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
-  const { localState, toggleAd } = useLocalState()
+  const { localState, toggleAd, updateLocalState } = useLocalState()
   const [valuesData, setValuesData] = useState([]);
   // Chat item picker: default to the user's own My Stuff items with a toggle
   // to the full catalog (adoptme pattern) — the list users attach in chat is
@@ -97,54 +113,6 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
   const hideBadge = []; // MM2 doesn't use badges for hiding
 
   // console.log(selectedFruits)
-
-  // ✅ MM2: Enhanced ListItem showing all scraped data
-  const ListItem = React.memo(({ item, getItemValue, styles, onPress }) => {
-    const currentValue = getItemValue(item);
-    const stabilityColor = getStabilityColor(item.stability);
-
-    return (
-      <TouchableOpacity style={[styles.itemContainer]} onPress={onPress} disabled={!fromChat && !fromSetting}>
-        <View style={styles.imageContainer}>
-          <View style={styles.imageWrapper}>
-            <Image source={{ uri: getImageUrl(item) }} style={styles.icon} resizeMode="cover" />
-          </View>
-          <View style={styles.itemInfo}>
-            <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.value}>{t('value.value')}: {currentValue}</Text>
-            {item.tier && <Text style={styles.tierLabel}>{item.tier}</Text>}
-          </View>
-        </View>
-
-        {/* Demand & Rarity pills */}
-        <View style={styles.pillsRow}>
-          {item.demand && item.demand !== 'N/A' && (
-            <View style={[styles.pill, styles.demandPill]}>
-              <Text style={styles.pillText}>Demand: {item.demand}</Text>
-            </View>
-          )}
-          {item.itemRarity && item.itemRarity !== 'N/A' && (
-            <View style={[styles.pill, styles.rarityPill]}>
-              <Text style={styles.pillText}>Rarity: {item.itemRarity}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Stability tag */}
-        {item.stability && item.stability !== 'N/A' && (
-          <View style={[styles.stabilityTag, { backgroundColor: stabilityColor + '20' }]}>
-            <View style={[styles.stabilityDot, { backgroundColor: stabilityColor }]} />
-            <Text style={[styles.stabilityText, { color: stabilityColor }]}>{item.stability}</Text>
-          </View>
-        )}
-
-        {/* Range */}
-        {item.range && item.range !== 'N/A' && (
-          <Text style={styles.rangeText}>Range: {item.range}</Text>
-        )}
-      </TouchableOpacity>
-    );
-  });
 
   const editValuesRef = useRef({
     Value: '',
@@ -249,24 +217,20 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
   // }, [parsedValuesData]);
 
 
-  // ✅ MM2: Simplified getItemValue (no modifiers needed)
-  const getItemValue = useCallback((item) => {
+  // Display text for one item under one catalogue: the source's own words
+  // when it has no real price ("Priceless", "Award only", "x3 T1
+  // Legendaries"), otherwise the number with commas. See
+  // Code/Helper/valueSources.js.
+  const formatFor = useCallback((item, source) => {
     if (!item) return '0';
-    // The source's own words when it has no real price — "Priceless",
-    // "Award only", "x3 T1 Legendaries". See Code/Helper/valueSources.js.
-    const label = displayValueText(item, valueSource);
+    const label = displayValueText(item, source);
     if (label) return label;
-    const numericValue = priceOf(item, valueSource).value || 0;
-    // For values >= 1, use toLocaleString for commas (250,000,000)
-    // For values < 1 (like .44, .33), show as-is without extra zeros
-    if (numericValue >= 1) {
-      return Math.floor(numericValue) === numericValue
-        ? numericValue.toLocaleString()
-        : numericValue.toLocaleString();
-    }
-    // Small decimals: show cleanly (e.g., 0.44 not 0.440000)
-    return numericValue.toString();
-  }, [valueSource]);
+    const numericValue = priceOf(item, source).value || 0;
+    return numericValue >= 1 ? numericValue.toLocaleString() : numericValue.toString();
+  }, []);
+  const getItemValue = useCallback((item) => formatFor(item, valueSource), [formatFor, valueSource]);
+  // The catalogue NOT selected — every card shows it small under the main value.
+  const otherSource = valueSource === VALUE_SOURCE.SUPREME ? VALUE_SOURCE.MM2 : VALUE_SOURCE.SUPREME;
   const filteredData = useMemo(() => {
     if (!Array.isArray(parsedValuesData) || parsedValuesData.length === 0) return [];
 
@@ -311,11 +275,15 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
 
     // Apply sort
     if (sortOrder !== 'none') {
-      filtered.sort((a, b) => {
-        const aValue = parseFloat(String(getItemValue(a)).replace(/,/g, '')) || 0;
-        const bValue = parseFloat(String(getItemValue(b)).replace(/,/g, '')) || 0;
-        return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
-      });
+      // Same key as before, computed ONCE per item: the comparator used to
+      // format and re-parse both values on every comparison (~30k calls for
+      // a full catalogue sort).
+      const keyed = filtered.map((item) => ({
+        item,
+        v: parseFloat(String(getItemValue(item)).replace(/,/g, '')) || 0,
+      }));
+      keyed.sort((a, b) => (sortOrder === 'asc' ? a.v - b.v : b.v - a.v));
+      filtered = keyed.map((k) => k.item);
     }
 
     return filtered;
@@ -416,16 +384,25 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
       };
 
       return (
-        <ListItem
+        <ValueCard
           item={item}
-          getItemValue={getItemValue}
-          styles={styles}
+          imageUrl={imageUrl}
+          primary={formatFor(item, valueSource)}
+          secondary={formatFor(item, otherSource)}
+          source={valueSource}
+          otherSource={otherSource}
+          stabilityColor={getStabilityColor(item.stability)}
+          isDarkMode={isDarkMode}
           onPress={handlePress}
+          disabled={!fromChat && !fromSetting}
         />
       );
     },
     [
       getItemValue,
+      formatFor,
+      otherSource,
+      isDarkMode,
       styles,
       selectedFruits,
       ownedPets,
@@ -472,9 +449,12 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
     setSelectedFilter(filter);
   };
 
-  const handleSearchChange = debounce((text) => {
+  // Created ONCE. It used to be rebuilt on every render — and every keystroke
+  // renders (inputText) — so each keystroke got its own fresh timer and the
+  // full filter + sort ran once per character instead of once per pause.
+  const handleSearchChange = useMemo(() => debounce((text) => {
     setSearchText(text);
-  }, 300);
+  }, 300), []);
   useValueSearchTelemetry(searchText, filteredData.length, parsedValuesData.length);
 
   const closeDrawer = () => {
@@ -546,7 +526,8 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
               style={styles.searchInput}
               placeholder={t('value.search_placeholder')}
               placeholderTextColor={isDarkMode ? config.colors.placeholderDark : config.colors.placeholderLight}
-              onChangeText={handleSearchChange}
+              value={inputText}
+              onChangeText={(text) => { setInputText(text); handleSearchChange(text); }}
             />
             {/* Selected / owned pets strip (chat/settings only) */}
 
@@ -610,6 +591,29 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
             </TouchableOpacity>}
           </View>
 
+          {/* Catalogue switch. Shared with the calculator's toggle (both read
+              localState.valueSource); every card also shows the other
+              catalogue's figure small, so both are always visible. */}
+          <View style={[styles.sourceSwitch, { marginHorizontal: SCREEN_GUTTER }]}>
+            {[VALUE_SOURCE.SUPREME, VALUE_SOURCE.MM2].map((src) => {
+              const active = valueSource === src;
+              return (
+                <TouchableOpacity
+                  key={src}
+                  style={[styles.sourceSwitchBtn, active && styles.sourceSwitchBtnActive]}
+                  onPress={() => { if (!active) { triggerHapticFeedback('impactLight'); updateLocalState('valueSource', src); } }}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.sourceSwitchText, active && styles.sourceSwitchTextActive]}>
+                    {src === VALUE_SOURCE.SUPREME ? 'Supreme values' : 'MM2 values'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           {fromChat && (
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
               {[
@@ -647,7 +651,7 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
               showsVerticalScrollIndicator={false}
               removeClippedSubviews={true}
               numColumns={2}
-              columnWrapperStyle={styles.columnWrapper}
+              columnWrapperStyle={{ justifyContent: 'space-between', paddingHorizontal: SCREEN_GUTTER }}
               contentContainerStyle={{ paddingBottom: 180 }}
               refreshing={refreshing}
               onRefresh={handleRefresh}
@@ -677,13 +681,22 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
       </GestureHandlerRootView>
       {!localState.isPro && !fromChat && (
         <View style={{ position: 'absolute', bottom: bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
-          <BannerAdComponent collapsible />
+          <BannerAdComponent />
         </View>
       )}
     </>
   );
 });
 export const getStyles = (isDarkMode) => StyleSheet.create({
+  // MM2 | Supreme segmented switch
+  sourceSwitch: {
+    flexDirection: 'row', padding: 4, borderRadius: 14, marginBottom: 12,
+    backgroundColor: isDarkMode ? config.colors.surfaceDark : '#e9ebf1',
+  },
+  sourceSwitchBtn: { flex: 1, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  sourceSwitchBtnActive: { backgroundColor: config.colors.primary },
+  sourceSwitchText: { fontSize: 13, fontFamily: 'Lato-Bold', color: isDarkMode ? '#8a95a5' : '#65707e' },
+  sourceSwitchTextActive: { color: '#ffffff' },
   container: {
     flex: 1,
     backgroundColor: isDarkMode ? config.colors.backgroundDark : config.colors.backgroundLight,
@@ -697,19 +710,20 @@ export const getStyles = (isDarkMode) => StyleSheet.create({
   },
   searchFilterContainer: {
     flexDirection: 'row',
-    marginVertical: 8,
-    paddingHorizontal: 8,
-    gap: 4,
+    marginTop: 10,
+    marginBottom: 10,
+    paddingHorizontal: SCREEN_GUTTER,
+    gap: 6,
     alignItems: 'center',
   },
   searchInput: {
-    height: 40,
+    height: 44,
     backgroundColor: isDarkMode ? config.colors.surfaceDark : config.colors.surfaceLight,
-    borderRadius: 8,
-    paddingHorizontal: 20,
+    borderRadius: 12,
+    paddingHorizontal: 14,
     color: isDarkMode ? config.colors.textDark : config.colors.textLight,
     flex: 1,
-    fontSize: 12,
+    fontSize: 14,
     shadowColor: config.colors.shadowDark,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -1002,10 +1016,10 @@ export const getStyles = (isDarkMode) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: config.colors.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    // paddingHorizontal: 10,
+    height: 44,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    gap: 2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,

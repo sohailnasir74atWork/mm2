@@ -21,6 +21,7 @@ import {
 } from 'react-native-google-mobile-ads';
 import getAdUnitId from './ads';
 import { ensureAdsInitialized } from './init';
+import { whenAdsReady } from './adsGate';
 
 const adUnitId = getAdUnitId('native');
 
@@ -117,6 +118,7 @@ function throttledCreate() {
 }
 
 async function loadFresh(key) {
+  await whenAdsReady(); // not before consent (adsGate.js)
   await ensureAdsInitialized();
   const ad = await throttledCreate();
 

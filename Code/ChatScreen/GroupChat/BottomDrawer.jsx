@@ -589,7 +589,12 @@ const ProfileBottomDrawer = ({
 
     Alert.alert(
       `${action}`,
-      `${t('chat.are_you_sure')} ${action.toLowerCase()} ${userName}?`,
+      // One full sentence per action: splicing the button label into
+      // "Are you sure you want to" can't be made grammatical in German,
+      // Japanese or Arabic.
+      isBlock
+        ? t('chat.confirm_unblock', { name: userName })
+        : t('chat.confirm_block', { name: userName }),
       [
         { text: t('chat.cancel'), style: 'cancel' },
         {

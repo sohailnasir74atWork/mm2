@@ -140,7 +140,7 @@ const CommentModal = ({ visible, onClose, postId }) => {
   const handleChatNavigation = useCallback((comment) => {
     const callback = () => {
       if (!user?.id) {
-        Alert.alert(t('chat.sign_in_required_title', { defaultValue: 'Sign In Required' }), t('feed.signin_message', { defaultValue: 'Please sign in to message' }));
+        Alert.alert(t('chat.sign_in_required_title', { defaultValue: 'Sign In Required' }), t('feed.signin_message', { defaultValue: 'Please sign in to comment' }));
         return;
       }
 
@@ -315,7 +315,7 @@ const CommentModal = ({ visible, onClose, postId }) => {
           {/* Reply indicator */}
           {item.replyToName && (
             <Text style={[styles.replyIndicator, isDarkMode && { color: '#64748b' }]}>
-              ↳ {t('comments.replying_to', { defaultValue: 'replying to' })} {item.replyToName}
+              ↳ {t('comments.replying_to', { defaultValue: 'Replying to' })} {item.replyToName}
             </Text>
           )}
 
@@ -462,7 +462,7 @@ const CommentModal = ({ visible, onClose, postId }) => {
               <TextInput
                 ref={inputRef}
                 placeholder={replyingTo
-                  ? t('comments.reply_placeholder', { defaultValue: `Reply to ${replyingTo.displayName}...`, name: replyingTo.displayName })
+                  ? t('comments.reply_placeholder', { defaultValue: 'Reply to {{name}}...', name: replyingTo.displayName })
                   : t('feed.write_comment', { defaultValue: 'Write a comment...' })
                 }
                 placeholderTextColor={isDarkMode ? '#64748b' : '#94a3b8'}

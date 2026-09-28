@@ -92,8 +92,8 @@ android {
         applicationId "com.mm2tradesvalues"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 38
-        versionName "1.4.6"
+        versionCode 40
+        versionName "1.4.8"
    ndk {
             // x86_64 is required, not optional: without it SoLoader on an
             // x86_64 device (PC emulators, Google Play Games on PC, Chromebooks,

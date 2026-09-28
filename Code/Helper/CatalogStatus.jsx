@@ -13,6 +13,16 @@ export default function CatalogStatus() {
   const updated = date && Number.isFinite(date.getTime()) ? date.toLocaleString() : null;
   if (catalogStatus === 'ready' && !updated) return null;
   const dark = theme === 'dark';
+  // Healthy catalogue: one quiet caption. The full tinted box is for when
+  // something is wrong (stale / failed) and the user may need to retry.
+  if (catalogStatus === 'ready') {
+    return (
+      <Text accessibilityLiveRegion="polite"
+        style={{fontSize: 11, textAlign: 'center', marginTop: 8, color: dark ? '#8a95a5' : '#65707e'}}>
+        {t('catalog.updated', {date: updated})}
+      </Text>
+    );
+  }
   return (
     <View style={{padding: 12, backgroundColor: dark ? '#1e293b' : '#eff6ff'}}>
       <Text accessibilityLiveRegion="polite" style={{color: dark ? '#e2e8f0' : '#1e3a5f'}}>

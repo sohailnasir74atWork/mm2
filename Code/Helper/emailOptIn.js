@@ -19,8 +19,31 @@
 //     through the same age check.
 import { ref, get, update, serverTimestamp } from '@react-native-firebase/database';
 import { getAuth } from '@react-native-firebase/auth';
+import * as RNLocalize from 'react-native-localize';
 
 export const EMAIL_MIN_AGE = 13;
+
+// Where a pre-ticked box is NOT valid consent: EU/EEA (GDPR + ePrivacy), the
+// UK (UK GDPR + PECR) and Switzerland (revFADP). Everywhere else (US CAN-SPAM
+// and most other regimes) allows opt-out marketing, so the sign-in box can
+// start ticked there. Owner decision 2026-09-27.
+const OPT_IN_ONLY_COUNTRIES = new Set([
+  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU',
+  'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES',
+  'SE', 'IS', 'LI', 'NO', 'GB', 'CH',
+]);
+
+// Initial state of the sign-in checkbox. Uses the device region; if that
+// cannot be read, start unticked — the safe side.
+export const emailOptInDefault = () => {
+  try {
+    const country = (RNLocalize.getCountry() || '').toUpperCase();
+    if (!country) return false;
+    return !OPT_IN_ONLY_COUNTRIES.has(country);
+  } catch {
+    return false;
+  }
+};
 
 const DOB_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
 

@@ -15,3 +15,17 @@
 # Do not drop this without adding keep rules first - with optimization on and
 # no rules, Room/WorkManager (via notifee) crash at launch in release builds.
 -dontoptimize
+
+# ── Room / WorkManager launch crash (1.4.7 (39), 2026-09-27) ──────────────────
+# "Unable to get provider androidx.startup.InitializationProvider: Failed to
+# create an instance of class androidx.work.impl.WorkDatabase.canonicalName".
+# Room finds its generated database via getCanonicalName() + "_Impl" and
+# reflection; WorkManager (pulled in by notifee) builds it from an
+# androidx.startup ContentProvider, so a renamed class or stripped
+# InnerClasses/EnclosingMethod kills every launch before any JS runs.
+# -dontoptimize above is NOT enough under AGP 9. Targeted keeps only — blanket
+# `-keep class androidx.** { *; }` rules trip Play's obfuscation warning.
+-keepattributes InnerClasses,EnclosingMethod,Signature,*Annotation*
+-keep class * extends androidx.room.RoomDatabase { <init>(); }
+-keepnames class * extends androidx.room.RoomDatabase
+-keep class * implements androidx.startup.Initializer { <init>(); }

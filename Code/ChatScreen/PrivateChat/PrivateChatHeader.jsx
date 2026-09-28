@@ -13,6 +13,7 @@ import { ref, get, set, remove } from '@react-native-firebase/database';
 import FramedAvatar from '../GroupChat/FramedAvatar';
 import { getCachedProfile, warmProfileCache, getOrFetchFullProfile } from '../../Helper/profileCache';
 import UserBadgePill, { getPrimaryRoleType } from '../../Helper/UserBadgePill';
+import { getUserRoles, useRoleRosterVersion } from '../../Helper/roleRoster';
 
 // Presence needs its own two colours. config.colors.hasBlockGreen and
 // wantBlockRed are both '#6A5ACD' in the light theme ("use primary for
@@ -101,9 +102,25 @@ const PrivateChatHeader = React.memo(({ selectedUser, selectedTheme, bannedUsers
     };
   }, [selectedUser?.senderId, selectedUser?.id, selectedUser?.robloxUsername, selectedUser?.robloxUserId, appdatabase]);
 
+  // Role pills come from the roster (Code/Helper/roleRoster.js). userData is
+  // skipped whenever selectedUser already carries Roblox fields — which every
+  // public-chat message does — so reading roles only from it left a DM opened
+  // from chat with no badges at all.
+  const roleRosterVersion = useRoleRosterVersion(appdatabase);
+  const selectedUid = selectedUser?.senderId || selectedUser?.id;
+
   // ✅ Merge selectedUser with fetched userData
   const mergedUser = useMemo(() => {
-    if (!userData) return selectedUser;
+    const roles = getUserRoles(selectedUid);
+    const roleFields = {
+      isAdmin: !!(userData?.isAdmin || roles.isAdmin),
+      isModerator: roles.isModerator,
+      isBabyMod: roles.isBabyMod,
+      isTrusted: roles.isTrusted,
+      isCMSR: roles.isCMSR,
+      isHelper: roles.isHelper,
+    };
+    if (!userData) return selectedUser ? { ...selectedUser, ...roleFields } : selectedUser;
     return {
       ...selectedUser,
       robloxUsername: selectedUser?.robloxUsername || userData.robloxUsername,
@@ -112,18 +129,14 @@ const PrivateChatHeader = React.memo(({ selectedUser, selectedTheme, bannedUsers
         ? selectedUser.robloxUsernameVerified 
         : userData.robloxUsernameVerified,
       isPro: selectedUser?.isPro !== undefined ? selectedUser.isPro : userData.isPro,
-      // Roles only ever come from the RTDB record.
-      isAdmin: userData.isAdmin,
-      isModerator: userData.isModerator,
-      isBabyMod: userData.isBabyMod,
-      isTrusted: userData.isTrusted,
-      isCMSR: userData.isCMSR,
-      isHelper: userData.isHelper,
+      ...roleFields,
       lastGameWinAt: selectedUser?.lastGameWinAt !== undefined 
         ? selectedUser.lastGameWinAt 
         : userData.lastGameWinAt, // ✅ Game win timestamp
     };
-  }, [selectedUser, userData]);
+    // roleRosterVersion: getUserRoles reads module state, so re-merge on load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedUser, userData, selectedUid, roleRosterVersion]);
 
   // ✅ Memoize avatarUri and userName
   const avatarUri = useMemo(() => 
@@ -163,10 +176,12 @@ const PrivateChatHeader = React.memo(({ selectedUser, selectedTheme, bannedUsers
       return;
     }
 
-    const action = !isBanned ? 'Block' : 'Unblock';
+    const action = isBanned ? t('chat.unblock') : t('chat.block');
     Alert.alert(
       `${action}`,
-      `${t("chat.are_you_sure")} ${action.toLowerCase()} ${userName}?`,
+      isBanned
+        ? t('chat.confirm_unblock', { name: userName })
+        : t('chat.confirm_block', { name: userName }),
       [
         { text: t("chat.cancel"), style: 'cancel' },
         {

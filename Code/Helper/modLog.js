@@ -14,7 +14,7 @@
  * Firebase-only by standing decision (HANDOFF.md), so it lives in Firestore:
  *
  *   mod_actions/{autoId}
- *     action         'mute' | 'strike' | 'ban' | 'unban' | 'review_delete' | 'status_delete'
+ *     action         'mute' | 'strike' | 'ban' | 'unban' | 'review_delete' | 'status_delete' | 'post_delete'
  *     targetEmail    lowercased, decoded ("a@b.com", never "a@b(dot)com")
  *     targetUid      may be null on old records
  *     targetName     denormalised — rendering a timeline costs no profile reads
@@ -51,7 +51,7 @@ import {
 } from '@react-native-firebase/firestore';
 
 const MOD_ACTIONS = 'mod_actions';
-export const ACTIONS = ['mute', 'strike', 'ban', 'unban', 'review_delete', 'status_delete'];
+export const ACTIONS = ['mute', 'strike', 'ban', 'unban', 'review_delete', 'status_delete', 'post_delete'];
 const LEADERBOARD_SCAN = 500;
 
 // RTDB stores emails as `name(dot)domain(dot)tld`, and some writers lowercase

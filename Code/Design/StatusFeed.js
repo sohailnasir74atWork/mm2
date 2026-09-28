@@ -40,9 +40,10 @@ import config from '../Helper/Environment';
 import { createMMKV } from 'react-native-mmkv';
 import ProfileBottomDrawer from '../ChatScreen/GroupChat/BottomDrawer';
 import { ModalKeyboardView } from '../Helper/keyboardAvoidingContainer';
+import { SCREEN_GUTTER } from '../Helper/layout';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const BUBBLE_SIZE = 64;
+const BUBBLE_SIZE = 58;
 const STATUS_EXPIRY_MS = 24 * 60 * 60 * 1000;
 const STORY_DURATION = 5000;
 
@@ -1223,27 +1224,30 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
 };
 
 const styles = StyleSheet.create({
+  // No divider line: Home titles this row itself, so a rule under it only
+  // chopped the page into strips.
   container: {
-    paddingVertical: 10,
-    borderBottomWidth: 1,
+    paddingVertical: 6,
   },
   listContent: {
-    paddingHorizontal: 12,
-    gap: 4,
+    paddingHorizontal: SCREEN_GUTTER,
+    gap: 6,
   },
-  bubbleWrap: { alignItems: 'center', width: 72 },
+  bubbleWrap: { alignItems: 'center', width: 68 },
   bubbleRing: {
     width: BUBBLE_SIZE + 4, height: BUBBLE_SIZE + 4,
     borderRadius: (BUBBLE_SIZE + 4) / 2,
-    borderWidth: 2.5, borderColor: '#e2e8f0',
+    borderWidth: 1.5, borderColor: '#e2e8f0',
     alignItems: 'center', justifyContent: 'center',
   },
-  bubbleRingUnseen: { borderColor: '#6A5ACD', borderWidth: 2.5 }, // MM2 slate blue
-  bubbleRingSeen: { borderColor: '#94A3B8', borderWidth: 2 },
+  bubbleRingUnseen: { borderColor: '#6A5ACD', borderWidth: 2 }, // MM2 slate blue
+  bubbleRingSeen: { borderColor: '#94A3B8', borderWidth: 1.5 },
+  // Unviewed: a thin brand ring with a hairline gap before the photo, rather
+  // than two stacked solid rings (which read as one heavy 3px border).
   gradientRingOuter: {
     width: BUBBLE_SIZE + 6, height: BUBBLE_SIZE + 6,
     borderRadius: (BUBBLE_SIZE + 6) / 2,
-    backgroundColor: '#8B5CF6', // Purple
+    backgroundColor: '#8B7FD9',
     alignItems: 'center', justifyContent: 'center',
   },
   gradientRingMiddle: {
@@ -1263,13 +1267,13 @@ const styles = StyleSheet.create({
     borderRadius: (BUBBLE_SIZE - 4) / 2,
   },
   addBadge: {
-    position: 'absolute', bottom: 18, right: 8,
-    width: 18, height: 18, borderRadius: 9,
+    position: 'absolute', bottom: 20, right: 6,
+    width: 20, height: 20, borderRadius: 10,
     backgroundColor: '#6A5ACD',
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, borderColor: '#FFF',
   },
-  bubbleName: { fontSize: 10, fontWeight: '500', marginTop: 3, textAlign: 'center' },
+  bubbleName: { fontSize: 11, fontFamily: 'Lato-Regular', marginTop: 5, textAlign: 'center' },
   // Viewer
   viewerOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',

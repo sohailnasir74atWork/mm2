@@ -24,6 +24,27 @@ export const LocalStateProvider = ({ children }) => {
     }
   };
 
+  // The value catalogues (~1.5 MB together). Kept in state as parsed objects
+  // so no reader has to JSON.parse them again. Until 2026-09-27 they were
+  // saved as a JSON *string* and a "force store" effect then stringified that
+  // string again, so `data` sat on disk double-encoded: every cold start parsed
+  // it into a string, re-encoded and rewrote the whole thing, and four readers
+  // each parsed it once more. This repairs an old double-encoded value once.
+  const loadCatalog = (key) => {
+    try {
+      const raw = storage.getString(key);
+      if (!raw) return {};
+      let value = JSON.parse(raw);
+      if (typeof value === 'string') {
+        value = JSON.parse(value);
+        storage.set(key, JSON.stringify(value));
+      }
+      return value && typeof value === 'object' ? value : {};
+    } catch {
+      return {};
+    }
+  };
+
   const [localState, setLocalState] = useState(() => ({
     localKey: storage.getString('localKey') || 'defaultValue',
     reviewCount: Number(storage.getString('reviewCount')) || 0,
@@ -35,12 +56,12 @@ export const LocalStateProvider = ({ children }) => {
     consentStatus: storage.getString('consentStatus') || 'UNKNOWN',
     isPro: storage.getBoolean('isPro') ?? false,
     fetchDataTime: storage.getString('fetchDataTime') || null,
-    data: safeParseJSON('data', {}),
+    data: loadCatalog('data'),
     // The Supreme catalogue. GlobalStats has written this to MMKV since the
     // dual-feed fetch landed, but it was never rehydrated here — so on every
     // cold start it came back undefined and stayed that way until the next
     // network fetch finished.
-    suprime: safeParseJSON('suprime', {}),
+    suprime: loadCatalog('suprime'),
     // Which catalogue prices the calculator: 'mm2' | 'supreme'. The two
     // disagree on 70% of the items they share, so this is a real preference,
     // not a display option. See Code/Helper/valueSources.js.
@@ -101,11 +122,8 @@ export const LocalStateProvider = ({ children }) => {
     }
   }, [localState.theme]);
 
-  useEffect(() => {
-    if (localState.data) {
-      storage.set('data', JSON.stringify(localState.data)); // Force store
-    }
-  }, [localState.data]);
+  // (The old "force store" effect for `data` is gone: updateLocalState already
+  // persists every value, and re-stringifying here double-encoded it.)
 
   // console.log(localState.isPro)
   // ✅ Memoize updateLocalState to prevent recreation on every render

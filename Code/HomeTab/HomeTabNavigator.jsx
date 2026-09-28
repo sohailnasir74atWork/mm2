@@ -20,6 +20,7 @@ const HomeTabNavigator = ({ selectedTheme }) => {
     contentStyle: { backgroundColor: selectedTheme.colors.background },
     animation: 'fade',
     animationDuration: 300,
+    freezeOnBlur: true,
   }), [selectedTheme]);
 
   return (

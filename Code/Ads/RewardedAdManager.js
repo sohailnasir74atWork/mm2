@@ -27,6 +27,7 @@ import {
 } from 'react-native-google-mobile-ads';
 import getAdUnitId from './ads';
 import { ensureAdsInitialized } from './init';
+import { whenAdsReady } from './adsGate';
 import { setFullScreenAdVisible } from './adVisibility';
 
 const adUnitId = getAdUnitId('rewarded');
@@ -89,7 +90,8 @@ class RewardedAdManager {
 
     this.unsubscribeEvents = [onLoaded, onError];
     // Config-before-load: don't request until the request config is applied.
-    ensureAdsInitialized().then(() => this._load()).catch(() => {});
+    // …and not before consent has run (adsGate.js).
+    whenAdsReady().then(ensureAdsInitialized).then(() => this._load()).catch(() => {});
   }
 
   // ── Safe load (prevents duplicate loads) ──

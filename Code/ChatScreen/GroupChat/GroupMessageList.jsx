@@ -26,6 +26,7 @@ import { getSafeTextColor, RainbowText, isMultiColorText, getMultiColorPalette }
 import { resolveProfile, warmProfileCache, getCachedProfile } from '../../Helper/profileCache';
 import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
 import FramedAvatar from './FramedAvatar';
+import { getUserRoles, useRoleRosterVersion } from '../../Helper/roleRoster';
 import { sourceLabelForItems } from '../../Helper/valueSources';
 
 const GroupMessageList = ({
@@ -45,6 +46,7 @@ const GroupMessageList = ({
   flatListRef, // Ref for FlatList
 }) => {
   const { theme, appdatabase } = useGlobalState();
+  const roleRosterVersion = useRoleRosterVersion(appdatabase);
   const isDarkMode = theme === 'dark';
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
   const { t } = useTranslation();
@@ -266,23 +268,29 @@ const GroupMessageList = ({
                   />
                 )}
 
-                {/* Community badges. Group messages never stamped the
-                    authority ranks, so those are resolved from the cache
-                    too rather than shown inconsistently. */}
+                {/* Role pills from the roster (Code/Helper/roleRoster.js):
+                    rules-protected, so they cannot be faked from a message. */}
                 {(() => {
-                  const firstBadge = getFirstBadgeType(
-                    { isTrusted: profile.isTrusted, isCMSR: profile.isCMSR, isHelper: profile.isHelper },
-                    ['trusted', 'cmsr', 'helper'],
-                  );
+                  const roles = getUserRoles(item.senderId);
+                  const firstBadge = getFirstBadgeType(roles);
                   return (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 4 }}>
-                      {profile.isTrusted && (
+                      {roles.isAdmin && (
+                        <UserBadgePill type="admin" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'admin'} />
+                      )}
+                      {!roles.isAdmin && roles.isModerator && (
+                        <UserBadgePill type="mod" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'mod'} />
+                      )}
+                      {!roles.isAdmin && !roles.isModerator && roles.isBabyMod && (
+                        <UserBadgePill type="jmd" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'jmd'} />
+                      )}
+                      {roles.isTrusted && (
                         <UserBadgePill type="trusted" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
                       )}
-                      {profile.isCMSR && (
+                      {roles.isCMSR && (
                         <UserBadgePill type="cmsr" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
                       )}
-                      {profile.isHelper && (
+                      {roles.isHelper && (
                         <UserBadgePill type="helper" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
                       )}
                     </View>
@@ -521,7 +529,7 @@ const GroupMessageList = ({
       inverted={true} // ✅ Latest messages at bottom
       style={messageListStyles}
       contentContainerStyle={messageListContentStyles}
-      extraData={`${highlightedMessageId}-${profileCacheVersion}`} // Re-render on highlight or cosmetics cache warm
+      extraData={`${highlightedMessageId}-${profileCacheVersion}-${roleRosterVersion}`} // Re-render on highlight or cosmetics cache warm
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#8B5CF6" />
       }

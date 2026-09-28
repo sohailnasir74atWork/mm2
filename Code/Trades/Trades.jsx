@@ -47,6 +47,7 @@ import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 import ProfileBottomDrawer from '../ChatScreen/GroupChat/BottomDrawer';
 import FramedAvatar from '../ChatScreen/GroupChat/FramedAvatar';
 import { getCachedProfile, warmProfileCache } from '../Helper/profileCache';
+import { getUserRoles, useRoleRosterVersion } from '../Helper/roleRoster';
 import { normalizeSearchTerm, tradeMatchesLocally } from './tradeSearchIndex';
 import UserBadgePill, { getFirstBadgeType } from '../Helper/UserBadgePill';
 import { isUserOnline } from '../ChatScreen/utils';
@@ -87,6 +88,8 @@ const TradeList = ({ route }) => {
   // const [isAdVisible, setIsAdVisible] = useState(true);
   const { selectedTheme, showMyTradesOnly = false } = route.params || {}
   const { user, analytics, updateLocalStateAndDatabase, appdatabase } = useGlobalState()
+  // Bumps when the role rosters load or change, so the cards' badges repaint.
+  const roleRosterVersion = useRoleRosterVersion(appdatabase);
   const [trades, setTrades] = useState([]);
   const [filteredTrades, setFilteredTrades] = useState([]);
   // Read inside handleSearchTrades for the instant local pass. A ref, not a
@@ -1550,37 +1553,6 @@ const TradeList = ({ route }) => {
     const formattedTime = item.timestamp
       ? dayjs(typeof item.timestamp?.toDate === 'function' ? item.timestamp.toDate() : item.timestamp).fromNow()
       : "Anonymous";
-    // ✅ Migration helper: Group items and count duplicates - handles both old and new structures
-    const groupItems = (items) => {
-      const grouped = {};
-      items.forEach((item) => {
-        if (!item) return;
-        
-        // ✅ Handle both old format: { name, image, value } and new format: { name, type, value, image }
-        const name = item.name || item.Name || '';
-        const type = item.type || item.Type || item.Category || '';
-        const image = item.image || item.Image || '';
-        
-        // ✅ Use name+type as key (fallback to name+image for old format)
-        const key = type ? `${name}-${type}` : `${name}-${image}`;
-        
-        if (grouped[key]) {
-          grouped[key].count += 1;
-        } else {
-          grouped[key] = { 
-            name, 
-            type: type || '', 
-            image: image || '',
-            count: 1 
-          };
-        }
-      });
-      return Object.values(grouped);
-    };
-
-    // Group and count duplicate items
-    const groupedHasItems = groupItems(item.hasItems || []);
-    const groupedWantsItems = groupItems(item.wantsItems || []);
     const selectedUser = {
       senderId: item.userId,
       sender: item.traderName,
@@ -1632,11 +1604,11 @@ const TradeList = ({ route }) => {
                   <Image source={require('../../assets/verification.png')} style={{ width: 11, height: 11 }} />
                 )}
 
-            {/* Role pills, resolved from the profile cache — trade and post
-                documents predate the role fields, so stamping them on the
-                document would leave older rows badge-less. */}
+            {/* Role pills from the roster (Code/Helper/roleRoster.js), never
+                from flags on the document: those are client-written, so they
+                could be faked. Works for old and new rows alike. */}
             {(() => {
-              const rp = getCachedProfile(item.userId) || {};
+              const rp = getUserRoles(item.userId);
               const firstBadge = getFirstBadgeType(rp);
               return (
                 <>
@@ -1998,7 +1970,8 @@ const TradeList = ({ route }) => {
   return (
     <View style={styles.container}>
       {/* ✅ Modern Search Container (Compact) */}
-      <View style={{ flexDirection: 'row', marginBottom: 10, marginTop: 10, paddingHorizontal: 16 }}>
+      {/* container already pads 8; 4 more lands on the shared 12pt gutter (Helper/layout.js) */}
+      <View style={{ flexDirection: 'row', marginBottom: 10, marginTop: 10, paddingHorizontal: 4 }}>
         <TextInput
           style={{
             flex: 1,
@@ -2128,6 +2101,7 @@ const TradeList = ({ route }) => {
         ref={flatListRef}
         data={tradesWithAds}
         renderItem={renderTrade}
+        extraData={roleRosterVersion}
         // The `featured-` prefix exists ONLY to key the list. It is deliberately
         // not part of item.id, which must stay the real Firestore document id
         // so save, delete and open all address the right document.
@@ -2181,7 +2155,7 @@ const TradeList = ({ route }) => {
           alignItems: 'center',
           zIndex: 5,
         }}>
-          <BannerAdComponent collapsible />
+          <BannerAdComponent />
         </View>
       )}
 

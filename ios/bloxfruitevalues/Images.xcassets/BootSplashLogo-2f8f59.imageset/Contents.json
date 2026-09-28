@@ -2,17 +2,17 @@
   "images": [
     {
       "idiom": "universal",
-      "filename": "logo-2f8f59.png",
+      "filename": "bootsplash-logo@1x.png",
       "scale": "1x"
     },
     {
       "idiom": "universal",
-      "filename": "logo-2f8f59@2x.png",
+      "filename": "bootsplash-logo@2x.png",
       "scale": "2x"
     },
     {
       "idiom": "universal",
-      "filename": "logo-2f8f59@3x.png",
+      "filename": "bootsplash-logo@3x.png",
       "scale": "3x"
     }
   ],

@@ -15,11 +15,13 @@
       "vi": "Vietnamese",
       "pt": "Portuguese",
       "id": "Indonesian",
-      "es": "Spanish",
+      "es": "Spanish (Latin America)",
       "fr": "French",
       "de": "German",
       "ru": "Russian",
-      "ar": "Arabic"
+      "ar": "Arabic",
+      "es_ES": "Spanish (Spain)",
+      "ja": "Japanese"
     },
     "language_settings": "LANGUAGE SETTINGS",
     "select_language": "Select Language",
@@ -49,7 +51,7 @@
     "logout_success": "You have been logged out successfully.",
     "logout_error": "Failed to log out. Please try again.",
     "delete_account": "Delete Account",
-    "delete_account_warning": "Deleting your account will permanently erase all your data, including chat history, points, and profile details. This action is irreversible.",
+    "delete_account_warning": "Deleting your account will permanently erase all your data, including chat history, stars, XP, and profile details. This action is irreversible.",
     "confirm_deletion": "Confirm Deletion",
     "confirm_deletion_warning": "Are you sure you want to delete your account? This action cannot be undone.",
     "user_not_found": "User not found. Please log in again.",
@@ -114,7 +116,8 @@
     "edit_cooldown_title": "Edit Cooldown",
     "success_deleted": "Your account and all associated data have been permanently deleted.",
     "joined": "Joined",
-    "buy_plan_unlock": "Upgrade to Pro to unlock this feature."
+    "buy_plan_unlock": "Upgrade to Pro to unlock this feature.",
+    "email_updates": "Email updates"
   },
   "home": {
     "you": "YOU",
@@ -158,7 +161,9 @@
       "ad_error": "Error showing interstitial ad",
       "unable_to_create_trade": "Unable to create trade. Please reload the app & try again later.",
       "sign_in_required": "To create a trade, you need to sign in.",
-      "missing_items_error": "Please add at least one item to both 'Offer' and 'Want' sections."
+      "missing_items_error": "Please add at least one item to both sides of the trade.",
+      "values_reloaded": "Values updated!",
+      "reload_error": "Failed to refresh"
     },
     "my_inventory": "My Inventory",
     "add_to_inventory": "Add Items to Inventory",
@@ -195,8 +200,25 @@
     "ranks": "Ranks",
     "log_trade": "Log Trade",
     "trade_logged": "Trade Logged!",
-    "trade_logged_message": "Saved to your Trade Journal.",
-    "our_team": "Our Team"
+    "trade_logged_message": "Saved to your trade history in My Stuff.",
+    "our_team": "Our Team",
+    "search_values": "Find a knife, gun or pet…",
+    "explore_tools": "Explore",
+    "values_sub": "Latest item values",
+    "top_rated_sub": "Most trusted traders",
+    "friends_sub": "Your trading circle",
+    "daily_stars_sub": "Collect your daily reward",
+    "stories": "Stories",
+    "stories_sub": "Last 24 hours",
+    "cosmetics_hero_title": "Hatch. Collect. Flex.",
+    "cosmetics_hero_sub": "Win frames and badges that show in chat",
+    "our_team_sub": "Meet the mods",
+    "invite_sub": "Share the app",
+    "just_now": "just now",
+    "manage_my_stuff": "Manage My Stuff",
+    "add_items_my_stuff": "Add items in My Stuff",
+    "updating": "Updating...",
+    "updated_prefix": "Updated "
   },
   "value": {
     "title": "Value Screen",
@@ -213,8 +235,8 @@
     "copy_success": "Code copied to clipboard!",
     "try_other_app": "Try Our other app",
     "download": "Download",
-    "selected_pets": "Selected pets",
-    "owned_pets": "Owned pets",
+    "selected_pets": "Selected items",
+    "owned_pets": "Owned items",
     "wishlist": "Wishlist",
     "high": "▲ High",
     "low": "▼ Low",
@@ -224,7 +246,11 @@
     "hd_wallpaper": "HD Wallpaper",
     "news": "News",
     "admin": "Admin",
-    "reward": "Reward"
+    "reward": "Reward",
+    "my_items": "My Items",
+    "all_items": "All Items",
+    "no_my_items": "No items in your My Stuff yet. Add them from the Home tab, or browse all items.",
+    "browse_all": "Browse All Items"
   },
   "stock": {
     "description": "Disclaimer: Stock updates may sometimes be delayed as data is updated manually. We appreciate your patience and recommend checking back periodically for the latest updates.",
@@ -276,7 +302,7 @@
     "price_has": "Has:",
     "price_want": "Want:",
     "signin_required_message": "You need to sign in to view full trade listings and send messages.",
-    "unknown_deal": "Anonymous Deal",
+    "unknown_deal": "Unknown Deal",
     "best_deal": "Best Deal",
     "great_deal": "Great Deal",
     "fair_deal": "Fair Deal",
@@ -359,11 +385,17 @@
     "alert_error": "Error",
     "alert_try_again": "An unexpected error occurred. Please try again later.",
     "error_google_unavailable_title": "Google sign-in unavailable",
-    "error_google_unavailable": "Google Play Services isn't available on this device. Please sign in with email instead — tap \"Sign in with Email\" below.",
+    "error_google_unavailable": "Google Play Services isn't available on this device. Please sign in with your email below instead.",
     "error_network_title": "Connection problem",
     "error_network": "We couldn't reach the sign-in server. Check your connection and try again. If Google services are restricted on your network, try email sign-in or a different connection.",
     "password_reset_email_sent": "Password reset email sent!",
-    "error_reset_password": "Failed to send password reset email. Please try again."
+    "error_reset_password": "Failed to send password reset email. Please try again.",
+    "title": "Sign In",
+    "email_updates_optin": "Email me news and updates (optional)",
+    "legal_prefix": "By continuing, you agree to our ",
+    "legal_terms": "Terms",
+    "legal_and": " and ",
+    "legal_privacy": "Privacy Policy"
   },
   "tabs": {
     "calculator": "Calculator",
@@ -396,7 +428,7 @@
     "unblocked": "Unblocked",
     "user_blocked": "has been blocked.",
     "start_chat": "Start Chat",
-    "replying_to": "Replying to:",
+    "replying_to": "Replying to",
     "report": "Report",
     "reply": "Reply",
     "report_submitted": "Report Submitted",
@@ -415,7 +447,13 @@
     "block": "Block User",
     "access_denied": "Access Denied",
     "banned_message": "You are banned from sending messages.",
-    "mod": "MOD"
+    "mod": "MOD",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "sign_in_required_title": "Sign In Required",
+    "error": "Error",
+    "confirm_block": "Are you sure you want to block {{name}}?",
+    "confirm_unblock": "Are you sure you want to unblock {{name}}?"
   },
   "first": {
     "continue_guest": "Continue as Guest",
@@ -429,7 +467,7 @@
     "continue": "Continue",
     "get_notified_text": "Get notified, create and bid on trades, chat with traders, and join group discussions.",
     "welcome_to": "Welcome to MM2 Values",
-    "track_pets": "Track pets values & optimize your trades.",
+    "track_pets": "Track item values & optimize your trades.",
     "welcome_user": "Welcome"
   },
   "offer": {
@@ -721,7 +759,7 @@
   "group_chat": {
     "group_not_found": "Group not found",
     "failed_load_group": "Failed to load group",
-    "limit_pets": "You can only send up to 18 pets in a message.",
+    "limit_pets": "You can only send up to 18 items in a message.",
     "not_member": "You are not a member of this group",
     "muted_in_group": "You are muted in this group",
     "missing_data": "Missing required data. Please try again.",
@@ -843,7 +881,8 @@
     "info_no_avail": "No group information available",
     "creator": "Creator",
     "missing_id": "Group ID is missing. Please try again.",
-    "create_group": "Create Group"
+    "create_group": "Create Group",
+    "add_members": "Add Members"
   },
   "private_chat": {
     "select_rating": "Please select a rating first.",
@@ -852,12 +891,12 @@
     "review_thanks": "Thanks for your review!",
     "rating_thanks": "Thanks for your rating!",
     "rating_error": "Error submitting rating. Try again!",
-    "max_pets_error": "You can only send up to 18 pets in a message.",
+    "max_pets_error": "You can only send up to 18 items in a message.",
     "anonymous": "Anonymous",
     "multiple_photos": "📷 {{count}} Photos",
     "single_photo": "📷 Photo",
-    "pets_count_plural": "🐾 {{count}} pets",
-    "pets_count_singular": "🐾 {{count}} pet",
+    "pets_count_plural": "🐾 {{count}} items",
+    "pets_count_singular": "🐾 {{count}} item",
     "send_failed": "Could not send your message. Please try again.",
     "rate_trader": "Rate this Trader",
     "write_review": "Write an optional review...",
@@ -875,8 +914,8 @@
     "message_placeholder": "[Message]",
     "images_attached_plural": "{{count}} images attached",
     "images_attached_singular": "{{count}} image attached",
-    "pets_selected_plural": "{{count}} pets selected",
-    "pets_selected_singular": "{{count}} pet selected",
+    "pets_selected_plural": "{{count}} items selected",
+    "pets_selected_singular": "{{count}} item selected",
     "quick_messages": "Quick Messages",
     "msg_copied": "Message Copied",
     "invalid_translate": "Invalid message to translate.",
@@ -1116,7 +1155,8 @@
     "remove": "Remove",
     "remove_selected_title": "Remove {{count}} items?",
     "remove_selected_title_one": "Remove {{count}} item?",
-    "remove_selected_msg": "They'll be removed from your inventory. Your goals and trade history are not affected."
+    "remove_selected_msg": "They'll be removed from your inventory. Your goals and trade history are not affected.",
+    "remove_selected_title_other": "Remove {{count}} items?"
   },
   "feed": {
     "create_post": "Create Post",
@@ -1148,7 +1188,7 @@
     "fetch_failed": "Failed to fetch your posts",
     "missing_tag": "Missing Tag",
     "missing_tag_msg": "Please select at least one tag.",
-    "signin_to_post": "Sign in to upload designs",
+    "signin_to_post": "Sign in to post",
     "sort_latest": "Latest",
     "sort_hot": "Hot",
     "sort_trending": "Trending",
@@ -1162,7 +1202,16 @@
     "invalid_post": "Invalid post.",
     "enter_reason": "Please enter a reason.",
     "post_not_found": "Post not found.",
-    "report_failed": "Could not submit report. Please try again."
+    "report_failed": "Could not submit report. Please try again.",
+    "signin_message": "Please sign in to comment",
+    "inappropriate_comment": "Your comment contains inappropriate content.",
+    "guest_user": "Guest User",
+    "failed_post_comment": "Failed to post comment. Please try again.",
+    "delete_post": "Delete",
+    "cancel": "Cancel",
+    "submit": "Delete",
+    "comments_title": "Comments",
+    "write_comment": "Write a comment..."
   },
   "engagement": {
     "game_leaders": "🏆 Game Leaders",
@@ -1202,7 +1251,7 @@
     "alerts": {
       "locked_label": "LOCKED",
       "need_more_stars": "Need {{count}} more ⭐",
-      "buy_prompt_msg": "Spend {{cost}} ⭐ Stars to hatch this egg?\\n\\nYou have ⭐ {{balance}} Stars",
+      "buy_prompt_msg": "Spend {{cost}} ⭐ Stars to hatch this egg?\n\nYou have ⭐ {{balance}} Stars",
       "nope": "Nope",
       "hatch_it": "Hatch! 🐣",
       "error_title": "Error 😢",
@@ -1300,5 +1349,56 @@
     "unavailable": "Values could not be loaded. Check your connection and try again.",
     "loading": "Trying again…",
     "retry": "Retry loading values"
+  },
+  "emailOptIn": {
+    "dob_subtitle": "We ask this once before turning on email updates.",
+    "underage_title": "Thanks for telling us",
+    "underage_body": "Email updates are only for players 13 and older, so we won't send you any. You'll still see news right here in the app.",
+    "ok": "OK",
+    "ask_title": "Get updates by email?",
+    "ask_body": "Hear about new features, value updates and events. No spam, and you can turn it off anytime in Settings.",
+    "ask_yes": "Yes, email me",
+    "ask_no": "No thanks",
+    "privacy": "Privacy Policy",
+    "save_failed": "Couldn't save your email choice. Please try again."
+  },
+  "comments": {
+    "delete_confirm": "Delete this comment?",
+    "replying_to": "Replying to",
+    "reply": "Reply",
+    "no_comments": "No comments yet. Be the first!",
+    "reply_placeholder": "Reply to {{name}}..."
+  },
+  "killer": {
+    "title": "Find the Killer",
+    "subtitle": "Study the scene. Find clues. Catch the killer! 🔍",
+    "score": "Score",
+    "streak": "Streak",
+    "multi": "Multi",
+    "suspects": "suspects",
+    "level": "Level",
+    "clues": "Clues",
+    "timer": "Timer",
+    "scene": "Scene:",
+    "whoDidIt": "Who did it?",
+    "accuse": "Accuse! 🔪",
+    "confidenceBet": "Confidence Bet",
+    "betDesc": "How confident are you in your pick?\nHigher bet = bigger reward (or penalty)!",
+    "youAccused": "You accused:",
+    "lockItIn": "Lock It In! 🔒",
+    "correct": "Correct!",
+    "wrong": "Wrong!",
+    "youPicked": "You picked:",
+    "killerWas": "Killer was:",
+    "howWeKnow": "HOW WE KNOW",
+    "cluesFound": "Clues Found",
+    "timeUsed": "Time Used",
+    "btnCommunityStats": "Community Stats 📊",
+    "btnNextLevel": "Next Level →",
+    "titleCommunityStats": "Community Stats",
+    "detectivesAttempted": "detectives attempted",
+    "beFirst": "Be the first detective!",
+    "gotItRight": "got it right",
+    "btnBackToLevels": "Back to Levels 🗺️"
   }
 }

@@ -50,6 +50,7 @@ import { getCachedProfile, warmProfileCache } from '../Helper/profileCache';
 import { getUserRoles, useRoleRosterVersion } from '../Helper/roleRoster';
 import { normalizeSearchTerm, tradeMatchesLocally } from './tradeSearchIndex';
 import UserBadgePill, { getFirstBadgeType } from '../Helper/UserBadgePill';
+import ChatPillButton, { CHAT_PILL_HEIGHT } from '../Helper/ChatPillButton';
 import { isUserOnline } from '../ChatScreen/utils';
 import { useHaptic } from '../Helper/HepticFeedBack';
 import {
@@ -1646,11 +1647,15 @@ const TradeList = ({ route }) => {
             </View>
           </TouchableOpacity>
 
-          {/* Badges: Featured + Win/Lose/Fair */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          {/* Badges: Featured + Win/Lose/Fair — top-aligned so they sit level
+              with the username, not centred on the avatar. */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}>
             {item.isFeatured && (
-              <View style={[styles.statusBadge, { backgroundColor: '#f59e0b' }]}>
-                <Text style={styles.statusBadgeText}>⭐ FEATURED</Text>
+              <View
+                style={[styles.statusBadge, styles.featuredBadge]}
+                accessibilityLabel="Featured"
+              >
+                <Icon name="star" size={11} color="white" />
               </View>
             )}
             {item.status && (
@@ -1944,15 +1949,13 @@ const TradeList = ({ route }) => {
               }}
               style={[styles.socialBtn, !!savedTradeRefs[item.id] && { backgroundColor: '#F59E0B20' }]}
               activeOpacity={0.7}
+              hitSlop={8}
             >
-              <Icon name={savedTradeRefs[item.id] ? 'bookmark' : 'bookmark-outline'} size={16} color="#F59E0B" />
+              <Icon name={savedTradeRefs[item.id] ? 'bookmark' : 'bookmark-outline'} size={12} color="#F59E0B" />
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity style={styles.chatBtn} onPress={() => handleOpenProfile(item)} activeOpacity={0.8}>
-            <Icon name="chatbubble" size={13} color="#fff" />
-            <Text style={styles.chatBtnText}>Chat</Text>
-          </TouchableOpacity>
+          <ChatPillButton onPress={() => handleOpenProfile(item)} />
         </View>
 
       </View>
@@ -2213,12 +2216,11 @@ const getStyles = (isDarkMode) =>
       flex: 1,
     },
     tradeItem: {
-      paddingHorizontal: 14,
-      paddingVertical: 12,
+      padding: 10,
       marginHorizontal: 4,
       marginBottom: 10,
       backgroundColor: isDarkMode ? config.colors.surfaceDark : '#ffffff',
-      borderRadius: 18,
+      borderRadius: 10,
       borderWidth: 1,
       borderColor: isDarkMode ? '#243050' : '#f0f4ff',
       shadowColor: isDarkMode ? '#000' : '#1a1a2e',
@@ -2302,6 +2304,12 @@ const getStyles = (isDarkMode) =>
       color: 'white',
       fontWeight: '700',
       fontSize: 9,
+    },
+    featuredBadge: {
+      backgroundColor: '#f59e0b',
+      paddingHorizontal: 6,
+      justifyContent: 'center',
+      alignSelf: 'stretch',
     },
     // Deliberately muted next to Win/Fair/Lose: it is provenance, not a verdict.
     unpricedItemNote: {
@@ -2587,9 +2595,9 @@ const getStyles = (isDarkMode) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'flex-end',
-      gap: 8,
-      marginTop: 8,
-      paddingTop: 8,
+      gap: 6,
+      marginTop: 5,
+      paddingTop: 10,
       borderTopWidth: 1,
       borderTopColor: isDarkMode ? '#243050' : '#f1f5f9',
     },
@@ -2597,29 +2605,10 @@ const getStyles = (isDarkMode) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      width: 32,
-      height: 32,
+      width: CHAT_PILL_HEIGHT,
+      height: CHAT_PILL_HEIGHT,
       borderRadius: 999,
       backgroundColor: isDarkMode ? '#1e293b' : '#f1f5f9',
-    },
-    chatBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 14,
-      paddingVertical: 7,
-      borderRadius: 999,
-      backgroundColor: config.colors.primary,
-      gap: 5,
-      shadowColor: config.colors.primary,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 5,
-      elevation: 3,
-    },
-    chatBtnText: {
-      color: '#ffffff',
-      fontWeight: '800',
-      fontSize: 11,
     },
     boost:{
       justifyContent:'flex-start', paddingVertical:2, paddingHorizontal:5, borderRadius:3, alignItems:'center', margin:4

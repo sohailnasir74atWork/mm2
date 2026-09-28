@@ -21,6 +21,7 @@ import { getCachedProfile } from '../../Helper/profileCache';
 import { getUserRoles } from '../../Helper/roleRoster';
 import { getUserEmail } from '../../Helper/privateProfile';
 import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
+import ChatPillButton from '../../Helper/ChatPillButton';
 import { logModAction, resolveActorRole } from '../../Helper/modLog';
 
 const REACTION_EMOJIS = ['❤️', '🔥', '😍', '💀', '🎯'];
@@ -282,6 +283,13 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
           </View>
           <View style={s.metaRow}>
             <Text style={s.time}>{formattedTime}</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Topic tags, right-aligned and top-aligned (level with the name)
+            like the badges on trade cards */}
+        {tags.length > 0 && (
+          <View style={s.tagColumn}>
             {tags.map((tag) => {
               const cfg = getTagConfig(tag);
               return (
@@ -292,11 +300,11 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
               );
             })}
           </View>
-        </TouchableOpacity>
+        )}
 
         {/* Kebab menu */}
-        <Menu>
-          <MenuTrigger>
+        <Menu style={{ alignSelf: 'flex-start' }}>
+          <MenuTrigger customStyles={{ triggerTouchable: { hitSlop: { top: 8, bottom: 8, left: 8, right: 8 } } }}>
             <View style={s.menuBtn}>
               <Icon name="ellipsis-v" size={14} color={isDark ? '#94a3b8' : '#64748b'} />
             </View>
@@ -481,10 +489,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
         <View style={{ flex: 1 }} />
 
         {/* Chat / DM button */}
-        <TouchableOpacity style={s.chatBtn} onPress={openProfileDrawer} activeOpacity={0.8}>
-          <Icon name="paper-plane" size={12} color="#fff" />
-          <Text style={s.chatBtnLabel}>Chat</Text>
-        </TouchableOpacity>
+        <ChatPillButton onPress={openProfileDrawer} />
       </View>
 
       {/* ── Emoji Picker ── */}
@@ -529,7 +534,7 @@ const getStyles = (isDark) => {
     card: {
       marginHorizontal: 12,
       marginVertical: 6,
-      borderRadius: 18,
+      borderRadius: 10,
       backgroundColor: isDark ? '#111c33' : '#ffffff',
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: border,
@@ -545,8 +550,8 @@ const getStyles = (isDark) => {
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 14,
-      paddingTop: 14,
+      paddingHorizontal: 10,
+      paddingTop: 10,
       paddingBottom: 8,
     },
     avatarWrapper: {
@@ -576,6 +581,13 @@ const getStyles = (isDark) => {
       fontSize: 12,
       color: isDark ? '#64748b' : '#94a3b8',
     },
+    tagColumn: {
+      alignSelf: 'flex-start',
+      alignItems: 'flex-end',
+      gap: 4,
+      marginLeft: 8,
+      maxWidth: '45%',
+    },
     tagChip: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -589,12 +601,15 @@ const getStyles = (isDark) => {
       fontSize: 10.5,
       fontWeight: '700',
       letterSpacing: 0.2,
+      flexShrink: 1,
     },
+    // Narrow and right-aligned so the dots sit on the card's 10pt inset,
+    // matching the left edge; hitSlop on the trigger keeps it easy to tap.
     menuBtn: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      alignItems: 'center',
+      width: 14,
+      height: 18,
+      marginLeft: 6,
+      alignItems: 'flex-end',
       justifyContent: 'center',
     },
     menuItem: {
@@ -611,7 +626,7 @@ const getStyles = (isDark) => {
 
     /* Body */
     body: {
-      paddingHorizontal: 14,
+      paddingHorizontal: 10,
       paddingBottom: 12,
     },
     desc: {
@@ -629,11 +644,11 @@ const getStyles = (isDark) => {
 
     /* Images */
     imageWrapper: {
-      marginHorizontal: 14,
+      marginHorizontal: 10,
       marginBottom: 12,
     },
     imageContainer: {
-      borderRadius: 14,
+      borderRadius: 6,
       overflow: 'hidden',
       backgroundColor: isDark ? '#0b1426' : '#f1f5f9',
     },
@@ -678,7 +693,7 @@ const getStyles = (isDark) => {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      paddingHorizontal: 14,
+      paddingHorizontal: 10,
       paddingBottom: 10,
     },
     reactionStack: {
@@ -705,8 +720,8 @@ const getStyles = (isDark) => {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      paddingHorizontal: 8,
-      paddingVertical: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: border,
     },
@@ -726,21 +741,6 @@ const getStyles = (isDark) => {
       fontWeight: '600',
       color: muted,
     },
-    chatBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      marginRight: 6,
-      borderRadius: 10,
-      backgroundColor: config.colors.primary,
-    },
-    chatBtnLabel: {
-      color: '#ffffff',
-      fontWeight: '700',
-      fontSize: 13,
-    },
 
     /* Emoji picker */
     emojiPicker: {
@@ -749,7 +749,7 @@ const getStyles = (isDark) => {
       alignItems: 'center',
       gap: 6,
       paddingVertical: 10,
-      marginHorizontal: 14,
+      marginHorizontal: 10,
       marginBottom: 10,
       backgroundColor: isDark ? config.colors.backgroundDark : '#f8fafc',
       borderRadius: 20,

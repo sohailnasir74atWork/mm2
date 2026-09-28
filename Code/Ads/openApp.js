@@ -84,6 +84,19 @@ class AppOpenAdManager {
   static showWatchdog = null;
   static splashGate = splashGate;
   static coldStartShowing = false;
+  static skipForegroundUntil = 0;
+
+  /**
+   * Our own trips out of the app — the Play purchase sheet — come back
+   * through 'active' exactly like a real return, and got an app-open ad: shown
+   * to someone who had just tried to BUY ad-free, before the purchase had even
+   * confirmed (so isProUser() was still false). Call right before leaving; the
+   * window only bounds how long an unused skip lingers (iOS's StoreKit sheet
+   * never backgrounds the app, so it is never consumed there).
+   */
+  static skipNextForeground(ms = 5 * 60 * 1000) {
+    this.skipForegroundUntil = Date.now() + ms;
+  }
 
   /**
    * Decide, at launch, whether this launch gets a cold-start ad, and arm the
@@ -135,6 +148,10 @@ class AppOpenAdManager {
       } else if (next === 'active') {
         if (this.wasBackgrounded) {
           this.wasBackgrounded = false;
+          if (Date.now() < this.skipForegroundUntil) {
+            this.skipForegroundUntil = 0;
+            return;
+          }
           this.showAdIfAvailable();
         }
       }

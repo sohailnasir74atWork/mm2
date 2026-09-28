@@ -28,7 +28,6 @@ import { ref, update } from '@react-native-firebase/database';
 import { Menu, MenuOption, MenuOptions, MenuTrigger } from 'react-native-popup-menu';
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
-import { handleBloxFruit, handleadoptme } from '../SettingScreen/settinghelper';
 import {
   resolveItemImage, buildItemPool, unwrapFeed, priceOf, displayValueText,
   DEFAULT_VALUE_SOURCE, categoryKey, VALUE_SOURCE,
@@ -81,7 +80,7 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
   const insets = useSafeAreaInsets();
   const bannerBottomPos = Math.max(insets.bottom, 8) + 6;
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
-  const { localState, toggleAd, updateLocalState } = useLocalState()
+  const { localState, updateLocalState } = useLocalState()
   const [valuesData, setValuesData] = useState([]);
   // Chat item picker: default to the user's own My Stuff items with a toggle
   // to the full catalog (adoptme pattern) — the list users attach in chat is
@@ -103,7 +102,6 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
   const [refreshing, setRefreshing] = useState(false);
   const [itemSelections, setItemSelections] = useState({});
   const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [showAd1, setShowAd1] = useState(localState?.showAd1);
   const [sortOrder, setSortOrder] = useState('none'); // 'asc', 'desc', or 'none'
 
 
@@ -120,50 +118,6 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
     Biliprice: '',
     Robuxprice: '',
   });
-  useEffect(() => {
-    // Toggle the ad state when the screen is mounted
-    const newAdState = toggleAd();
-    setShowAd1(newAdState);
-  }, []);
-  const CustomAd = () => (
-    <View style={styles.adContainer}>
-      <View style={styles.adContent}>
-        <Image
-          source={require('../../assets/icon.webp')} // Replace with your ad icon
-          style={styles.adIcon}
-        />
-        <View>
-          <Text style={styles.adTitle}>Blox Fruits Values</Text>
-          <Text style={styles.tryNowText}>{t('value.try_other_app')}</Text>
-        </View>
-      </View>
-      <TouchableOpacity style={styles.downloadButton} onPress={() => {
-        handleBloxFruit(); triggerHapticFeedback('impactLight');
-      }}>
-        <Text style={styles.downloadButtonText}>{t('value.download')}</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const CustomAd2 = () => (
-    <View style={styles.adContainer}>
-      <View style={styles.adContent}>
-        <Image
-          source={require('../../assets/MM2logo.webp')}
-          style={styles.adIcon}
-        />
-        <View>
-          <Text style={styles.adTitle}>MM2 Values</Text>
-          <Text style={styles.tryNowText}>{t('value.try_other_app')}</Text>
-        </View>
-      </View>
-      <TouchableOpacity style={styles.downloadButton} onPress={() => {
-        handleadoptme(); triggerHapticFeedback('impactLight');
-      }}>
-        <Text style={styles.downloadButtonText}>{t('value.download')}</Text>
-      </TouchableOpacity>
-    </View>
-  );
 
 
   // Which catalogue prices this screen. See Code/Helper/valueSources.js.
@@ -516,9 +470,6 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
               />
             </View>
           )}
-          {/* {(!fromChat && !fromSetting) && (
-  showAd1 ? <CustomAd /> : <CustomAd2 />
-)} */}
 
           <View style={styles.searchFilterContainer}>
 
@@ -1164,54 +1115,6 @@ export const getStyles = (isDarkMode) => StyleSheet.create({
   },
   categoryButtonTextActive: {
     color: config.colors.white,
-  },
-  adContainer: {
-    backgroundColor: isDarkMode ? config.colors.surfaceDark : config.colors.surfaceLight,
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: isDarkMode ? config.colors.borderDark : config.colors.borderLight,
-    marginHorizontal: 10
-
-  },
-  adContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start', // Aligns text and image in a row
-  },
-  adIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 5,
-    marginRight: 15,
-  },
-  adTitle: {
-    fontSize: 18,
-    fontFamily: 'Lato-Bold',
-    color: isDarkMode ? config.colors.textSecondaryDark : config.colors.textSecondaryLight,
-    // marginBottom: 5, // Adds space below the title
-  },
-  tryNowText: {
-    fontSize: 14,
-    fontFamily: 'Lato-Regular',
-    color: config.colors.primary, // Adds a distinct color for the "Try Now" text
-    // marginTop: 5, // Adds space between the title and the "Try Now" text
-  },
-  downloadButton: {
-    backgroundColor: config.colors.success,
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderRadius: 5,
-    marginTop: 10, // Adds spacing between the text and the button
-  },
-  downloadButtonText: {
-    color: config.colors.white,
-    fontSize: 14,
-    fontFamily: 'Lato-Bold',
   },
   selectedPetsSection: {
     paddingHorizontal: 8,

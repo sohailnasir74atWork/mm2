@@ -443,7 +443,7 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
                 </Text>
               </View>
 
-              <FlatList
+              <FlatList removeClippedSubviews={false}
                 horizontal
                 data={selectedList}
                 keyExtractor={(item, index) => `${item.id || item.name}-${index}`}
@@ -603,7 +603,7 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
               keyExtractor={(item) => item.id || item.name}
               renderItem={renderItem}
               showsVerticalScrollIndicator={false}
-              removeClippedSubviews={true}
+              removeClippedSubviews={false}
               numColumns={2}
               columnWrapperStyle={{ justifyContent: 'space-between', paddingHorizontal: SCREEN_GUTTER }}
               contentContainerStyle={{ paddingBottom: 180 }}

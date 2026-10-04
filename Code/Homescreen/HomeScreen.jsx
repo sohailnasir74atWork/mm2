@@ -1477,7 +1477,7 @@ const HomeScreen = ({ selectedTheme }) => {
                     initialNumToRender={12}
                     maxToRenderPerBatch={12}
                     windowSize={5}
-                    removeClippedSubviews={true}
+                    removeClippedSubviews={false}
                     getItemLayout={selectedPetType === 'INVENTORY' && !isAddingToFavorites ? undefined : getItemLayout}
                   />
                   {selectedPetType === 'INVENTORY' ? renderFavoritesFooter() : null}

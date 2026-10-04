@@ -98,7 +98,7 @@ const ImageViewerScreenChat = ({ route }) => {
       initialNumToRender={3}
       maxToRenderPerBatch={3}
       windowSize={5}
-      removeClippedSubviews={true}
+      removeClippedSubviews={false}
       showsHorizontalScrollIndicator={false}
       renderItem={renderItem}
       keyExtractor={keyExtractor}

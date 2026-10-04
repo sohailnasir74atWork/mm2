@@ -506,7 +506,7 @@ const SocialDashboard = () => {
                     {loadingFriends || loadingFriendSearch ? (
                         <ActivityIndicator size="large" color={config.colors.primary} style={{ marginTop: 40 }} />
                     ) : (
-                        <FlatList
+                        <FlatList removeClippedSubviews={false}
                             data={isFriendSearchActive ? friendSearchResults : friends} // ✅ Toggle Data Source
                             keyExtractor={keyExtractor}
                             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? '#FFF' : '#000'} />}
@@ -551,7 +551,7 @@ const SocialDashboard = () => {
                     {loadingSearch ? (
                         <ActivityIndicator size="large" color={config.colors.primary} style={{ marginTop: 40 }} />
                     ) : (
-                        <FlatList
+                        <FlatList removeClippedSubviews={false}
                             data={searchResults}
                             keyExtractor={keyExtractor}
                             contentContainerStyle={styles.listContent}

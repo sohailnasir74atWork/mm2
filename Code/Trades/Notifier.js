@@ -324,7 +324,7 @@ const NotifierDrawer = () => {
         <View style={[styles.drawerContainer, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff' }]}>
           <Text style={[styles.sectionTitle, { fontFamily: 'Lato-Bold', color: isDarkMode ? '#fff' : '#000' }]}>Select Items to Notify</Text>
 
-          <FlatList
+          <FlatList removeClippedSubviews={false}
             data={parsedValuesData}
             renderItem={renderItem}
             keyExtractor={(item, index) => item?.name || item?.Name || `item-${index}`}

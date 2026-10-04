@@ -332,7 +332,7 @@ const EditProfileDrawerContent = ({
         </View>
 
         {/* Avatar Grid - Minimal */}
-        <FlatList
+        <FlatList removeClippedSubviews={false}
           data={filteredAvatarOptions}
           keyExtractor={(item, index) => `${item.url}-${index}`}
           horizontal

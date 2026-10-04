@@ -538,7 +538,7 @@ const GroupMessageList = ({
       initialNumToRender={15} // ✅ Render 15 messages initially
       maxToRenderPerBatch={10} // ✅ Render 10 per batch
       windowSize={5} // ✅ Optimize memory usage
-      removeClippedSubviews={true} // ✅ Improve performance
+      removeClippedSubviews={false} // ✅ Improve performance
       ListFooterComponent={
         isPaginating ? (
           <View style={{ padding: 16, alignItems: 'center' }}>

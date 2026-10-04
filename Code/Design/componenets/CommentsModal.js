@@ -421,7 +421,7 @@ const CommentModal = ({ visible, onClose, postId }) => {
             {loading ? (
               <ActivityIndicator size="small" color={isDarkMode ? '#94a3b8' : '#64748b'} style={{ marginVertical: 30 }} />
             ) : (
-              <FlatList
+              <FlatList removeClippedSubviews={false}
                 data={threadedComments}
                 keyExtractor={(item) => item.id}
                 renderItem={renderThread}

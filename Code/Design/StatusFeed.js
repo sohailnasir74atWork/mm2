@@ -948,7 +948,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
 
   return (
     <View style={[styles.container, { borderBottomColor: isDarkMode ? config.colors.surfaceDark : 'rgba(0,0,0,0.05)' }]}>
-      <FlatList
+      <FlatList removeClippedSubviews={false}
         data={feedData}
         horizontal
         showsHorizontalScrollIndicator={false}

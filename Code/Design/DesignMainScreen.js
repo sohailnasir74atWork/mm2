@@ -622,7 +622,7 @@ const DesignFeedScreen = ({ route }) => {
 
   return (
     <View style={[styles.container, isDarkMode && styles.darkContainer]}>
-      <FlatList
+      <FlatList removeClippedSubviews={false}
         data={dataToRender}
         keyExtractor={keyExtractor}
         renderItem={renderItem}

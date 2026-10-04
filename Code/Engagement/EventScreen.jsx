@@ -220,7 +220,7 @@ const EventCard = ({ isDarkMode = false }) => {
               renderItem={renderItem}
               initialNumToRender={14}
               windowSize={7}
-              removeClippedSubviews
+              removeClippedSubviews={false}
               contentContainerStyle={styles.listContent}
             />
           )}

@@ -1521,7 +1521,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
           </TouchableOpacity>
           {joinRequestsExpanded && (
             <View style={{ padding: 12 }}>
-              <FlatList
+              <FlatList removeClippedSubviews={false}
                 data={pendingJoinRequests}
                 keyExtractor={(item) => item.id}
                 renderItem={renderJoinRequestItem}
@@ -1609,7 +1609,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
           </TouchableOpacity>
           {invitationsExpanded && (
             <View style={{ padding: 12 }}>
-              <FlatList
+              <FlatList removeClippedSubviews={false}
                 data={pendingInvitations}
                 keyExtractor={(item) => item.id}
                 renderItem={renderInvitationItem}
@@ -1635,7 +1635,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
           data={filteredGroups}
           keyExtractor={(item, index) => item?.groupId || `group-${index}`}
           renderItem={renderGroupItem}
-          removeClippedSubviews={true}
+          removeClippedSubviews={false}
           maxToRenderPerBatch={10}
           windowSize={10}
         />
@@ -1670,7 +1670,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
               ) : null
             }
             renderItem={renderAllGroupItem}
-            removeClippedSubviews={true}
+            removeClippedSubviews={false}
             maxToRenderPerBatch={10}
             windowSize={10}
           />

@@ -1279,7 +1279,7 @@ const AdminDashboard = () => {
           <Text style={s.sectionLabel}>
             {searching ? `Search results · ${filteredBans.length}` : `Active restrictions · ${filteredBans.length}${bansHasMore ? '+' : ''}`}
           </Text>
-          <FlatList
+          <FlatList removeClippedSubviews={false}
             data={filteredBans}
             keyExtractor={(i) => i.encodedEmail}
             contentContainerStyle={[s.list, listBottom]}
@@ -1324,7 +1324,7 @@ const AdminDashboard = () => {
             </TouchableOpacity>
           </View>
           {usersLoading ? <ActivityIndicator style={{ marginTop: 30 }} color={c.primary} /> : (
-            <FlatList
+            <FlatList removeClippedSubviews={false}
               data={users}
               extraData={banStatusTick}
               keyExtractor={(i) => i.id}
@@ -1364,7 +1364,7 @@ const AdminDashboard = () => {
           {pills([[7, '7 days'], [30, '30 days'], [90, '90 days']], modLogDays, setModLogDays)}
 
           {modLogView === 'leaderboard' ? (
-            <FlatList
+            <FlatList removeClippedSubviews={false}
               data={leaderboard.rows}
               keyExtractor={(r, i) => r.actorUid || `${r.actorName}-${i}`}
               contentContainerStyle={[s.list, listBottom]}
@@ -1410,7 +1410,7 @@ const AdminDashboard = () => {
                   <Icon name="close-circle" size={14} color={c.primary} style={{ marginLeft: 6 }} />
                 </TouchableOpacity>
               )}
-              <FlatList
+              <FlatList removeClippedSubviews={false}
                 data={feed}
                 keyExtractor={(a) => a.id}
                 contentContainerStyle={[s.list, listBottom]}
@@ -1512,7 +1512,7 @@ const AdminDashboard = () => {
 
       {/* ── STATUSES ── */}
       {tab === 'statuses' && (
-        <FlatList
+        <FlatList removeClippedSubviews={false}
           data={statuses}
           keyExtractor={(st) => st.id}
           contentContainerStyle={[s.list, listBottom, { paddingTop: 6 }]}
@@ -1642,7 +1642,7 @@ const AdminDashboard = () => {
             </View>
           )}
           {ucPick.length > 0 && !ucTarget && (
-            <FlatList data={ucPick} keyExtractor={(u) => u.id} contentContainerStyle={s.list}
+            <FlatList removeClippedSubviews={false} data={ucPick} keyExtractor={(u) => u.id} contentContainerStyle={s.list}
               ListHeaderComponent={<Text style={[s.sectionLabel, { paddingHorizontal: 2 }]}>Which one?</Text>}
               renderItem={({ item: u }) => (
                 <TouchableOpacity style={s.card} onPress={() => pickUcTarget(u)}>
@@ -1655,7 +1655,7 @@ const AdminDashboard = () => {
               )} />
           )}
           {ucTarget && (
-            <FlatList
+            <FlatList removeClippedSubviews={false}
               data={ucList}
               keyExtractor={(r) => r.partnerId}
               contentContainerStyle={[s.list, listBottom]}
@@ -1702,7 +1702,7 @@ const AdminDashboard = () => {
               autoCapitalize="none" autoCorrect={false} returnKeyType="search" onSubmitEditing={searchGrant} style={s.input} />
             <TouchableOpacity onPress={searchGrant} style={s.searchBtn}><Icon name="search" size={18} color="#fff" /></TouchableOpacity>
           </View>
-          <FlatList
+          <FlatList removeClippedSubviews={false}
             data={granters}
             keyExtractor={(i) => i.id}
             contentContainerStyle={[s.list, listBottom]}

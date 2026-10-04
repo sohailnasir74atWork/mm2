@@ -393,7 +393,7 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
           data={displayedChats}
           keyExtractor={(item, index) => item?.chatId || `chat-${index}`}
           renderItem={renderChatItem}
-          removeClippedSubviews={true}
+          removeClippedSubviews={false}
           maxToRenderPerBatch={10}
           windowSize={10}
           onEndReached={handleLoadMore}

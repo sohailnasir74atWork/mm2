@@ -518,7 +518,7 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
                   </View>
 
                   {/* Selected Members List */}
-                  <FlatList
+                  <FlatList removeClippedSubviews={false}
                     data={displayUsers.filter((u) => selectedMemberIds.includes(u.id))}
                     keyExtractor={(item) => item.id}
                     scrollEnabled={false}

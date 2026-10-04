@@ -173,7 +173,7 @@ const BlockedUsersScreen = () => {
           keyExtractor={(item, index) => item?.id || `blocked-${index}`}
           renderItem={renderBlockedUser}
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={true}
+          removeClippedSubviews={false}
           maxToRenderPerBatch={10}
           windowSize={10}
         />

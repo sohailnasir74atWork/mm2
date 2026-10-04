@@ -277,7 +277,7 @@ const LeaderboardScreen = ({ route }) => {
             <Text style={styles.emptySubtext}>{t('leaderboard.empty_subtext')}</Text>
           </View>
         ) : (
-          <FlatList
+          <FlatList removeClippedSubviews={false}
             data={leaderboardData}
             renderItem={renderLeaderboardItem}
             keyExtractor={(item) => item.userId}

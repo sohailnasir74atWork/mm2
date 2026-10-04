@@ -66,7 +66,7 @@ const CodesDrawer = ({ isVisible, toggleModal, codes }) => {
 
       {/* Drawer */}
       <View style={styles.drawer}>
-        <FlatList
+        <FlatList removeClippedSubviews={false}
           data={normalizedCodes}
           keyExtractor={(item, index) => index.toString()}
           renderItem={renderCodeItem}

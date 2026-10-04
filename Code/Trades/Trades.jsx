@@ -2118,7 +2118,7 @@ const TradeList = ({ route }) => {
         contentContainerStyle={{ paddingBottom: 180 }}
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.2}
-        removeClippedSubviews={true} // 🚀 Reduce memory usage
+        removeClippedSubviews={false} // 🚀 Reduce memory usage
         initialNumToRender={10} // 🔹 Render fewer items at start
         maxToRenderPerBatch={10} // 🔹 Load smaller batches
         updateCellsBatchingPeriod={50} // 🔹 Reduce updates per frame

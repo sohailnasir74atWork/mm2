@@ -30,6 +30,7 @@ import { addDoc, collection, serverTimestamp, doc, getDoc, setDoc } from '@react
 import SubscriptionScreen from '../SettingScreen/OfferWall';
 import { SCREEN_GUTTER } from '../Helper/layout';
 import { matchesItemName } from '../Helper/itemSearch';
+import { trackTradePosted } from '../Helper/growthAnalytics';
 
 const GRID_STEPS = [4, 8, 12, 16];
 
@@ -942,6 +943,7 @@ const HomeScreen = ({ selectedTheme }) => {
 
 
       await addDoc(tradesCollection, newTrade);
+      trackTradePosted(valueSource);
       // Step 1: Close modal first
       setModalVisible(false);
 

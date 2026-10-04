@@ -6,6 +6,7 @@ import config from './Helper/Environment';
 import { useTranslation } from 'react-i18next';
 
 import { showErrorMessage, showSuccessMessage } from './Helper/MessageHelper';
+import { trackProPurchase } from './Helper/growthAnalytics';
 
 const storage = createMMKV();
 const LocalStateContext = createContext();
@@ -325,8 +326,7 @@ export const LocalStateProvider = ({ children }) => {
           : []
       );
 
-      if (track) {
-      }
+      if (proStatus) trackProPurchase(packageToPurchase, track);
 
       showSuccessMessage("Success", "Purchase completed successfully!");
     } catch (error) {

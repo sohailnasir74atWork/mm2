@@ -24,6 +24,7 @@ import { requestPermission } from '../Helper/PermissionCheck';
 import { setPendingSigninChoice, clearPendingSigninChoice, emailOptInDefault } from '../Helper/emailOptIn';
 import { handleOpenPrivacy, handleOpenTerms } from '../SettingScreen/settinghelper';
 import config from '../Helper/Environment';
+import { trackSignUp } from '../Helper/growthAnalytics';
 // import { showMessage } from 'react-native-flash-message';
 
 import { getApp } from '@react-native-firebase/app';
@@ -157,7 +158,8 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
       if (!identityToken) throw new Error(t('signin.error_apple_token'));
 
       const appleCredential = AppleAuthProvider.credential(identityToken, nonce);
-      await signInWithCredential(auth, appleCredential);
+      const appleResult = await signInWithCredential(auth, appleCredential);
+      if (appleResult?.additionalUserInfo?.isNewUser) trackSignUp('apple');
 
       showSuccessMessage(t('home.alert.success'), t('signin.success_signin'));
       setTimeout(onClose, 200);
@@ -195,6 +197,7 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
         clearPendingSigninChoice();
         // 🔐 Register new user
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        trackSignUp('email');
         const user = userCredential.user;
 
         if (!user.emailVerified) {
@@ -269,7 +272,8 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
       if (!idToken) throw new Error(t('signin.error_signin_message'));
 
       const googleCredential = GoogleAuthProvider.credential(idToken);
-      await signInWithCredential(auth, googleCredential);
+      const googleResult = await signInWithCredential(auth, googleCredential);
+      if (googleResult?.additionalUserInfo?.isNewUser) trackSignUp('google');
 
       showSuccessMessage(t('signin.alert_welcome_back'), t('signin.success_signin'));
       setTimeout(onClose, 200);

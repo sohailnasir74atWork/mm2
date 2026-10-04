@@ -41,8 +41,7 @@ import { showSuccessMessage, showErrorMessage } from '../Helper/MessageHelper';
 import SubscriptionScreen from '../SettingScreen/OfferWall';
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
-import NativeAdCard from '../Ads/NativeAdCard';
-import { releaseByPrefix as releaseNativeAds } from '../Ads/NativeAdManager';
+import FeedBannerAd from '../Ads/FeedBannerAd';
 import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 import ProfileBottomDrawer from '../ChatScreen/GroupChat/BottomDrawer';
 import FramedAvatar from '../ChatScreen/GroupChat/FramedAvatar';
@@ -255,13 +254,8 @@ const TradeList = ({ route }) => {
 
   }, [user?.id, localState.bannedUsers]);
 
-  // Free this list's native ad handles on unmount (keys prefixed 'trade-ad-').
-  useEffect(() => {
-    return () => releaseNativeAds('trade-ad-');
-  }, []);
-
-  // Interleave a native ad every TRADE_AD_FREQUENCY trades (non-Pro only).
-  // Unfilled slots collapse to nothing via NativeAdCard, so the list never
+  // Interleave an in-feed ad every TRADE_AD_FREQUENCY trades (non-Pro only).
+  // Unfilled slots collapse to nothing via FeedBannerAd, so the list never
   // shows a blank gap.
   const TRADE_AD_FREQUENCY = 8;
   const tradesWithAds = useMemo(() => {
@@ -704,8 +698,14 @@ const TradeList = ({ route }) => {
       return value?.toLocaleString(); // Default formatting
     }
   };
+  // onEndReached re-fires whenever the content height changes near the end —
+  // e.g. a native ad popping into its slot — so a second call could start
+  // before the first moved lastDoc on, append the same page again, and give
+  // FlatList duplicate keys (rows dropped/doubled, jumpy scrolling).
+  const loadingMoreRef = useRef(false);
   const fetchMoreTrades = useCallback(async () => {
-    if (!hasMore || !lastDoc) return;
+    if (!hasMore || !lastDoc || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
 
     try {
       // ✅ Build query for more normal trades
@@ -735,7 +735,10 @@ const TradeList = ({ route }) => {
       // ✅ Merge & maintain balance
       const mergedTrades = mergeFeaturedWithNormal(newFeaturedTrades, newNormalTrades);
 
-      setTrades((prevTrades) => [...prevTrades, ...mergedTrades]);
+      setTrades((prevTrades) => {
+        const seen = new Set(prevTrades.map((row) => row.id));
+        return [...prevTrades, ...mergedTrades.filter((row) => !seen.has(row.id))];
+      });
       setLastDoc(
         normalTradesQuerySnap.docs[normalTradesQuerySnap.docs.length - 1]
       );      
@@ -745,6 +748,8 @@ const TradeList = ({ route }) => {
       if (error.code === 'failed-precondition') {
         console.warn('⚠️ Firestore index required.');
       }
+    } finally {
+      loadingMoreRef.current = false;
     }
   }, [lastDoc, hasMore, remainingFeaturedTrades, firestoreDB]);
 
@@ -1538,9 +1543,9 @@ const TradeList = ({ route }) => {
 
 
   const renderTrade = ({ item, index }) => {
-    // Native ad slot interleaved into the list (collapses when unfilled / Pro).
+    // In-feed ad slot interleaved into the list (collapses when unfilled / Pro).
     if (item?.__type === 'ad') {
-      return <NativeAdCard adKey={item.id} isDarkMode={isDarkMode} />;
+      return <FeedBannerAd adKey={item.id} isDarkMode={isDarkMode} />;
     }
 
     // ✅ Migration: Normalize totals to handle both old (object.value) and new (number) formats

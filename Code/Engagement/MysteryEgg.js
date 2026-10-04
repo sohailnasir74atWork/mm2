@@ -674,9 +674,13 @@ const MysteryEggScreen = ({ navigation }) => {
                 onPress={async () => {
                   if (adLoading) return;
                   setAdLoading(true);
-                  const earned = await RewardedAdManager.show();
+                  const result = await RewardedAdManager.showForResult();
                   setAdLoading(false);
-                  if (earned) {
+                  if (result === 'unavailable') {
+                    Alert.alert(t('mystery_egg.alerts.no_ad_title'), t('mystery_egg.alerts.no_ad_msg'));
+                    return;
+                  }
+                  if (result === 'earned') {
                     setUsedFreeHatch(true);
                     // Persist to RTDB
                     const { ref: adRef, set: adSet } = require('@react-native-firebase/database');
@@ -806,9 +810,13 @@ const MysteryEggScreen = ({ navigation }) => {
                   onPress={async () => {
                     if (adLoading) return;
                     setAdLoading(true);
-                    const earned = await RewardedAdManager.show();
+                    const result = await RewardedAdManager.showForResult();
                     setAdLoading(false);
-                    if (earned) {
+                    if (result === 'unavailable') {
+                      Alert.alert(t('mystery_egg.alerts.no_ad_title'), t('mystery_egg.alerts.no_ad_msg'));
+                      return;
+                    }
+                    if (result === 'earned') {
                       setUsedFreeHatch(true);
                       // Persist to RTDB
                       const { ref: adRef, set: adSet } = require('@react-native-firebase/database');

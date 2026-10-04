@@ -192,8 +192,16 @@ const ShimmerPlaceholder = ({ style }) => {
 };
 
 // ── Image with loading shimmer ──
-const LoadingImage = ({ source, style, resizeMode = 'cover', borderRadius }) => {
+// A failed load swaps to `fallbackUri` (avatars) or just ends the shimmer, so
+// a dead URL never leaves a spinner running forever.
+const LoadingImage = ({ source, style, resizeMode = 'cover', borderRadius, fallbackUri }) => {
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const shown = failed && fallbackUri ? { uri: fallbackUri } : source;
+  const handleError = () => {
+    if (!failed && fallbackUri && source?.uri !== fallbackUri) setFailed(true);
+    else setLoaded(true);
+  };
   return (
     <View style={[style, { overflow: 'hidden', borderRadius: borderRadius || style?.borderRadius || 0 }]}>
       {!loaded && (
@@ -202,10 +210,11 @@ const LoadingImage = ({ source, style, resizeMode = 'cover', borderRadius }) => 
         />
       )}
       <Image
-        source={source}
+        source={shown}
         style={[style, { position: loaded ? 'relative' : 'absolute', opacity: loaded ? 1 : 0 }]}
         resizeMode={resizeMode}
         onLoad={() => setLoaded(true)}
+        onError={handleError}
       />
     </View>
   );
@@ -886,6 +895,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
               <View style={[styles.gradientRingInner, { backgroundColor: isDarkMode ? config.colors.backgroundDark : '#fff' }]}>
                 <LoadingImage
                   source={{ uri: item.userAvatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
+                  fallbackUri="https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png"
                   style={styles.bubbleAvatar}
                   borderRadius={(BUBBLE_SIZE - 4) / 2}
                 />
@@ -896,6 +906,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
           <View style={[styles.bubbleRing, ringStyle]}>
             <LoadingImage
               source={{ uri: item.userAvatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
+              fallbackUri="https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png"
               style={styles.bubbleAvatar}
               borderRadius={(BUBBLE_SIZE - 4) / 2}
             />

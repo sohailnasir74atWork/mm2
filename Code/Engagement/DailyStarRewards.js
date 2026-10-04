@@ -20,11 +20,14 @@ import {
 import { DAILY_REWARDS, getStarStatus, claimDailyStar } from './starUtils';
 import { getThemeColors } from '../Helper/themeColors';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const DailyStarRewards = ({ visible, onClose, db, uid, isDarkMode = false }) => {
   const { t } = useTranslation();
+  // Edge-to-edge modal on Android: the cycle line must clear the nav bar.
+  const insets = useSafeAreaInsets();
   const [status, setStatus] = useState(null);
   const [claiming, setClaiming] = useState(false);
   const [claimedReward, setClaimedReward] = useState(null);
@@ -46,7 +49,12 @@ const DailyStarRewards = ({ visible, onClose, db, uid, isDarkMode = false }) => 
     const reward = await claimDailyStar(db, uid);
     if (reward) {
       setClaimedReward(reward);
-      setStatus(prev => ({ ...prev, canClaim: false, currentDay: reward.currentDay }));
+      setStatus(prev => ({
+        ...prev,
+        canClaim: false,
+        currentDay: reward.currentDay,
+        totalStarsEarned: (prev?.totalStarsEarned || 0) + (reward.stars || 1),
+      }));
 
       // Bounce animation
       Animated.sequence([
@@ -88,7 +96,7 @@ const DailyStarRewards = ({ visible, onClose, db, uid, isDarkMode = false }) => 
       onRequestClose={handleClose}
     >
       <View style={styles.overlay}>
-        <View style={[styles.container, { backgroundColor: bg }]}>
+        <View style={[styles.container, { backgroundColor: bg, paddingBottom: 20 + insets.bottom }]}>
           {/* Drag handle */}
           <View style={styles.handleBar}>
             <View style={[styles.handle, { backgroundColor: c.border }]} />

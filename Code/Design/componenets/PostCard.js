@@ -72,6 +72,13 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
   const [showComments, setShowComments] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
+  // The comment, report and profile modals mount on first open and then stay
+  // mounted: the drawer has to outlive its own close while a staff reason
+  // prompt is up. Mounting all three in every card put a 2,500-line drawer
+  // plus two modals behind each post, and deep scrolls in the feed froze.
+  const [commentsMounted, setCommentsMounted] = useState(false);
+  const [reportMounted, setReportMounted] = useState(false);
+  const [drawerMounted, setDrawerMounted] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [heartScale] = useState(new Animated.Value(1));
   const [bannedUsers, setBannedUsers] = useState([]);
@@ -156,6 +163,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
     } catch (error) {
       setIsOnline(false);
     }
+    setDrawerMounted(true);
     setIsDrawerVisible(true);
   };
 
@@ -310,7 +318,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
             </View>
           </MenuTrigger>
           <MenuOptions customStyles={{ optionsContainer: { borderRadius: 14, overflow: 'hidden', backgroundColor: isDark ? config.colors.surfaceDark : '#fff', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, minWidth: 160 } }}>
-            <MenuOption onSelect={() => setShowReportModal(true)}>
+            <MenuOption onSelect={() => { setReportMounted(true); setShowReportModal(true); }}>
               <View style={s.menuItem}>
                 <FontAwesome6 name="flag" size={12} color="#F59E0B" solid />
                 <Text style={[s.menuItemText, { color: '#F59E0B' }]}>Report</Text>
@@ -429,11 +437,13 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
               </View>
             )}
           </View>
-          <ReportModal visible={showReportModal} onClose={() => setShowReportModal(false)} item={item} banUserwithEmail={banUserwithEmail} />
+          {reportMounted && (
+            <ReportModal visible={showReportModal} onClose={() => setShowReportModal(false)} item={item} banUserwithEmail={banUserwithEmail} />
+          )}
         </View>
       )}
 
-      {hasNoImages && (
+      {hasNoImages && reportMounted && (
         <ReportModal visible={showReportModal} onClose={() => setShowReportModal(false)} item={item} banUserwithEmail={banUserwithEmail} />
       )}
 
@@ -479,7 +489,11 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
         </Animated.View>
 
         {/* Comment button */}
-        <TouchableOpacity style={s.actionBtn} onPress={() => setShowComments(true)} activeOpacity={0.75}>
+        <TouchableOpacity
+          style={s.actionBtn}
+          onPress={() => { setCommentsMounted(true); setShowComments(true); }}
+          activeOpacity={0.75}
+        >
           <Icon name="comment-o" size={15} color={isDark ? '#94a3b8' : '#64748b'} />
           <Text style={s.actionBtnLabel}>
             {item.commentCount ? `Comment · ${item.commentCount}` : 'Comment'}
@@ -508,21 +522,25 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
         </View>
       )}
 
-      <CommentModal
-        visible={showComments}
-        onClose={() => setShowComments(false)}
-        postId={item.id}
-        appdatabase={appdatabase}
-      />
+      {commentsMounted && (
+        <CommentModal
+          visible={showComments}
+          onClose={() => setShowComments(false)}
+          postId={item.id}
+          appdatabase={appdatabase}
+        />
+      )}
 
-      <ProfileBottomDrawer
-        isVisible={isDrawerVisible}
-        toggleModal={closeProfileDrawer}
-        startChat={handleChatNavigation}
-        selectedUser={selectedUser}
-        isOnline={isOnline}
-        bannedUsers={bannedUsers}
-      />
+      {drawerMounted && (
+        <ProfileBottomDrawer
+          isVisible={isDrawerVisible}
+          toggleModal={closeProfileDrawer}
+          startChat={handleChatNavigation}
+          selectedUser={selectedUser}
+          isOnline={isOnline}
+          bannedUsers={bannedUsers}
+        />
+      )}
     </View>
   );
 };

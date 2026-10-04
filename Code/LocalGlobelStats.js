@@ -79,7 +79,11 @@ export const LocalStateProvider = ({ children }) => {
     ownedPets: safeParseJSON('ownedPets', []),
     wishlistPets: safeParseJSON('wishlistPets', []),
     bannedUsers: safeParseJSON('bannedUsers', []),
-    isAppReady: storage.getBoolean('isAppReady') ?? false,
+    // Per launch, never restored: it gates the boot splash on THIS launch's
+    // login. Read back from storage it was true from the 2nd launch on, so the
+    // splash hid before login and signed-in players saw a signed-out app.
+    // (Still written to storage; openApp.js reads that as "launched before".)
+    isAppReady: false,
     lastActivity: storage.getString('lastActivity') || null,
     showOnBoardingScreen: storage.getBoolean('showOnBoardingScreen') ?? true,
     user_name: storage.getString('user_name') || 'Anonymous',
@@ -287,6 +291,14 @@ export const LocalStateProvider = ({ children }) => {
           expiry: customerInfo.allExpirationDates[subscription],
         }));
         setMySubscriptions(activePlansWithExpiry);
+      } else {
+        // A lapsed subscription must turn ads back on. This branch used to be
+        // missing, so once isPro had ever been written true it stayed true in
+        // MMKV on this device forever. RevenueCat is the only source of Pro in
+        // this app, so an answered-but-empty entitlement set is authoritative
+        // (a thrown getCustomerInfo lands in the catch and changes nothing).
+        updateLocalState('isPro', false);
+        setMySubscriptions([]);
       }
     } catch (error) {
       // console.error('❌ Error checking entitlements:', error);
@@ -336,7 +348,7 @@ export const LocalStateProvider = ({ children }) => {
       return newState;
     });
 
-    storage.delete(key);
+    storage.remove(key);
   }, []);
 
   // Clear all local state and MMKV storage

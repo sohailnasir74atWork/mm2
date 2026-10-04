@@ -23,10 +23,19 @@ export const usableCatalog = value => {
   }
 };
 
+// no-store is load-bearing: Bunny serves the feeds with max-age=2592000 and
+// RN's Android fetch keeps a disk cache, so without it a phone kept the same
+// values for up to 30 days, pull-to-refresh included. whatwg-fetch turns it
+// into a `?_=<timestamp>` cache-buster. The 24h TTL in GlobelStats is what
+// limits downloads.
 export const fetchCatalog = (url, options = {}, timeoutMs = 12000) => {
   const controller = new AbortController();
   return withDeadline(async () => {
-    const response = await fetch(url, {...options, signal: controller.signal});
+    const response = await fetch(url, {
+      cache: 'no-store',
+      ...options,
+      signal: controller.signal,
+    });
     if (!response.ok) {
       const error = new Error(`Catalog HTTP ${response.status}`);
       error.code = `catalog/http-${response.status}`;

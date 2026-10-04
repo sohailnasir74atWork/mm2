@@ -20,3 +20,8 @@ this ASO work. The old MM2 CDN aliases were restored separately during the sessi
 `data.json`, `mm2.json`, and `mm2values.json` all return HTTP 200 and byte-identical valid JSON
 with 1,086 items. Keep the aliases in the publisher, purge all three after each publication, and
 verify the `{meta, data}` wrapper against active old app versions.
+
+## iOS App Store localization — 28 September 2026
+
+Draft 4.2 now has 11 listing languages, the new name "MM2 Values: Trade Calculator", a corrected English description, and 144 localized screenshots. Full details, IDs, open items and the regeneration/upload pipeline:
+[MM2 iOS handover](../aso-reports/2026-09-28/ios/MM2-iOS-HANDOVER.md). The `CFBundleLocalizations` change in `ios/bloxfruitevalues/Info.plist` is not committed yet.

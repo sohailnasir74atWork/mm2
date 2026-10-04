@@ -34,6 +34,11 @@ const aliases = {
 };
 
 const normalize = value => String(value || '').toLowerCase().replace(/ё/g, 'е').trim();
+// The two catalogues space names differently ("Log Chopper" vs Supreme's
+// "Logchopper", "Ice Wing" vs "Icewing"), and the pool keeps MM2's spelling.
+// Typing "logchopper" used to find only the LogChopper trophies (50K–500M),
+// never the ancient worth 20 — one trader was scammed off that.
+const compact = value => value.replace(/[\s'’.\-_()]/g, '');
 
 export const matchesItemName = (name, query, acronym = false) => {
   const needle = normalize(query);
@@ -41,6 +46,8 @@ export const matchesItemName = (name, query, acronym = false) => {
   const canonical = normalize(name);
   if (!canonical) return false;
   if (canonical.includes(needle)) return true;
+  const compactNeedle = compact(needle);
+  if (compactNeedle && compact(canonical).includes(compactNeedle)) return true;
   if (acronym && canonical.split(/[\s_-]+/).map(word => word[0] || '').join('').includes(needle)) return true;
   // Whole English words avoid matching “cat” in an unrelated item name.
   return Object.entries(aliases).some(([english, translations]) => {

@@ -26,6 +26,7 @@ import { showSuccessMessage } from '../../Helper/MessageHelper';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useHaptic } from '../../Helper/HepticFeedBack';
 import SwipeableBottomDrawer from '../../Helper/SwipeableBottomDrawer';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProfileReviewsSection from './ProfileReviewsSection';
 import ProfileTradesSection from './ProfileTradesSection';
 import ProfilePostsSection from './ProfilePostsSection';
@@ -150,6 +151,9 @@ const ProfileBottomDrawer = ({
   const { updateLocalState, localState } = useLocalState();
   const { t } = useTranslation();
   const { triggerHapticFeedback } = useHaptic();
+  // Modals are edge-to-edge on Android (targetSdk 36): the drawer's last row
+  // must clear the system nav bar itself.
+  const insets = useSafeAreaInsets();
 
   const isDarkMode = theme === 'dark';
   const c = getThemeColors(isDarkMode);
@@ -1768,7 +1772,7 @@ const ProfileBottomDrawer = ({
               borderTopLeftRadius: 20,
               borderTopRightRadius: 20,
               maxHeight: '85%',
-              paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+              paddingBottom: Math.max(insets.bottom, 20),
             }}
           >
             {/* Header */}
@@ -1842,7 +1846,7 @@ const ProfileBottomDrawer = ({
         </Pressable>
       </Modal>
     );
-  }, [selectedPost, isDarkMode, avatar, userName, screenWidth]);
+  }, [selectedPost, isDarkMode, avatar, userName, screenWidth, insets.bottom]);
 
   // ── Default gradient — neutral gray ──
   const DEFAULT_BANNER = ['#64748b', '#94a3b8', '#cbd5e1'];
@@ -1930,7 +1934,7 @@ const ProfileBottomDrawer = ({
             </View>
 
             {/* ═══ CONTENT AREA (white/dark bg below banner) ═══ */}
-            <View style={{ backgroundColor: c.bg, paddingBottom: 12 }}>
+            <View style={{ backgroundColor: c.bg, paddingBottom: 12 + insets.bottom }}>
 
               {/* ═══ CENTERED AVATAR (overlapping banner) ═══ */}
               <View style={{ alignItems: 'center', marginTop: -36, zIndex: 10 }}>

@@ -73,6 +73,7 @@
     "business_enquiries_desc": "Para colaboraciones, alianzas u otras consultas comerciales, escríbenos a:",
     "child_safety_standards": "Normas de seguridad infantil",
     "privacy_policy": "Política de privacidad",
+    "privacy_options": "Opciones de privacidad",
     "report_abusive_content": "Denunciar contenido abusivo",
     "upload_photo": "Subir foto",
     "search_items": "Buscar objetos...",
@@ -170,7 +171,7 @@
     "wishlist": "Lista de deseos",
     "high": "▲ Alto",
     "low": "▼ Bajo",
-    "filter": "Filtrar",
+    "filter": "Ordenar",
     "done": "Listo",
     "reward": "Recompensa",
     "my_items": "Mis objetos",
@@ -263,7 +264,8 @@
     "legal_prefix": "Al continuar, aceptas nuestros ",
     "legal_terms": "Términos",
     "legal_and": " y la ",
-    "legal_privacy": "Política de privacidad"
+    "legal_privacy": "Política de privacidad",
+    "restoring": "Cargando tu cuenta…"
   },
   "tabs": {
     "calculator": "Calculadora",
@@ -678,7 +680,7 @@
     "already_claimed": "✅ ¡Ya has recogido la de hoy! Vuelve mañana",
     "day": "Día",
     "tap": "¡TOCA!",
-    "cycle_info": "Ciclo {{cycle}} · {{stars}} estrellas ganadas",
+    "cycle_info": "Ciclo {{cycle}} · Estrellas ganadas: {{stars}}",
     "welcome_back": "¡Hola de nuevo!",
     "keep_going": "¡Sigue así!",
     "hat_trick": "¡Triplete!",
@@ -843,7 +845,9 @@
       "error_title": "¡Vaya! 😢",
       "error_msg": "Algo ha fallado. Inténtalo de nuevo.",
       "oops": "¡Ups! 😅",
-      "failed_hatch": "No se ha podido abrir el huevo"
+      "failed_hatch": "No se ha podido abrir el huevo",
+      "no_ad_title": "Ahora no hay vídeo 📺",
+      "no_ad_msg": "Ahora mismo no hay ningún anuncio disponible. ¡Prueba otra vez en un minuto!"
     },
     "rewards": {
       "reward_type_frame": "🖼️ Marco de perfil",

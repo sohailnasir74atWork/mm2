@@ -73,6 +73,7 @@
     "business_enquiries_desc": "コラボ、提携、その他ビジネスに関するお問い合わせは、こちらまでお気軽にご連絡ください：",
     "child_safety_standards": "子どもの安全基準",
     "privacy_policy": "プライバシーポリシー",
+    "privacy_options": "プライバシー設定",
     "report_abusive_content": "不適切なコンテンツを通報",
     "upload_photo": "写真をアップロード",
     "search_items": "アイテムを検索…",
@@ -263,7 +264,8 @@
     "legal_prefix": "続行すると、以下に同意したものとみなされます： ",
     "legal_terms": "利用規約",
     "legal_and": " と ",
-    "legal_privacy": "プライバシーポリシー"
+    "legal_privacy": "プライバシーポリシー",
+    "restoring": "アカウントを読み込み中…"
   },
   "tabs": {
     "calculator": "計算機",
@@ -841,7 +843,9 @@
       "error_title": "エラー 😢",
       "error_msg": "問題が発生しました。もう一度お試しください。",
       "oops": "おっと！😅",
-      "failed_hatch": "タマゴを孵化できませんでした"
+      "failed_hatch": "タマゴを孵化できませんでした",
+      "no_ad_title": "今は動画がありません 📺",
+      "no_ad_msg": "いま再生できる広告がありません。少し待ってからもう一度試してね！"
     },
     "rewards": {
       "reward_type_frame": "🖼️ プロフィールフレーム",

@@ -13,7 +13,7 @@ import { getThemeColors } from '../../Helper/themeColors';
  *   Exclusive → Full ornamental frame + all effects + Lottie
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { View, Image } from 'react-native';
 import Svg, {
   Path,
@@ -997,6 +997,10 @@ const renderDecorations = ({
   return <>{elements}</>;
 };
 
+// Shown when a stored avatar URL no longer loads (e.g. retired preset images
+// that now 404) — better than an empty grey circle.
+const FALLBACK_AVATAR = 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
+
 // ════════════════════════════════════════════════════════════
 //  FRAMED AVATAR COMPONENT
 // ════════════════════════════════════════════════════════════
@@ -1017,6 +1021,21 @@ const FramedAvatar = ({
   const borderColors = frame?.borderColors || [];
   const glowColor = frame?.glowColor || null;
   const primaryColor = borderColors[0] || '#94a3b8';
+
+  const [failedUri, setFailedUri] = useState(null);
+  const shownUri = avatarUri && avatarUri === failedUri ? FALLBACK_AVATAR : avatarUri;
+  const markFailed = () => { if (avatarUri !== FALLBACK_AVATAR) setFailedUri(avatarUri); };
+
+  // SvgImage has no error callback, so framed avatars probe the URL up front.
+  useEffect(() => {
+    if (!def || !avatarUri || avatarUri === FALLBACK_AVATAR) return;
+    let alive = true;
+    Image.prefetch(avatarUri)
+      .then(ok => { if (alive && !ok) setFailedUri(avatarUri); })
+      .catch(() => { if (alive) setFailedUri(avatarUri); });
+    return () => { alive = false; };
+  }, [def, avatarUri]);
+
   // ── No frame: simple circular avatar ──
   if (!frame || !def) {
     const showOnline = isOnline !== undefined && avatarSize >= 40;
@@ -1031,9 +1050,10 @@ const FramedAvatar = ({
           backgroundColor: c.border,
           alignItems: 'center', justifyContent: 'center',
         }}>
-          {avatarUri ? (
+          {shownUri ? (
             <Image
-              source={{ uri: avatarUri }}
+              source={{ uri: shownUri }}
+              onError={markFailed}
               style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }}
             />
           ) : null}
@@ -1229,9 +1249,9 @@ const FramedAvatar = ({
         })}
 
         {/* ── Layer 9: Avatar image ── */}
-        {avatarUri ? (
+        {shownUri ? (
           <SvgImage
-            href={{ uri: avatarUri }}
+            href={{ uri: shownUri }}
             x={cx - innerR}
             y={cy - innerR}
             width={innerR * 2}

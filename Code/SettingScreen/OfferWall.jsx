@@ -158,7 +158,7 @@ const CLOSE_TIMER_SECONDS = 5;
 
 // ── What Pro actually unlocks ──
 // Every line is a real gate in this codebase, not a marketing claim:
-//   noads   → bannerAds / openApp / IntAd / NativeAdManager skip Pro, and
+//   noads   → bannerAds / openApp / IntAd / FeedBannerAd skip Pro, and
 //             Trades.jsx stops injecting an ad row every 8 trades
 //   boost   → Trades.jsx handleMakeFeatureTrade is Pro-only: 2 boosts per 24h,
 //             12 hours each, no rewarded video (free users get 1, with a video)

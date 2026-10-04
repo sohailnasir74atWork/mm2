@@ -39,10 +39,9 @@ import config from '../Helper/Environment';
 import { getMyCosmetics } from '../Helper/cosmeticsCache';
 import { Platform } from 'react-native';
 import { showMessage } from 'react-native-flash-message';
-import NativeAdCard from '../Ads/NativeAdCard';
+import FeedBannerAd from '../Ads/FeedBannerAd';
 import PollCard from '../Engagement/PollCard';
 import EventCard from '../Engagement/EventScreen';
-import { releaseByPrefix as releaseNativeAds } from '../Ads/NativeAdManager';
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
 import { ABOVE_BANNER, bannerAware, FLOATING_BUTTON_ICON_SIZE, FLOATING_BUTTON_RIGHT } from '../Helper/floatingButtonLayout';
@@ -133,10 +132,6 @@ const DesignFeedScreen = ({ route }) => {
 
   }, [localState.bannedUsers]);
 
-  // Free this feed's native ad handles on unmount (keys are prefixed 'ad-').
-  useEffect(() => {
-    return () => releaseNativeAds('ad-');
-  }, []);
   // console.log('mainscreen')
   const fetchMyPosts = async (tag = null) => {
     if (!user?.id) return;
@@ -175,7 +170,11 @@ const DesignFeedScreen = ({ route }) => {
     }
   };
   
-  const deleteUsersLatestPosts = async (userId, n = 15) => {
+  // The handlers handed to PostCard are useCallback'd: its memo compares them
+  // by identity, and fresh functions every render re-rendered every mounted
+  // card on each page load and poll vote — the "deep in the feed it freezes"
+  // reviews.
+  const deleteUsersLatestPosts = useCallback(async (userId, n = 15) => {
     if (!userId) throw new Error('userId is required');
   
     const q = query(
@@ -198,7 +197,7 @@ const DesignFeedScreen = ({ route }) => {
   
     await batch.commit();
     return ids;
-  };
+  }, [firestoreDB]);
   
   // useEffect(() => {
   //   nativeAdPool.fillIfNeeded();
@@ -234,7 +233,7 @@ const DesignFeedScreen = ({ route }) => {
 
 
   const skeletonArray = useMemo(() => Array.from({ length: 5 }), []);
-    const handleDeletePost = async (postId) => {
+    const handleDeletePost = useCallback(async (postId) => {
       try {
         await deleteDoc(doc(firestoreDB, 'designPosts', postId));
         setPosts(prev => prev.filter(p => p.id !== postId));
@@ -242,7 +241,7 @@ const DesignFeedScreen = ({ route }) => {
       } catch (err) {
         showMessage({ message: t('feed.delete_failed'), type: 'danger' });
       }
-    };
+    }, [firestoreDB, t]);
     
 
 
@@ -376,7 +375,7 @@ const DesignFeedScreen = ({ route }) => {
     }
   };
 
-  const handleLike = async (post) => {
+  const handleLike = useCallback(async (post) => {
     if (!user?.id) return;
     const postRef = doc(firestoreDB, 'designPosts', post.id);
     const alreadyLiked = !!post.likes?.[user.id];
@@ -412,7 +411,7 @@ const DesignFeedScreen = ({ route }) => {
       setMyPosts(rollback);
       setRankedPosts(rollback);
     }
-  };
+  }, [user?.id, firestoreDB]);
 
   // UploadModal still passes the poster's email as a 4th argument; it is
   // deliberately not taken (see the post body below).
@@ -527,15 +526,15 @@ const DesignFeedScreen = ({ route }) => {
     }
   };
   
-  const renderItem = ({ item, index }) => {
+  const renderItem = useCallback(({ item }) => {
     if (initialLoading) {
       return <View style={[styles.skeletonPost, isDarkMode && { backgroundColor: '#444' }]} />;
     }
 
-    // Native ad slot interleaved into the feed (collapses to nothing when
+    // In-feed ad slot interleaved into the feed (collapses to nothing when
     // unfilled or for Pro users, so the feed never shows a blank gap).
     if (item?.__type === 'ad') {
-      return <NativeAdCard adKey={item.id} isDarkMode={isDarkMode} />;
+      return <FeedBannerAd adKey={item.id} isDarkMode={isDarkMode} />;
     }
 
     // Seasonal event. Renders nothing when no event is running or near.
@@ -565,11 +564,10 @@ const DesignFeedScreen = ({ route }) => {
         roleRosterVersion={roleRosterVersion}
         onDelete={handleDeletePost}
         onDeleteAll={deleteUsersLatestPosts}
-
-
       />
     );
-  };
+  }, [initialLoading, isDarkMode, user, firestoreDB, handleLike, localState,
+    appdatabase, roleRosterVersion, handleDeletePost, deleteUsersLatestPosts]);
 
   // const dataToRender = initialLoading
   //   ? skeletonArray
@@ -631,6 +629,11 @@ const DesignFeedScreen = ({ route }) => {
         extraData={roleRosterVersion}
         onEndReached={loadMorePosts}
         onEndReachedThreshold={0.5}
+        // The default window (21 screens) kept 30–50 cards mounted once deep
+        // in the feed; these match the trade list.
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={5}
         refreshing={refreshing}
         contentContainerStyle={{ paddingBottom: 180 }}
         onRefresh={() => {

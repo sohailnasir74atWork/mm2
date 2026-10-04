@@ -93,6 +93,7 @@
     "business_enquiries_desc": "Für Kooperationen, Partnerschaften oder andere geschäftliche Anfragen schreib uns gern an:",
     "child_safety_standards": "Kinderschutz-Standards",
     "privacy_policy": "Datenschutzerklärung",
+    "privacy_options": "Datenschutzoptionen",
     "report_abusive_content": "Missbrauch melden",
     "upload_photo": "Foto hochladen",
     "search_items": "Items suchen …",
@@ -229,7 +230,7 @@
     "wishlist": "Wunschliste",
     "high": "▲ Hoch",
     "low": "▼ Niedrig",
-    "filter": "Filter",
+    "filter": "Sortieren",
     "done": "Fertig",
     "items": "Gegenstände",
     "hd_wallpaper": "HD-Hintergrund",
@@ -381,7 +382,8 @@
     "legal_prefix": "Wenn du fortfährst, akzeptierst du unsere ",
     "legal_terms": "Nutzungsbedingungen",
     "legal_and": " und ",
-    "legal_privacy": "Datenschutzerklärung"
+    "legal_privacy": "Datenschutzerklärung",
+    "restoring": "Dein Konto wird geladen…"
   },
   "tabs": {
     "calculator": "Rechner",
@@ -850,7 +852,7 @@
     "already_claimed": "✅ Heute schon abgeholt! Komm morgen wieder",
     "day": "Tag",
     "tap": "TIPPEN!",
-    "cycle_info": "Runde #{{cycle}} · {{stars}} Sterne gesammelt",
+    "cycle_info": "Runde #{{cycle}} · Gesammelte Sterne: {{stars}}",
     "welcome_back": "Willkommen zurück!",
     "keep_going": "Weiter so!",
     "hat_trick": "Hattrick!",
@@ -1015,7 +1017,9 @@
       "error_title": "Fehler 😢",
       "error_msg": "Da ist etwas schiefgelaufen. Bitte versuch es noch mal.",
       "oops": "Ups! 😅",
-      "failed_hatch": "Ausbrüten hat nicht geklappt"
+      "failed_hatch": "Ausbrüten hat nicht geklappt",
+      "no_ad_title": "Gerade kein Video 📺",
+      "no_ad_msg": "Im Moment gibt's keine Werbung zum Anschauen. Versuch's in einer Minute nochmal!"
     },
     "rewards": {
       "reward_type_frame": "🖼️ Profilrahmen",

@@ -20,6 +20,9 @@ const config = {
   IOsRewarded: isNoman ? 'ca-app-pub-5740215782746766/8470806324' : '',
   IOsOpenApp: isNoman ? 'ca-app-pub-5740215782746766/9662267365' : '',
   IOsNative: isNoman ? 'ca-app-pub-5740215782746766/9167930659' : '',
+  // In-feed inline banner units (Code/Ads/FeedBannerAd.jsx); null = fall back to the anchored banner unit until the dedicated AdMob units are filled in.
+  andriodFeedBanner: 'ca-app-pub-5740215782746766/7645096771', // feed_inline_banner
+  IOsFeedBanner: 'ca-app-pub-5740215782746766/4598373448', // feed_inline_banner
   // No separate "game" interstitial units exist in this AdMob app, so the
   // IntAd A/B slot B points at the real interstitial unit (valid unit, no
   // no-fill). Create a 2nd interstitial unit per platform later for true A/B.

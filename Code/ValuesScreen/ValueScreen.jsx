@@ -229,19 +229,22 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
 
     // Apply sort
     if (sortOrder !== 'none') {
-      // Same key as before, computed ONCE per item: the comparator used to
-      // format and re-parse both values on every comparison (~30k calls for
-      // a full catalogue sort).
+      // Computed ONCE per item: the comparator used to format and re-parse
+      // both values on every comparison (~30k calls for a full catalogue
+      // sort). The key is the number, never the display text: toLocaleString
+      // writes "5 200" in Russian and "5.200" in German, which parseFloat read
+      // back as 5 and 5.2, so High→Low was scrambled outside English. Labels
+      // ("Award only", "x3 T1 Legendaries") still sort as 0, as before.
       const keyed = filtered.map((item) => ({
         item,
-        v: parseFloat(String(getItemValue(item)).replace(/,/g, '')) || 0,
+        v: displayValueText(item, valueSource) ? 0 : (priceOf(item, valueSource).value || 0),
       }));
       keyed.sort((a, b) => (sortOrder === 'asc' ? a.v - b.v : b.v - a.v));
       filtered = keyed.map((k) => k.item);
     }
 
     return filtered;
-  }, [parsedValuesData, searchText, selectedFilter, sortOrder, getItemValue, CATEGORIES]);
+  }, [parsedValuesData, searchText, selectedFilter, sortOrder, valueSource, CATEGORIES]);
 
   // Chat "My Items" mode: the user's My Stuff list matched against the live
   // catalog (fresh values, renderItem works unchanged), deduped, searchable.

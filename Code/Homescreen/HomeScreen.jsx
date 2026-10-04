@@ -29,6 +29,7 @@ import TradeCompletion from '../Engagement/TradeCompletion';
 import { addDoc, collection, serverTimestamp, doc, getDoc, setDoc } from '@react-native-firebase/firestore';
 import SubscriptionScreen from '../SettingScreen/OfferWall';
 import { SCREEN_GUTTER } from '../Helper/layout';
+import { matchesItemName } from '../Helper/itemSearch';
 
 const GRID_STEPS = [4, 8, 12, 16];
 
@@ -503,7 +504,7 @@ const HomeScreen = ({ selectedTheme }) => {
     return list
       .filter(item => {
         if (!item) return false;
-        const matchesSearch = item.name?.toLowerCase().includes(debouncedSearchText.toLowerCase());
+        const matchesSearch = !!item.name && matchesItemName(item.name, debouncedSearchText);
         const matchesType = selectedPetType === 'INVENTORY' ||
           selectedPetType === 'ALL' ||
           // categoryKey folds Supreme's plurals ("Godlies") into the chip's name.

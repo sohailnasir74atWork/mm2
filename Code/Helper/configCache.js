@@ -20,7 +20,7 @@ try {
   store = createMMKV({ id: 'config-cache' });
 } catch (e) {
   console.warn('[configCache] MMKV not available:', e.message);
-  store = { getString: () => undefined, set: () => {}, delete: () => {} };
+  store = { getString: () => undefined, set: () => {}, remove: () => {} };
 }
 
 const TTL = 6 * 60 * 60 * 1000; // 6 hours
@@ -89,7 +89,7 @@ export const getConfigNodes = async (db, nodes) => {
 /** Drop every cached config node. For a pull-to-refresh or a debug menu. */
 export const clearConfigCache = (nodes = []) => {
   try {
-    nodes.forEach((n) => store.delete(`cfg_${n}`));
+    nodes.forEach((n) => store.remove(`cfg_${n}`));
   } catch {
     // ignore
   }

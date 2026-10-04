@@ -94,6 +94,7 @@
     "business_enquiries_desc": "للتعاون أو الشراكات أو أي استفسار تجاري آخر، تواصل معنا عبر:",
     "child_safety_standards": "معايير سلامة الأطفال",
     "privacy_policy": "سياسة الخصوصية",
+    "privacy_options": "خيارات الخصوصية",
     "report_abusive_content": "الإبلاغ عن محتوى مسيء",
     "upload_photo": "رفع صورة",
     "search_items": "ابحث عن عنصر...",
@@ -234,7 +235,7 @@
     "wishlist": "قائمة الأمنيات",
     "high": "▲ الأعلى",
     "low": "▼ الأقل",
-    "filter": "تصفية",
+    "filter": "ترتيب",
     "done": "تم",
     "items": "عناصر",
     "hd_wallpaper": "خلفية HD",
@@ -389,7 +390,8 @@
     "legal_prefix": "بالمتابعة، أنت توافق على ",
     "legal_terms": "الشروط",
     "legal_and": " و ",
-    "legal_privacy": "سياسة الخصوصية"
+    "legal_privacy": "سياسة الخصوصية",
+    "restoring": "جارٍ تحميل حسابك…"
   },
   "tabs": {
     "calculator": "الحاسبة",
@@ -1028,7 +1030,9 @@
       "error_title": "خطأ 😢",
       "error_msg": "حدث خطأ ما. حاول مرة أخرى.",
       "oops": "أوه! 😅",
-      "failed_hatch": "تعذّر فقس البيضة"
+      "failed_hatch": "تعذّر فقس البيضة",
+      "no_ad_title": "لا يوجد فيديو الآن 📺",
+      "no_ad_msg": "ما في إعلان متاح حاليًا. جرّب مرة ثانية بعد دقيقة!"
     },
     "rewards": {
       "reward_type_frame": "🖼️ إطار الملف الشخصي",

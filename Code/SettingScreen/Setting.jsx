@@ -68,6 +68,7 @@ import PetModal from '../ChatScreen/PrivateChat/PetsModel';
 import { pickImages } from '../Helper/imagePicker';
 import FramedAvatar from '../ChatScreen/GroupChat/FramedAvatar';
 import { getMyCosmetics, syncMyCosmetics } from '../Helper/cosmeticsCache';
+import { usePrivacyOptionsRequired, showPrivacyOptionsForm } from '../Ads/consentOptions';
 // Bunny avatar upload (same zone/keys as your post uploader)
 const BUNNY_STORAGE_HOST = 'storage.bunnycdn.com';
 const BUNNY_STORAGE_ZONE = 'post-gag';
@@ -519,6 +520,9 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
 
   const { t } = useTranslation();
+  // EEA/UK/CH users must be able to revisit their ad-consent choice from the
+  // app menu (Google UMP requirement); everyone else never sees the row.
+  const privacyOptionsRequired = usePrivacyOptionsRequired();
   const BASE_ADOPTME_URL = 'https://elvebredd.com';
 
 
@@ -3162,6 +3166,14 @@ const formatPlanName = (plan) => {
             <Icon name="link-outline" size={18} color={'white'}  style={{backgroundColor:'green', padding:5, borderRadius:5}}/>
             <Text style={styles.optionText}>{t('settings.privacy_policy')}</Text>
           </TouchableOpacity>
+          {privacyOptionsRequired && (
+            <TouchableOpacity style={user?.id ? styles.option : styles.optionLast} onPress={() => {
+              showPrivacyOptionsForm(); triggerHapticFeedback('impactLight');
+            }}>
+              <Icon name="shield-checkmark-outline" size={18} color={'white'}  style={{backgroundColor:'green', padding:5, borderRadius:5}}/>
+              <Text style={styles.optionText}>{t('settings.privacy_options', { defaultValue: 'Privacy options' })}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={user?.id ? styles.option : styles.optionLast} onPress={() => {
             handleOpenChild(); triggerHapticFeedback('impactLight');
           }}>

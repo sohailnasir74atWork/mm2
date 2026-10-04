@@ -20,3 +20,12 @@ test('aliases do not match incidental substrings or unrelated items', () => {
   expect(matchesItemName('Dog', 'кошка')).toBe(false);
   expect(matchesItemName('Frost Dragon', 'теневой дракон')).toBe(false);
 });
+
+test('spacing and punctuation differences between catalogues still match', () => {
+  // MM2 spells the ancient "Log Chopper"; Supreme and players write "Logchopper".
+  expect(matchesItemName('Log Chopper', 'logchopper')).toBe(true);
+  expect(matchesItemName('Ice Wing', 'icewing')).toBe(true);
+  expect(matchesItemName("Nik's Scythe", 'niks scythe')).toBe(true);
+  expect(matchesItemName('Gold LogChopper', 'log chopper')).toBe(true);
+  expect(matchesItemName('Log Chopper', 'logchoppers')).toBe(false);
+});

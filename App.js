@@ -47,6 +47,13 @@ import OnboardingScreen from './Code/AppHelper/OnBoardingScreen';
 import { useTranslation } from 'react-i18next';
 import InterstitialAdManager from './Code/Ads/IntAd';
 import AppOpenAdManager from './Code/Ads/openApp';
+
+// The splash waits for login (isAppReady) but never longer than this from JS
+// start: most logins are well under it; a slower one lets the app open and
+// the profile fill in behind it (SigninDrawer never asks a signed-in player to
+// sign in meanwhile).
+const SPLASH_LOGIN_CAP_MS = 3000;
+const JS_STARTED_AT = Date.now();
 import { ensureAdsInitialized } from './Code/Ads/init';
 import { markAdsReady, whenAdsReady } from './Code/Ads/adsGate';
 import RNBootSplash from "react-native-bootsplash";
@@ -319,41 +326,31 @@ export default function AppWrapper() {
   const { theme } = useGlobalState();
 
   // App Open ad: start the manager once, after onboarding, for non-Pro users.
-  // It registers its OWN AppState listener and shows on every genuine
-  // background→foreground return (both iOS and Android) — frequency-capped,
-  // Pro-gated, and de-duped against interstitial/rewarded ads via the shared
-  // full-screen flag. Pro state is re-read from MMKV on every show, so a
-  // purchase mid-session immediately stops App Open ads.
+  // It registers its OWN AppState listener and shows on a genuine
+  // background→foreground return (both iOS and Android) — at most once per
+  // 30 min, Pro-gated, and de-duped against interstitial/rewarded ads via the
+  // shared full-screen flag. Pro state is re-read from MMKV on every show, so a
+  // purchase mid-session immediately stops App Open ads. Never at launch (see
+  // Code/Ads/openApp.js).
   //
-  // The manager itself starts only once consent has run (whenAdsReady). The
-  // cold-start decision is made right away, though, because the splash hide
-  // below waits on it: the cold-start ad is shown FROM the splash or not at
-  // all (budget, first-launch and 4h rules live in Code/Ads/openApp.js).
-  const [splashAdGateOpen, setSplashAdGateOpen] = useState(false);
-  const coldStartPrepared = useRef(false);
+  // The manager itself starts only once consent has run (whenAdsReady).
   useEffect(() => {
-    if (!coldStartPrepared.current) {
-      coldStartPrepared.current = true;
-      if (localState.showOnBoardingScreen || localState.isPro) {
-        AppOpenAdManager.skipColdStart();
-      } else {
-        AppOpenAdManager.prepareColdStart();
-      }
-      AppOpenAdManager.splashGate.then(() => setSplashAdGateOpen(true));
-      // Belt and braces: whatever the ad SDK does, the splash never stays
-      // more than 6s.
-      setTimeout(() => setSplashAdGateOpen(true), 6000);
-    }
     if (localState.showOnBoardingScreen || localState.isPro) return;
     let cancelled = false;
     whenAdsReady().then(() => { if (!cancelled) AppOpenAdManager.start(); });
     return () => { cancelled = true; };
   }, [localState.isPro, localState.showOnBoardingScreen]);
 
-  // ✅ Hide splash after UI ready — and after the cold-start ad has either
-  // opened over it or been skipped.
+  const [splashCapReached, setSplashCapReached] = useState(false);
   useEffect(() => {
-    if (localState.isAppReady && splashAdGateOpen) {
+    const id = setTimeout(() => setSplashCapReached(true),
+      Math.max(0, JS_STARTED_AT + SPLASH_LOGIN_CAP_MS - Date.now()));
+    return () => clearTimeout(id);
+  }, []);
+
+  // ✅ Hide splash once login is done (or the cap passed).
+  useEffect(() => {
+    if (localState.isAppReady || splashCapReached) {
       // Was InteractionManager.runAfterInteractions (deprecated in RN 0.83).
       // rAF defers to after the next frame commits, which is what this needed
       // — and unlike requestIdleCallback it cannot be starved, so the splash
@@ -363,7 +360,7 @@ export default function AppWrapper() {
       });
       return () => cancelAnimationFrame(raf);
     }
-  }, [localState.isAppReady, splashAdGateOpen]);
+  }, [localState.isAppReady, splashCapReached]);
 
   const selectedTheme = useMemo(() => {
     return theme === 'dark' ? MyDarkTheme : MyLightTheme;

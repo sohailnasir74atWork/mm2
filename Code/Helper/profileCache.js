@@ -36,7 +36,7 @@ try {
   cache = {
     getString: () => undefined,
     set: () => {},
-    delete: () => {},
+    remove: () => {},
   };
 }
 // 6 hours. Was 30 minutes, which is what a Supabase-backed build needed to
@@ -77,7 +77,7 @@ export const getCachedProfile = (uid) => {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (Date.now() - parsed.t > TTL) {
-      cache.delete(`p_${uid}`);
+      cache.remove(`p_${uid}`);
       return null;
     }
     return parsed.d;
@@ -298,7 +298,7 @@ export const getCachedFullProfile = (uid) => {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (Date.now() - parsed.t > TTL) {
-      cache.delete(FULL_KEY(uid));
+      cache.remove(FULL_KEY(uid));
       return null;
     }
     return parsed.d;
@@ -343,8 +343,8 @@ export const invalidateFullProfile = (uid) => {
   // BOTH keys. They are two projections of the same record, so clearing only
   // the raw one left the chat rows and online list showing a removed role
   // badge for up to the full TTL.
-  try { cache.delete(FULL_KEY(uid)); } catch {}
-  try { cache.delete(`p_${uid}`); } catch {}
+  try { cache.remove(FULL_KEY(uid)); } catch {}
+  try { cache.remove(`p_${uid}`); } catch {}
 };
 
 // Read the raw /users/{uid} once, cache it, return it. Returns null on missing.

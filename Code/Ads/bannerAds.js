@@ -42,11 +42,17 @@ const BannerAdComponent = ({
   // network). The <BannerAd> won't re-request on its own until something
   // forces a remount, so the slot would stay blank for the whole screen
   // visit — a silently lost impression on every such screen. We bump
-  // reloadKey (used as the BannerAd `key`) after a delay to force one fresh
-  // request. Once an ad has loaded, the SDK's own auto-refresh takes over and
-  // we stop interfering, so we never remount a working banner.
+  // reloadKey (used as the BannerAd `key`) after a delay to force exactly
+  // ONE fresh request. Once an ad has loaded, the SDK's own auto-refresh takes
+  // over and we stop interfering, so we never remount a working banner.
+  //
+  // Exactly one: the timer ref is nulled when it fires and hasEverLoaded
+  // stays false after a second no-fill, so without `retriedOnce` the retry
+  // re-armed every 30s for as long as the banner was mounted — an unbounded
+  // request loop per slot in no-fill geos (the same answer every time).
   const [reloadKey, setReloadKey] = useState(0);
   const hasEverLoaded = useRef(false);
+  const retriedOnce = useRef(false);
   const retryTimer = useRef(null);
 
   const handleAdLoaded = useCallback(() => {
@@ -56,8 +62,10 @@ const BannerAdComponent = ({
 
   const handleAdFailedToLoad = useCallback(() => {
     setIsAdLoaded(false);
-    // Only nudge the first-ever load; let the SDK own refresh failures.
-    if (hasEverLoaded.current || retryTimer.current) return;
+    // Only nudge the first-ever load, and only once; let the SDK own refresh
+    // failures.
+    if (hasEverLoaded.current || retriedOnce.current || retryTimer.current) return;
+    retriedOnce.current = true;
     retryTimer.current = setTimeout(() => {
       retryTimer.current = null;
       setReloadKey((k) => k + 1);

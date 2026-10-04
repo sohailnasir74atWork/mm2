@@ -91,6 +91,7 @@
     "business_enquiries_desc": "Pour une collaboration, un partenariat ou toute autre demande professionnelle, écris-nous à :",
     "child_safety_standards": "Normes de sécurité des enfants",
     "privacy_policy": "Politique de confidentialité",
+    "privacy_options": "Options de confidentialité",
     "report_abusive_content": "Signaler un contenu abusif",
     "upload_photo": "Importer une photo",
     "search_items": "Rechercher des objets…",
@@ -225,7 +226,7 @@
     "wishlist": "Liste d'envies",
     "high": "▲ Valeur haute",
     "low": "▼ Valeur basse",
-    "filter": "Filtrer",
+    "filter": "Trier",
     "done": "Terminé",
     "items": "Articles",
     "hd_wallpaper": "Fond HD",
@@ -378,7 +379,8 @@
     "legal_prefix": "En continuant, tu acceptes nos ",
     "legal_terms": "Conditions d'utilisation",
     "legal_and": " et notre ",
-    "legal_privacy": "Politique de confidentialité"
+    "legal_privacy": "Politique de confidentialité",
+    "restoring": "Chargement de ton compte…"
   },
   "tabs": {
     "calculator": "Calculateur",
@@ -847,7 +849,7 @@
     "already_claimed": "✅ Déjà récupérées aujourd'hui ! Reviens demain",
     "day": "Jour",
     "tap": "APPUIE !",
-    "cycle_info": "Cycle n° {{cycle}} · {{stars}} étoiles gagnées",
+    "cycle_info": "Cycle n° {{cycle}} · Étoiles gagnées : {{stars}}",
     "welcome_back": "Content de te revoir !",
     "keep_going": "Continue comme ça !",
     "hat_trick": "Coup du chapeau !",
@@ -1013,7 +1015,9 @@
       "error_title": "Erreur 😢",
       "error_msg": "Un problème est survenu. Réessaie.",
       "oops": "Oups ! 😅",
-      "failed_hatch": "L'œuf n'a pas pu éclore"
+      "failed_hatch": "L'œuf n'a pas pu éclore",
+      "no_ad_title": "Pas de vidéo pour l'instant 📺",
+      "no_ad_msg": "Aucune pub n'est dispo pour le moment. Réessaie dans une minute !"
     },
     "rewards": {
       "reward_type_frame": "🖼️ Cadre de profil",

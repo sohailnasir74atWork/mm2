@@ -100,6 +100,7 @@
     "business_enquiries_desc": "For collaborations, partnerships, or other business-related queries, feel free to contact us at:",
     "child_safety_standards": "Child Safety Standards",
     "privacy_policy": "Privacy Policy",
+    "privacy_options": "Privacy options",
     "report_abusive_content": "Report Abusive Content",
     "upload_photo": "Upload Photo",
     "search_items": "Search items...",
@@ -240,7 +241,7 @@
     "wishlist": "Wishlist",
     "high": "▲ High",
     "low": "▼ Low",
-    "filter": "Filter",
+    "filter": "Sort",
     "done": "Done",
     "items": "Items",
     "hd_wallpaper": "HD Wallpaper",
@@ -395,7 +396,8 @@
     "legal_prefix": "By continuing, you agree to our ",
     "legal_terms": "Terms",
     "legal_and": " and ",
-    "legal_privacy": "Privacy Policy"
+    "legal_privacy": "Privacy Policy",
+    "restoring": "Loading your account…"
   },
   "tabs": {
     "calculator": "Calculator",
@@ -1085,7 +1087,7 @@
     "already_claimed": "✅ Already claimed today! Come back tomorrow",
     "day": "Day",
     "tap": "TAP!",
-    "cycle_info": "Cycle #{{cycle}} · {{stars}} stars earned",
+    "cycle_info": "Cycle #{{cycle}} · Stars earned: {{stars}}",
     "welcome_back": "Welcome back!",
     "keep_going": "Keep going!",
     "hat_trick": "Hat trick!",
@@ -1257,7 +1259,9 @@
       "error_title": "Error 😢",
       "error_msg": "Something went wrong. Please try again.",
       "oops": "Oops! 😅",
-      "failed_hatch": "Failed to hatch egg"
+      "failed_hatch": "Failed to hatch egg",
+      "no_ad_title": "No video right now 📺",
+      "no_ad_msg": "There's no ad to watch at the moment. Try again in a minute!"
     },
     "rewards": {
       "reward_type_frame": "🖼️ Profile Frame",

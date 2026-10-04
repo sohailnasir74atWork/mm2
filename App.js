@@ -327,15 +327,33 @@ export default function AppWrapper() {
 
   // App Open ad: start the manager once, after onboarding, for non-Pro users.
   // It registers its OWN AppState listener and shows on a genuine
-  // background→foreground return (both iOS and Android) — at most once per
-  // 30 min, Pro-gated, and de-duped against interstitial/rewarded ads via the
-  // shared full-screen flag. Pro state is re-read from MMKV on every show, so a
-  // purchase mid-session immediately stops App Open ads. Never at launch (see
-  // Code/Ads/openApp.js).
+  // background→foreground return (both iOS and Android) under the shared
+  // policy in Code/Ads/adPolicy.js (APP_OPEN_MIN_INTERVAL_MS /
+  // APP_OPEN_MIN_BACKGROUND_MS), Pro-gated, and de-duped against
+  // interstitial/rewarded ads via the shared full-screen flag. Pro state is
+  // re-read from MMKV on every show, so a purchase mid-session immediately
+  // stops App Open ads.
   //
   // The manager itself starts only once consent has run (whenAdsReady).
+  // Cold-start App Open ad: decided once per launch, shown FROM the splash or
+  // not at all (budget, first-launch and 4 h rules live in Code/Ads/adPolicy.js
+  // and Code/Ads/openApp.js — the same flow as Adopt Me / Blox / Fisch).
+  const [splashAdGateOpen, setSplashAdGateOpen] = useState(false);
+  const coldStartPrepared = useRef(false);
   useEffect(() => {
-    if (localState.showOnBoardingScreen || localState.isPro) return;
+    if (!coldStartPrepared.current) {
+      coldStartPrepared.current = true;
+      if (localState.showOnBoardingScreen || localState.isPro) {
+        AppOpenAdManager.skipColdStart();
+      } else {
+        AppOpenAdManager.prepareColdStart();
+      }
+      AppOpenAdManager.splashGate.then(() => setSplashAdGateOpen(true));
+      // Belt and braces: whatever the ad SDK does, the splash never stays
+      // more than 6 s.
+      setTimeout(() => setSplashAdGateOpen(true), 6000);
+    }
+    if (localState.showOnBoardingScreen || localState.isPro) return undefined;
     let cancelled = false;
     whenAdsReady().then(() => { if (!cancelled) AppOpenAdManager.start(); });
     return () => { cancelled = true; };
@@ -350,7 +368,7 @@ export default function AppWrapper() {
 
   // ✅ Hide splash once login is done (or the cap passed).
   useEffect(() => {
-    if (localState.isAppReady || splashCapReached) {
+    if ((localState.isAppReady || splashCapReached) && splashAdGateOpen) {
       // Was InteractionManager.runAfterInteractions (deprecated in RN 0.83).
       // rAF defers to after the next frame commits, which is what this needed
       // — and unlike requestIdleCallback it cannot be starved, so the splash
@@ -360,7 +378,7 @@ export default function AppWrapper() {
       });
       return () => cancelAnimationFrame(raf);
     }
-  }, [localState.isAppReady, splashCapReached]);
+  }, [localState.isAppReady, splashCapReached, splashAdGateOpen]);
 
   const selectedTheme = useMemo(() => {
     return theme === 'dark' ? MyDarkTheme : MyLightTheme;

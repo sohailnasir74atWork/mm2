@@ -20,6 +20,7 @@ import {
   NO_FILL_RETRY_MS,
   INTERSTITIAL_EXPIRY_MS,
   POST_SHOW_RELOAD_MS,
+  INTERSTITIAL_COOLDOWN_MS,
   isNoFillError,
 } from './adPolicy';
 
@@ -85,7 +86,7 @@ class InterstitialAdManager {
   // caller's callback immediately so content is never blocked. Two minutes,
   // not the old 30s: "so many ads" was the most common Play review complaint.
   static lastShownAt = 0;
-  static COOLDOWN_MS = 2 * 60 * 1000;
+  static COOLDOWN_MS = INTERSTITIAL_COOLDOWN_MS;
 
   // ✅ How long to wait for OPENED before treating the presentation as failed.
   static SHOW_WATCHDOG_MS = 5000;
@@ -382,7 +383,7 @@ class InterstitialAdManager {
       this.isShowing = false;
       if (!didShow) {
         // Nothing reached the screen, so nothing was consumed: don't burn the
-        // 2-minute frequency cap on an impression the user never saw.
+        // cooldown on an impression the user never saw.
         this.lastShownAt = 0;
       }
       // Preload the next one: the user just proved they hit ad triggers,

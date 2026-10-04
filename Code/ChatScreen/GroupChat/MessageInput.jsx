@@ -8,6 +8,7 @@ import { useHaptic } from '../../Helper/HepticFeedBack';
 import { useTranslation } from 'react-i18next';
 import { useLocalState } from '../../LocalGlobelStats';
 import InterstitialAdManager from '../../Ads/IntAd';
+import { CHAT_MESSAGES_PER_AD } from '../../Ads/adPolicy';
 import { useGlobalState } from '../../GlobelStats';
 import { validateContent } from '../../Helper/ContentModeration';
 import { showMessage } from 'react-native-flash-message';
@@ -126,13 +127,13 @@ const MessageInput = ({
       const newCount = messageCount + 1;
       setMessageCount(newCount);
 
-      if (!localState?.isPro && newCount % 7 === 0) {
+      if (!localState?.isPro && newCount % CHAT_MESSAGES_PER_AD === 0) {
         // Show ad only if user is NOT pro
         InterstitialAdManager.showAd(adCallback);
       } else {
         // One message before the ad message: warm the interstitial so the
         // trigger actually has something to show (lazy-load pipeline).
-        if (!localState?.isPro && newCount % 7 === 6) InterstitialAdManager.prepare();
+        if (!localState?.isPro && newCount % CHAT_MESSAGES_PER_AD === CHAT_MESSAGES_PER_AD - 1) InterstitialAdManager.prepare();
         setIsSending(false);
       }
     } catch (error) {

@@ -6,6 +6,8 @@ import {
 import { showMessage } from 'react-native-flash-message';
 import firestore from '@react-native-firebase/firestore';
 import { useLocalState } from '../../LocalGlobelStats';
+import { useGlobalState } from '../../GlobelStats';
+import { postReportCrossesBan } from '../../Helper/reportLedger';
 import { useTranslation } from 'react-i18next';
 import { ModalKeyboardView } from '../../Helper/keyboardAvoidingContainer';
 
@@ -13,6 +15,7 @@ const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
   const [reportText, setReportText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const {updateLocalState, localState} = useLocalState()
+  const { user } = useGlobalState();
   const { t } = useTranslation();
 // console.log(localState.bannedUsers)
 
@@ -83,21 +86,39 @@ const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
   
         const currentCount = snap.get('reportCount') || 0;
         const nextCount = currentCount + 1;
-  
+
+        // No reporter ledger on feed posts: designPosts is world-readable, so a
+        // `reportedBy` list would show every reporter's uid to anyone, and the
+        // Firestore rules (isPostReport) refuse it. Chat reports keep theirs in
+        // RTDB chat_reports. The reporter's app hides the author afterwards
+        // (bannedUsers below), and the server bans only at reportCount >= 2.
+
         // Keep legacy boolean 'report' if your UI needs it
         const updates = {
           reportCount: nextCount,
           report: true,
         };
-  
+
         // prevent double-ban by storing a flag
         const alreadyBanned = !!snap.get('banned');
-        const shouldBan = !alreadyBanned && nextCount >= REPORT_THRESHOLD;
-  
-        if (shouldBan) {
+        if (!alreadyBanned && nextCount >= REPORT_THRESHOLD) {
           updates.banned = true; // mark so future transactions don't re-ban
         }
-  
+
+        // The same test the server runs (autoBanOnPostReports), on the post
+        // as it is now and as this report leaves it.
+        const before = {
+          banned: snap.get('banned'),
+          reportCount: currentCount,
+          userId: snap.get('userId'),
+        };
+        const after = {
+          ...before,
+          banned: updates.banned === true ? true : before.banned,
+          reportCount: nextCount,
+        };
+        const shouldBan = postReportCrossesBan(before, after);
+
         tx.update(postRef, updates);
   
         return {
@@ -112,7 +133,6 @@ const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
         showMessage({ message: t('feed.post_not_found'), type: 'danger' });
         return;
       }
-  
       // Side-effects OUTSIDE the transaction to avoid retries breaking things
       //
       // Only posts made by older builds still carry `email`. For every other

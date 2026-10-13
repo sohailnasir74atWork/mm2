@@ -26,7 +26,7 @@ import { showSuccessMessage } from '../../Helper/MessageHelper';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useHaptic } from '../../Helper/HepticFeedBack';
 import SwipeableBottomDrawer from '../../Helper/SwipeableBottomDrawer';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useModalWindowInsets } from '../../Helper/useNavBarInset';
 import ProfileReviewsSection from './ProfileReviewsSection';
 import ProfileTradesSection from './ProfileTradesSection';
 import ProfilePostsSection from './ProfilePostsSection';
@@ -170,7 +170,10 @@ const ProfileBottomDrawer = ({
   const { triggerHapticFeedback } = useHaptic();
   // Modals are edge-to-edge on Android (targetSdk 36): the drawer's last row
   // must clear the system nav bar itself.
-  const insets = useSafeAreaInsets();
+  // Both sheets here (profile drawer, post viewer) are inside a <Modal>: on
+  // iOS useSafeAreaInsets() reads 0 there (App.js's root SafeAreaView pads
+  // instead), so they take the window's insets. Android: unchanged.
+  const insets = useModalWindowInsets();
 
   const isDarkMode = theme === 'dark';
   const c = getThemeColors(isDarkMode);

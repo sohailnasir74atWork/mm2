@@ -30,6 +30,12 @@
  *     banned by the reporter's own app exactly as before, so the two paths
  *     never both fire (and the "delete latest 15 posts" never runs twice).
  *
+ * 📅 2026-10-13: report ledger (reportLedgerCore.js). One account reporting
+ * the same message or post twice used to be enough. New builds record each
+ * reporter (chat_reports/{room}/{msg}/{uid}, designPosts.reportedBy); when
+ * that ledger exists, 2 DISTINCT reporters are required. Old builds write no
+ * ledger, so without one the counter alone still decides, as before.
+ *
  * Deploy:
  *   node -e "console.log(Object.keys(require('./functions')).filter(n=>/^autoBanOn/.test(n)).map(n=>'functions:'+n).join(','))"
  *   firebase deploy --only <that list> --project mm2vlaues-ed80c
@@ -39,7 +45,24 @@ const admin = require('firebase-admin');
 const { onValueUpdated } = require('firebase-functions/v2/database');
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { CHAT_CHANNEL_PATHS } = require('./chatChannels');
-const { db, encodeEmailForBan, banEmailFor, logModAction } = require('./_userEmail');
+const userEmail = require('./_userEmail');
+const { distinctReporters, ledgerAllowsBan, postReportCrossesBan } = require('./reportLedgerCore');
+
+const { encodeEmailForBan } = userEmail;
+
+// Everything that touches Firebase goes through here, so
+// test/reportAutoBan.test.js can swap in an in-memory database.
+const deps = {
+  db: () => userEmail.db(),
+  firestore: () => admin.firestore(),
+  banEmailFor: (uid) => userEmail.banEmailFor(uid),
+  logModAction: (row) => userEmail.logModAction(row),
+};
+const db = () => deps.db();
+
+// RTDB chat_reports/{room}/{msgId}/{uid}: true — written by ReportPopUp.jsx
+// (new builds) in the same multi-path update as the reportCount +1.
+const CHAT_REPORT_LEDGER = 'chat_reports';
 
 const OPTS = { region: 'us-central1', memory: '128MiB', timeoutSeconds: 60 };
 
@@ -87,23 +110,36 @@ const chatSentence = (strikeCount) =>
 //
 // onValueUpdated, not onValueWritten: message creation (reportCount 0) and
 // the nightly retention deletes are not updates, so neither wakes it.
-const makeMessageAutoBan = (path) => onValueUpdated({ ...OPTS, ref: `/${path}/{messageId}/reportCount` }, async (event) => {
-  const { messageId } = event.params;
-  const before = Number(event.data.before.val()) || 0;
-  const after = Number(event.data.after.val()) || 0;
-  if (after < MESSAGE_REPORT_THRESHOLD || after <= before) return null;
+//
+// Returns a short outcome string (the tests read it; the trigger ignores it).
+const handleMessageReport = async (path, messageId, beforeVal, afterVal) => {
+  const before = Number(beforeVal) || 0;
+  const after = Number(afterVal) || 0;
+  if (after < MESSAGE_REPORT_THRESHOLD || after <= before) return 'below-threshold';
 
   const messageRef = db().ref(`${path}/${messageId}`);
+  const ledgerRef = db().ref(`${CHAT_REPORT_LEDGER}/${path}/${messageId}`);
   try {
     const message = (await messageRef.once('value')).val();
-    if (!message || typeof message !== 'object') return null;
+    if (!message || typeof message !== 'object') return 'missing';
 
     const senderId = message.senderId || null;
+
+    // New builds record each reporter. With a ledger, the counter alone is
+    // not enough: one account reporting twice must not ban. No ledger = an
+    // old build reported, judged on reportCount exactly as before.
+    const ledger = (await ledgerRef.once('value')).val();
+    if (!ledgerAllowsBan(ledger, senderId)) {
+      console.log(`[autoBanOnMessageReports] ${path}/${messageId}: reportCount ${after} but ${distinctReporters(ledger, senderId)} distinct reporter(s); waiting`);
+      return 'single-reporter';
+    }
+
     if (await isStaffUid(senderId)) {
       console.log(`[autoBanOnMessageReports] ${path}/${messageId}: sender ${senderId} is staff; not banned, message kept`);
-      return null;
+      return 'staff';
     }
-    const email = senderId ? await banEmailFor(senderId) : null;
+    const email = senderId ? await deps.banEmailFor(senderId) : null;
+    let outcome = 'removed';
 
     // Same guard the client had: no email, no ban — the message still goes.
     if (email) {
@@ -128,20 +164,31 @@ const makeMessageAutoBan = (path) => onValueUpdated({ ...OPTS, ref: `/${path}/{m
       };
       await banRef.set(record);
 
-      await logModAction({
+      await deps.logModAction({
         action: 'ban', targetEmail: email, targetUid: senderId, targetName: record.displayName,
         reason, strikeCount, bannedUntil, source: 'report',
         actorUid: 'system', actorName: 'Auto (message reports)', actorRole: 'system',
       });
       console.log(`[autoBanOnMessageReports] ${path}/${messageId}: sender ${senderId} → strike ${strikeCount}`);
+      outcome = 'banned';
     } else {
       console.log(`[autoBanOnMessageReports] ${path}/${messageId}: no email for sender ${senderId}; message removed only`);
     }
 
-    await messageRef.remove();
+    // The message and its ledger go together (retention sweeps the rest).
+    await db().ref().update({
+      [`${path}/${messageId}`]: null,
+      [`${CHAT_REPORT_LEDGER}/${path}/${messageId}`]: null,
+    });
+    return outcome;
   } catch (err) {
     console.error(`[autoBanOnMessageReports] ${path}/${messageId} failed:`, err.message);
+    return 'error';
   }
+};
+
+const makeMessageAutoBan = (path) => onValueUpdated({ ...OPTS, ref: `/${path}/{messageId}/reportCount` }, async (event) => {
+  await handleMessageReport(path, event.params.messageId, event.data.before.val(), event.data.after.val());
   return null;
 });
 
@@ -180,28 +227,34 @@ for (const path of CHAT_CHANNEL_PATHS) {
 // `false`/`true` and deletes nothing. This reproduces the working path.
 const POST_BAN_DELETE_LATEST = 15;
 
-exports.autoBanOnPostReports = onDocumentUpdated({ ...OPTS, document: 'designPosts/{postId}' }, async (event) => {
-  const before = event.data && event.data.before.data();
-  const after = event.data && event.data.after.data();
-  if (!before || !after) return null;
-  if (before.banned === true || after.banned !== true) return null;
-  if (after.email) return null;           // the reporter's app handles it
+//
+// When it fires (reportLedgerCore.postReportCrossesBan):
+//   no `reportedBy` (old builds)  `banned` flips false → true with
+//                                 reportCount ≥ 2 — unchanged from before.
+//                                 ReportModal sets `banned` on the report
+//                                 that reaches 2, in the same write as
+//                                 reportCount; a bare `banned: true` is not
+//                                 a report.
+//   `reportedBy` (new builds)     additionally needs 2 distinct reporters
+//                                 other than the author, and fires on the
+//                                 write that brings it there (which may come
+//                                 after `banned` was already set).
+const handlePostReport = async (postId, before, after) => {
+  if (!before || !after) return 'missing';
+  if (!postReportCrossesBan(before, after)) return 'not-crossing';
+  if (after.email) return 'client-handles';   // the reporter's app handles it
   const userId = after.userId;
-  if (!userId || userId === 'Anonymous') return null;
-  // ReportModal sets `banned` on the report that reaches 2, in the same
-  // write as reportCount. A bare `banned: true` is not a report.
-  if (!(Number(after.reportCount) >= 2)) return null;
+  if (!userId || userId === 'Anonymous') return 'no-author';
 
-  const { postId } = event.params;
   if (await isStaffUid(userId)) {
     console.log(`[autoBanOnPostReports] ${postId}: author ${userId} is staff; not banned`);
-    return null;
+    return 'staff';
   }
   try {
-    const email = await banEmailFor(userId);
+    const email = await deps.banEmailFor(userId);
     if (!email) {
       console.log(`[autoBanOnPostReports] ${postId}: no email for ${userId}; not banned`);
-      return null;
+      return 'no-email';
     }
 
     const banRef = db().ref(`banned_users_by_email_post/${encodeEmailForBan(email)}`);
@@ -217,19 +270,31 @@ exports.autoBanOnPostReports = onDocumentUpdated({ ...OPTS, document: 'designPos
 
     // DesignMainScreen.deleteUsersLatestPosts: newest 15 by the author.
     // Served by the (userId, createdAt desc) index the app already uses.
-    const latest = await admin.firestore().collection('designPosts')
+    const latest = await deps.firestore().collection('designPosts')
       .where('userId', '==', userId)
       .orderBy('createdAt', 'desc')
       .limit(POST_BAN_DELETE_LATEST)
       .get();
     if (!latest.empty) {
-      const batch = admin.firestore().batch();
+      const batch = deps.firestore().batch();
       latest.docs.forEach((doc) => batch.delete(doc.ref));
       await batch.commit();
     }
     console.log(`[autoBanOnPostReports] ${postId}: ${userId} post-banned (strike ${strikeCount}), ${latest.size} posts removed`);
+    return 'banned';
   } catch (err) {
     console.error(`[autoBanOnPostReports] ${postId} failed:`, err.message);
+    return 'error';
   }
+};
+
+exports.autoBanOnPostReports = onDocumentUpdated({ ...OPTS, document: 'designPosts/{postId}' }, async (event) => {
+  const before = event.data && event.data.before.data();
+  const after = event.data && event.data.after.data();
+  await handlePostReport(event.params.postId, before, after);
   return null;
 });
+
+// Not a function: test/reportAutoBan.test.js only. index.js exports the
+// triggers by name (`autoBanOn*`), so this never deploys.
+exports._internal = { deps, handleMessageReport, handlePostReport, isStaffUid, CHAT_REPORT_LEDGER };

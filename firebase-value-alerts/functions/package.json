@@ -3,7 +3,7 @@
   "description": "MM2 value-change push alerts (scheduled Cloud Function)",
   "main": "index.js",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "dependencies": {
     "firebase-admin": "^13.0.0",

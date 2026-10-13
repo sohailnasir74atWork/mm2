@@ -1229,6 +1229,7 @@
     "invalid_message": "Mensagem inválida. Não dá para denunciar.",
     "no_db": "Banco de dados indisponível. Tente de novo.",
     "submit_failed": "Falha ao enviar a denúncia. Tente de novo.",
+    "already_reported": "Você já denunciou isso.",
     "title": "Denunciar mensagem",
     "message_label": "Mensagem",
     "sender_label": "Remetente",

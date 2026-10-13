@@ -1092,6 +1092,7 @@
     "invalid_message": "Mensaje no válido. No se puede reportar.",
     "no_db": "La base de datos no está disponible. Intenta de nuevo.",
     "submit_failed": "No se pudo enviar el reporte. Intenta de nuevo.",
+    "already_reported": "Ya reportaste esto.",
     "title": "Reportar mensaje",
     "message_label": "Mensaje",
     "sender_label": "Remitente",

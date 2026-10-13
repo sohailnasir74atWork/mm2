@@ -1242,6 +1242,7 @@
     "invalid_message": "Invalid message. Unable to report.",
     "no_db": "Database not available. Please try again.",
     "submit_failed": "Failed to submit the report. Please try again.",
+    "already_reported": "You've already reported this.",
     "title": "Report Message",
     "message_label": "Message",
     "sender_label": "Sender",

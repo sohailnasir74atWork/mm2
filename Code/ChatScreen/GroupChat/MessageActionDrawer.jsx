@@ -14,7 +14,7 @@ import React, { useMemo, useCallback } from 'react';
 import { Modal, View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useModalWindowInsets } from '../../Helper/useNavBarInset';
 import SwipeableBottomDrawer from '../../Helper/SwipeableBottomDrawer';
 import config from '../../Helper/Environment';
 
@@ -42,7 +42,10 @@ const MessageActionDrawer = (props) => {
     isDarkMode,
   } = props;
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
+  // Inside a <Modal>: on iOS useSafeAreaInsets() reads 0 there (App.js's root
+  // SafeAreaView pads instead), so the sheet takes the window's insets.
+  // Android: the same numbers as before.
+  const insets = useModalWindowInsets();
 
   const myReaction = useMemo(() => {
     if (!message?.reactions || !userId) return null;

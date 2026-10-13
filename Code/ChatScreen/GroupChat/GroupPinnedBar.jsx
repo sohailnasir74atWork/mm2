@@ -19,7 +19,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useModalWindowInsets } from '../../Helper/useNavBarInset';
 import { flipInRTL } from '../../Helper/rtl';
 
 export const MAX_GROUP_PINS = 5;
@@ -38,7 +38,10 @@ const preview = (pin, t) => {
 export default function GroupPinnedBar(props) {
   const { pins, c, canManage, onJump, onUnpin } = props;
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
+  // Inside a <Modal>: on iOS useSafeAreaInsets() reads 0 there (App.js's root
+  // SafeAreaView pads instead), so the sheet takes the window's insets.
+  // Android: the same numbers as before.
+  const insets = useModalWindowInsets();
   const [index, setIndex] = useState(0);
   const [open, setOpen] = useState(false);
   const count = Array.isArray(pins) ? pins.length : 0;

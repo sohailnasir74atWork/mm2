@@ -1080,6 +1080,7 @@
     "invalid_message": "Ungültige Nachricht. Melden nicht möglich.",
     "no_db": "Datenbank nicht verfügbar. Bitte versuch es noch mal.",
     "submit_failed": "Die Meldung konnte nicht gesendet werden. Bitte versuch es noch mal.",
+    "already_reported": "Das hast du schon gemeldet.",
     "title": "Nachricht melden",
     "message_label": "Nachricht",
     "sender_label": "Absender",

@@ -74,9 +74,13 @@ exports.cleanupOldPublicChats = functions
         if (!snap.exists() || snap.numChildren() === 0) break;
 
         const updates = {};
-        snap.forEach((child) => { updates[`${path}/${child.key}`] = null; });
+        snap.forEach((child) => {
+          updates[`${path}/${child.key}`] = null;
+          // Its report ledger (reportAutoBan.js, chat_reports), if any.
+          updates[`chat_reports/${path}/${child.key}`] = null;
+        });
 
-        const n = Object.keys(updates).length;
+        const n = snap.numChildren();
         await db.ref().update(updates);   // one write for the whole batch
         deleted += n;
 

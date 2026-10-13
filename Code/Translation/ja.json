@@ -900,6 +900,7 @@
     "invalid_message": "無効なメッセージのため通報できません。",
     "no_db": "データベースを利用できません。もう一度お試しください。",
     "submit_failed": "通報を送信できませんでした。もう一度お試しください。",
+    "already_reported": "これはすでに通報済みです。",
     "title": "メッセージを通報",
     "message_label": "メッセージ",
     "sender_label": "送信者",

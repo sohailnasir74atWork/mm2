@@ -12,7 +12,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Modal, Pressable, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useModalWindowInsets } from '../Helper/useNavBarInset';
 import { BIRTHDAY_PINK } from './BirthdayBits';
 import { updateMyBirthday, birthdayErrorKey } from './birthdayApi';
 import { monthShortName } from './birthdayDate';
@@ -34,7 +34,10 @@ const ageOn = ({ y, m, d }, today) => {
 
 export default function EditBirthdaySheet({ visible, dob, c, onClose, onSaved }) {
   const { t, i18n } = useTranslation();
-  const insets = useSafeAreaInsets();
+  // Inside a <Modal>: on iOS useSafeAreaInsets() reads 0 there (App.js's root
+  // SafeAreaView pads instead), so the sheet takes the window's insets.
+  // Android: the same numbers as before.
+  const insets = useModalWindowInsets();
   const cur = useMemo(() => parse(dob), [dob]);
   const [year, setYear] = useState(cur?.y || null);
   const [month, setMonth] = useState(cur?.m || null);

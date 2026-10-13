@@ -150,7 +150,10 @@ exports.stampBanTimestamp = require('./stampBanTimestamp').stampBanTimestamp;
 //   emailPrivacy.js     CUTOVER only. Strips the copies old builds keep
 //                       writing — which old builds' moderation still reads.
 const reportAutoBan = require('./reportAutoBan');
-for (const [name, fn] of Object.entries(reportAutoBan)) exports[name] = fn;
+// Triggers only: `_internal` is the test hook, not a function.
+for (const [name, fn] of Object.entries(reportAutoBan)) {
+  if (name.startsWith('autoBanOn')) exports[name] = fn;
+}
 
 exports.syncStaffClaims = require('./syncStaffClaims').syncStaffClaims;
 exports.privateEmailOnSignup = require('./privateEmailOnSignup').privateEmailOnSignup;

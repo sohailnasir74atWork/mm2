@@ -20,6 +20,7 @@
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		AE30EFB988CB49C7A0CA6153 /* Lato-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7F5A461FA3FD426E82335FB7 /* Lato-Bold.ttf */; };
 		FA158A36C8384474EEF34F46 /* Pods_bloxfruitevalues.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DB5362513FD3728584AD3E9A /* Pods_bloxfruitevalues.framework */; };
+		4D7A11C12E9C0A0100A1B2C3 /* AppReload.m in Sources */ = {isa = PBXBuildFile; fileRef = 4D7A11C02E9C0A0100A1B2C3 /* AppReload.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +44,7 @@
 		C396F747E7BCA6040709BCAF /* Pods-bloxfruitevalues.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-bloxfruitevalues.release.xcconfig"; path = "Target Support Files/Pods-bloxfruitevalues/Pods-bloxfruitevalues.release.xcconfig"; sourceTree = "<group>"; };
 		DB5362513FD3728584AD3E9A /* Pods_bloxfruitevalues.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_bloxfruitevalues.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		4D7A11C02E9C0A0100A1B2C3 /* AppReload.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = AppReload.m; path = bloxfruitevalues/AppReload.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,6 +64,7 @@
 			isa = PBXGroup;
 			children = (
 				18119D582D5CF50800B22C3A /* AppDelegate.swift */,
+				4D7A11C02E9C0A0100A1B2C3 /* AppReload.m */,
 				18210E382D5CBE3C00113462 /* bloxfruitevalues.entitlements */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
@@ -335,6 +338,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				18119D592D5CF50800B22C3A /* AppDelegate.swift in Sources */,
+				4D7A11C12E9C0A0100A1B2C3 /* AppReload.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -22,7 +22,7 @@ const ReportPopup = ({ visible, message, onClose, channelPath = DEFAULT_CHANNEL.
   const [customReason, setCustomReason] = useState("");
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { theme, appdatabase } = useGlobalState();
+  const { theme, appdatabase, user } = useGlobalState();
   const isDarkMode = theme === "dark";
   const { t } = useTranslation();
 
@@ -62,38 +62,29 @@ const ReportPopup = ({ visible, message, onClose, channelPath = DEFAULT_CHANNEL.
     // The room the message was reported from. Defaults to English so the
     // trade-report caller, which has no channel, keeps working unchanged.
     const messageRef = ref(appdatabase, `${channelPath}/${sanitizedId}`);
-  
-    get(messageRef)
-      .then((snapshot) => {
-        if (!snapshot.exists()) throw new Error("Message not found");
-  
-        const data = snapshot.val();
-        if (!data || typeof data !== 'object') {
-          throw new Error("Invalid message data");
-        }
+    const reporterId = user?.id || null;
+    // Report ledger (Code/Helper/reportLedger.js): one marker per reporter,
+    // so one account reporting twice cannot trigger the auto-ban.
+    const ledgerPath = reporterId ? `chat_reports/${channelPath}/${sanitizedId}/${reporterId}` : null;
 
-        // Chat rooms are publicly writable, so reportCount can hold anything.
-        // NaN/Infinity in an RTDB write kills the process natively (RNFB), so
-        // only a finite, non-negative integer is ever incremented.
-        const rawCount = Number(data?.reportCount);
-        const reportCount = Number.isFinite(rawCount) && rawCount > 0 ? Math.floor(rawCount) : 0;
+    // Already reported it? Readable only by its owner. A failed read (rules
+    // not deployed yet, offline) just means "unknown": carry on.
+    const alreadyReported = ledgerPath
+      ? get(ref(appdatabase, ledgerPath)).then((s) => s.val() === true).catch(() => false)
+      : Promise.resolve(false);
 
-        // Only RECORD the report. The second one (reportCount reaching 2)
-        // is acted on server-side by functions/reportAutoBan.js
-        // (autoBanOnMessageReports): it bans the sender with the same record
-        // this screen used to write, then deletes the message.
-        //
-        // It used to happen here, with the email copied into every public
-        // message as `currentUserEmail`. Messages no longer carry it, and a
-        // reporter cannot read anyone's email, so the ban needs the Admin SDK.
-        // Older builds still ban from the reporter's device and delete the
-        // message on the second report; their `if (message.currentUserEmail)`
-        // guard skips the ban once messages stop carrying the email.
-        return update(messageRef, { reportCount: reportCount + 1 })
-          .then(() => ({ action: reportCount >= 1 ? "escalated" : "reported" }));
+    alreadyReported
+      .then((already) => {
+        if (already) return { action: 'duplicate' };
+        return get(messageRef).then((snapshot) => recordReport(snapshot));
       })
       .then((res) => {
         setLoading(false);
+        if (res?.action === 'duplicate') {
+          Alert.alert(t("chat.report_submitted"), t("report_popup.already_reported"));
+          onClose(true);
+          return;
+        }
         Alert.alert(t("chat.report_submitted"), t("chat.report_submitted_message"));
         onClose(true);
       })
@@ -102,6 +93,51 @@ const ReportPopup = ({ visible, message, onClose, channelPath = DEFAULT_CHANNEL.
         setLoading(false);
         Alert.alert(t("home.alert.error"), t("report_popup.submit_failed"));
       });
+
+    function recordReport(snapshot) {
+      if (!snapshot.exists()) throw new Error("Message not found");
+
+      const data = snapshot.val();
+      if (!data || typeof data !== 'object') {
+        throw new Error("Invalid message data");
+      }
+
+      // Chat rooms are publicly writable, so reportCount can hold anything.
+      // NaN/Infinity in an RTDB write kills the process natively (RNFB), so
+      // only a finite, non-negative integer is ever incremented.
+      const rawCount = Number(data?.reportCount);
+      const reportCount = Number.isFinite(rawCount) && rawCount > 0 ? Math.floor(rawCount) : 0;
+
+      // Only RECORD the report. The second one (reportCount reaching 2)
+      // is acted on server-side by functions/reportAutoBan.js
+      // (autoBanOnMessageReports): it bans the sender with the same record
+      // this screen used to write, then deletes the message.
+      //
+      // It used to happen here, with the email copied into every public
+      // message as `currentUserEmail`. Messages no longer carry it, and a
+      // reporter cannot read anyone's email, so the ban needs the Admin SDK.
+      // Older builds still ban from the reporter's device and delete the
+      // message on the second report; their `if (message.currentUserEmail)`
+      // guard skips the ban once messages stop carrying the email.
+      //
+      // The +1 and the ledger marker go in ONE multi-path update, so the
+      // function never sees the count without the reporter. The marker is
+      // create-only: a second report by the same account is refused whole.
+      // Until the chat_reports rule is deployed the marker is refused too;
+      // then the +1 alone goes through, exactly as older builds write it.
+      const action = reportCount >= 1 ? "escalated" : "reported";
+      const countOnly = () => update(messageRef, { reportCount: reportCount + 1 }).then(() => ({ action }));
+      if (!ledgerPath) return countOnly();
+      return update(ref(appdatabase), {
+        [`${channelPath}/${sanitizedId}/reportCount`]: reportCount + 1,
+        [ledgerPath]: true,
+      })
+        .then(() => ({ action }))
+        .catch(() => get(ref(appdatabase, ledgerPath))
+          .then((s) => s.val() === true)
+          .catch(() => false)
+          .then((mine) => (mine ? { action: 'duplicate' } : countOnly())));
+    }
   };
 
   // ✅ Early return if no message

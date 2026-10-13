@@ -1,6 +1,6 @@
 import {trackGrowthEvent} from './Code/Helper/growthAnalytics';
 import i18n from "i18next";
-import { I18nManager, NativeModules, Platform, Alert } from "react-native";
+import { I18nManager, NativeModules, Alert } from "react-native";
 import dayjs from "dayjs";
 import "dayjs/locale/pt-br";
 import "dayjs/locale/es";
@@ -112,9 +112,10 @@ i18n.on('languageChanged', syncDayjsLocale);
 //
 // forceRTL only takes effect when the React host starts, so it is set on
 // every launch (correct from the next start) and, on a switch that changes
-// direction, the app reloads at once: Android through the AppReload native
-// module (android/.../AppReloadModule.kt); iOS has no such module yet, so the
-// player is asked to reopen the app.
+// direction, the app reloads at once through the AppReload native module:
+// android/.../AppReloadModule.kt and ios/bloxfruitevalues/AppReload.m. A
+// build without it (iOS builds before 2026-10-13) asks the player to reopen
+// the app instead.
 export const isRTLLanguage = (lng) => lng === 'ar';
 const applyLayoutDirection = (lng) => {
   const rtl = isRTLLanguage(lng);
@@ -128,7 +129,7 @@ applyLayoutDirection(initialLanguage);
 
 const reloadForDirection = () => {
   const reload = NativeModules.AppReload?.reload;
-  if (Platform.OS === 'android' && typeof reload === 'function') {
+  if (typeof reload === 'function') {
     // A reload is not a launch: no launch ad (Code/Ads/openApp.js).
     storage.set('appOpenSkipNextColdStartAt', String(Date.now()));
     // Let the language and MMKV writes land before the JS context goes away.

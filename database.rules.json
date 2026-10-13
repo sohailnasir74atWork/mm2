@@ -460,6 +460,17 @@
         }
       }
     },
+    "chat_reports": {
+      "$room": {
+        "$msgId": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid && !data.exists() && newData.exists() && $room.matches(/^chat_(new|es|pt|fr|de|ru|ar|id|vi|fil)$/) && root.child($room).child($msgId).child('senderId').exists() && root.child($room).child($msgId).child('senderId').val() !== auth.uid && newData.parent().parent().parent().parent().child($room).child($msgId).child('reportCount').val() === ((root.child($room).child($msgId).child('reportCount').isNumber() && root.child($room).child($msgId).child('reportCount').val() >= 1) ? root.child($room).child($msgId).child('reportCount').val() + 1 : 1)",
+            ".validate": "newData.val() === true"
+          }
+        }
+      }
+    },
     "chat_es": {
       ".read": true,
       ".indexOn": [

@@ -1,129 +1,402 @@
 rules_version = '2';
 
 // ═══════════════════════════════════════════════════════════════════════
-//  MM2 Values — Firestore security rules
+//  MM2 Values — Firestore security rules, STAGE 2 (per-collection owners).
 //
-//  ⚠️ WHAT IS LIVE RIGHT NOW (ruleset 172c3c69-3d97-44a0-8ca5-c6c6e231ead8,
-//     last changed 2026-03-05):
+//  Replaces the stage-1 rule "any signed-in user can write anything".
+//  Modelled on Adopt Me's live rules (adoptme-jan7/firestore.rules,
+//  2026-09-29): createsAs / ownerIs / ownEntryOnly / changed().hasOnly.
 //
-//        match /{document=**} {
-//          allow read, write: if request.time < timestamp.date(2029, 3, 5);
-//        }
+//  Backward compatible by design. Every Firestore write the app makes —
+//  current code AND every older shape in the repo's history (f2b6466 …
+//  f2526b2), plus MM2WEB's trade post — is still allowed. Writes made ABOUT
+//  another user (ratings summary, review docs {to}_{from}, likes, reactions,
+//  comment counts, post reports, poll votes, group invites/joins) are
+//  limited to the fields the app actually touches, instead of an owner check.
+//  Cloud Functions use the Admin SDK and are not affected.
 //
-//     That is the console's "test mode" default with the expiry pushed out.
-//     Anyone who reads the project ID out of the app bundle can read, rewrite
-//     or delete EVERY document — trades, reviews, posts, profiles, scores —
-//     with no account and no token. See PLAN_2026-09.md S1.
+//  What does NOT change:
+//   • READS. Every collection stays world-readable exactly as before, except
+//     mod_actions (staff only). The app browses before sign-in.
+//   • Collections not named in MANAGED below keep the stage-1 rule
+//     (signed-in write). That keeps anything this audit could not see — a
+//     shape only an untracked old build used — working as it does today.
 //
-//  STAGE 1 (this file). Public read stays exactly as it is; every write now
-//  requires a signed-in user. This cannot break a legitimate flow — every
-//  write path in the app already runs behind Firebase Auth — and it removes
-//  anonymous vandalism, which is the actual emergency.
+//  Staff = the `staff` custom claim (functions/syncStaffClaims.js, every
+//  30 min: admin / isAdmin / isSeniorMod / isModerator / isBabyMod /
+//  jmd_granters) or a verified founder email. Staff may write anything in a
+//  managed collection, as the app's moderation screens need.
 //
-//  STAGE 2 is drafted at the bottom: per-collection owner checks. It needs
-//  testing against the real client before it goes anywhere near production,
-//  because a wrong ownership field fails silently and looks like a bug in
-//  the app rather than a rules problem.
-//
-//  Deploy stage 1:
-//    firebase deploy --only firestore:rules --project mm2vlaues-ed80c
-//  Roll back: Firebase console → Firestore → Rules → History → the
-//  2026-03-05 ruleset → Restore.
+//  Deploy:   firebase deploy --only firestore:rules --project mm2vlaues-ed80c
+//  Rollback: Firebase console → Firestore → Rules → History → previous
+//            ruleset (2026-10-13) → Restore. See NOTES.md.
 // ═══════════════════════════════════════════════════════════════════════
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() {
-      return request.auth != null;
-    }
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
 
-    // Staff, as the STAFF expression in database.rules.json defines it.
-    // Firestore rules cannot read RTDB, so the role flags arrive as a `staff`
-    // custom claim that functions/syncStaffClaims.js keeps in step; the
-    // founder emails are checked here directly, as everywhere else.
     function isStaff() {
       return signedIn() && (
-        request.auth.token.staff == true
-        || (request.auth.token.email_verified == true
-            && request.auth.token.email in ['thesolanalabs@gmail.com', 'sohailnasir74business@gmail.com', 'sohailnasir74@gmail.com'])
+        request.auth.token.get('staff', false) == true
+        || (request.auth.token.get('email_verified', false) == true
+            && request.auth.token.get('email', '') in ['thesolanalabs@gmail.com', 'sohailnasir74business@gmail.com', 'sohailnasir74@gmail.com'])
       );
     }
 
-    // Reads stay open: the app browses trades, posts and leaderboards before
-    // the user signs in, and locking reads here would blank those screens for
-    // every existing build in the field.
-    //
-    // Writes require an account. Nothing in the app writes while signed out.
-    //
-    // 2026-09-27 (round 2): reads open on every collection EXCEPT
-    // mod_actions. Rules only ever add access — a second match cannot narrow
-    // what this one allows — so the catch-all itself has to leave mod_actions
-    // out. `/{collection}/{document=**}` matches every document the old
-    // `/{document=**}` did (all documents live in a collection); the one shape
-    // it would not cover is a collection-group query, and no client makes one.
-    match /{collection}/{document=**} {
-      allow read: if collection != 'mod_actions';
-      allow write: if signedIn();
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    // A per-user map field (likes.{uid}, reactions.{uid}, voters.{uid},
+    // members.{uid}) where the writer may only add/change/remove their own key.
+    function ownEntryOnly(field) {
+      return !(field in changed())
+        || request.resource.data.get(field, {}).diff(resource.data.get(field, {})).affectedKeys().hasOnly([me()]);
+    }
+    function ownerIs(field) { return signedIn() && resource.data.get(field, null) == me(); }
+    function createsAs(field) { return signedIn() && request.resource.data.get(field, null) == me(); }
+    // Owner edits must not hand the document to someone else.
+    function keepsOwner(field) { return request.resource.data.get(field, null) == me(); }
+    // A counter that may move by exactly `step` (increment(±1) or +1 in a transaction).
+    function bumped(field, step) {
+      return request.resource.data.get(field, 0) == resource.data.get(field, 0) + step;
     }
 
-    // Moderation audit log (Code/Helper/modLog.js). Every row carries the
-    // target's email, and its only reader is the Admin Dashboard — Mod Log
-    // tab and user sheet — which only admins, moderators and Junior Mods can
-    // open. Writes stay as they were (the catch-all above): build 1.4.6
-    // logs report auto-bans from the REPORTER's device.
-    //
-    // Deploy only after syncStaffClaims has run once AND an hour has passed,
-    // so every staff member's ID token has refreshed with the claim.
-    // Otherwise the Mod Log shows "failed" for them until it does.
+    // Collections with their own rules below. Everything else keeps stage 1.
+    function managed(c) {
+      return c in [
+        'trades_new', 'designPosts', 'statuses', 'polls',
+        'reviews', 'user_ratings_summary', 'user_profiles',
+        'following', 'notifications', 'streaks',
+        'groups', 'group_invitations', 'group_join_requests',
+        'games', 'game_stats', 'game_scores', 'game_leaderboard_cache', 'leaderboard_cache',
+        'mystery_levels', 'mystery_answers', 'trade_journal',
+        'petGuessingGame_rooms', 'petGuessingGame_userInvites',
+        'mod_actions'
+      ];
+    }
+
+    // ── Catch-all ──────────────────────────────────────────────────────
+    // Reads: unchanged (everything except the moderation log).
+    // Writes: stage 1 (signed in), but ONLY for collections not managed
+    // below. Rules only ever add access, so a managed collection must be
+    // excluded here or this line would re-open it.
+    match /{collection}/{document=**} {
+      allow read: if collection != 'mod_actions';
+      allow write: if signedIn() && !managed(collection);
+    }
+
+    // ── Trades (app: Homescreen/HomeScreen.jsx, Trades/Trades.jsx,
+    //    SettingScreen/Setting.jsx; website: MM2WEB lib/trades.ts) ──
+    // Only the poster edits (feature / boost: isFeatured, featuredUntil) or
+    // deletes (single, or the "delete all" batch). No client ever writes
+    // another player's trade.
+    match /trades_new/{tradeId} {
+      allow create: if createsAs('userId');
+      allow update: if (ownerIs('userId') && keepsOwner('userId')) || isStaff();
+      allow delete: if ownerIs('userId') || isStaff();
+    }
+
+    // ── Design feed posts (Design/DesignMainScreen.js, CommentsModal.js,
+    //    ReportModal.js, PostCard.js) ──
+    // A report (ReportModal transaction): reportCount +1, report: true, and
+    // banned: true only once the count reaches the threshold (2). The
+    // autoBanOnPostReports function acts on `banned`, so it cannot be set
+    // any other way.
+    function isPostReport() {
+      return changed().hasOnly(['reportCount', 'report', 'banned'])
+        && bumped('reportCount', 1)
+        && request.resource.data.get('report', true) == true
+        && (!('banned' in changed())
+            || (request.resource.data.banned == true && request.resource.data.reportCount >= 2));
+    }
+    match /designPosts/{postId} {
+      allow create: if createsAs('userId');
+      allow update: if isStaff()
+        || (ownerIs('userId') && keepsOwner('userId')
+            && !changed().hasAny(['reportCount', 'report', 'banned']))
+        || (signedIn() && (
+              (changed().hasOnly(['likes']) && ownEntryOnly('likes'))
+              || (changed().hasOnly(['reactions']) && ownEntryOnly('reactions'))
+              || (changed().hasOnly(['commentCount']) && (bumped('commentCount', 1) || bumped('commentCount', -1)))
+              || isPostReport()
+           ));
+      allow delete: if ownerIs('userId') || isStaff();
+
+      match /comments/{commentId} {
+        allow create: if createsAs('userId');
+        allow update: if (ownerIs('userId') && keepsOwner('userId')) || isStaff()
+          || (signedIn() && changed().hasOnly(['likes']) && ownEntryOnly('likes'));
+        allow delete: if ownerIs('userId') || isStaff();
+      }
+    }
+
+    // ── Statuses / stories (Design/StatusFeed.js; AdminDashboard deletes) ──
+    // Viewers add only themselves to viewedBy (arrayUnion) and set only
+    // their own reactions.{uid}.
+    function viewedByAddsOnlyMe() {
+      let before = resource.data.get('viewedBy', []).toSet();
+      let after = request.resource.data.get('viewedBy', []).toSet();
+      return !('viewedBy' in changed())
+        || (after.difference(before).hasOnly([me()]) && before.difference(after).size() == 0);
+    }
+    match /statuses/{statusId} {
+      allow create: if createsAs('userId');
+      allow update: if (ownerIs('userId') && keepsOwner('userId')) || isStaff()
+        || (signedIn()
+            && changed().hasOnly(['viewedBy', 'reactions'])
+            && viewedByAddsOnlyMe() && ownEntryOnly('reactions'));
+      allow delete: if ownerIs('userId') || isStaff();
+
+      // Not used by MM2 today; Adopt Me's shared code has it.
+      match /comments/{commentId} {
+        allow create: if createsAs('userId');
+        allow update, delete: if ownerIs('userId') || isStaff();
+      }
+    }
+
+    // ── Polls (staff create/toggle/delete in AdminDashboard; users vote in
+    //    Engagement/PollCard.jsx) ──
+    // A vote rewrites `options` and `totalVotes` from the client's copy (it
+    // can be stale, so neither is bounded) and sets voters.{own uid}.
+    match /polls/{pollId} {
+      allow create, delete: if isStaff();
+      allow update: if isStaff()
+        || (signedIn()
+            && changed().hasOnly(['options', 'totalVotes', 'voters'])
+            && ownEntryOnly('voters')
+            && request.resource.data.get('options', []).size() == resource.data.get('options', []).size());
+
+      match /comments/{commentId} {
+        allow create: if createsAs('userId');
+        allow update, delete: if ownerIs('userId') || isStaff();
+      }
+    }
+
+    // ── reviews: two kinds of doc ──
+    //   reviews/{uid}             the player's own profile doc: bio, ownedPets,
+    //                             wishlistPets, Trade Match fields
+    //                             (dreamItemKey, availableForTrade inside
+    //                             ownedPets, tradeMatchLang, tradeMatchSeenAt,
+    //                             dreamFoundKey/At). Owner only.
+    //   reviews/{toUid}_{fromUid}  a rating/review. Only the reviewer writes it.
+    match /reviews/{docId} {
+      allow create, update: if signedIn() && (
+        (docId == me()
+          && request.resource.data.get('toUserId', null) == null
+          && request.resource.data.get('fromUserId', null) == null)
+        || (request.resource.data.get('fromUserId', null) == me()
+            && request.resource.data.get('toUserId', null) is string
+            && request.resource.data.toUserId != me()
+            && docId == request.resource.data.toUserId + '_' + me())
+      ) || isStaff();
+      allow delete: if isStaff()
+        || (signedIn() && (docId == me() || resource.data.get('fromUserId', null) == me()));
+    }
+
+    // ── Rating summary, written BY the rater ONTO the rated player's doc
+    //    (PrivateChat.jsx), by the reviewer editing (Setting.jsx), and by the
+    //    one-time RTDB→Firestore migrations (HomeScreen, Setting, BottomDrawer)
+    //    which create it for self or for a profile being viewed. ──
+    function ratingValues() {
+      return request.resource.data.get('averageRating', 0) is number
+        && request.resource.data.get('averageRating', 0) >= 0
+        && request.resource.data.get('averageRating', 0) <= 5
+        && request.resource.data.get('count', 0) is number
+        && request.resource.data.get('count', 0) >= 0;
+    }
+    match /user_ratings_summary/{uid} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['averageRating', 'count', 'updatedAt'])
+        && ratingValues();
+      // A new rating: count +1. Re-rating or editing a review: count unchanged.
+      allow update: if isStaff() || (signedIn()
+        && changed().hasOnly(['averageRating', 'count', 'updatedAt'])
+        && ratingValues()
+        && (bumped('count', 0) || bumped('count', 1)));
+      allow delete: if isStaff();
+    }
+
+    // No client writes in any version; owner-only in case one appears.
+    match /user_profiles/{uid} {
+      allow create, update: if signedIn() && me() == uid;
+      allow delete: if (signedIn() && me() == uid) || isStaff();
+    }
+
+    // ── Social ──
+    // Follow = a doc {followerId, followingId}; unfollow deletes it
+    // (StatusFeed.js, BottomDrawer.jsx).
+    match /following/{id} {
+      allow create: if createsAs('followerId') && request.resource.data.get('followingId', null) != me();
+      allow update: if isStaff();
+      allow delete: if ownerIs('followerId') || isStaff();
+    }
+
+    // Created by Cloud Functions. Builds 1.3.x–1.4.x carried a (never
+    // mounted) NotificationFeed that marked read / deleted the reader's own.
+    match /notifications/{id} {
+      allow create: if createsAs('fromUid');
+      allow update: if isStaff() || (ownerIs('toUid') && changed().hasOnly(['read']));
+      allow delete: if ownerIs('toUid') || isStaff();
+    }
+
+    // Doc id = the two uids sorted and joined with "_" (StreakHelper.js,
+    // builds 1.3.x–1.4.x, never called). Decided by the id, not the data.
+    match /streaks/{pairId} {
+      allow create, update: if signedIn() && me() in pairId.split('_');
+      allow delete: if isStaff();
+    }
+
+    // ── Groups (ChatScreen/utils/groupUtils.js, GroupChatScreen.jsx) ──
+    function groupAdmin() {
+      return signedIn() && (resource.data.get('createdBy', null) == me()
+        || resource.data.get('members', {}).get(me(), {}).get('role', '') == 'admin');
+    }
+    // Accepting an invite (joins) or leaving: only the writer's own
+    // membership moves, they cannot make themselves admin, the count matches,
+    // and a join cannot take the group past 50 (MAX_GROUP_MEMBERS).
+    function ownMembershipOnly() {
+      let beforeList = resource.data.get('memberIds', []);
+      let afterList = request.resource.data.get('memberIds', []);
+      let before = beforeList.toSet();
+      let after = afterList.toSet();
+      return changed().hasOnly(['memberIds', 'members', 'memberCount', 'updatedAt'])
+        && after.difference(before).union(before.difference(after)).hasOnly([me()])
+        && ownEntryOnly('members')
+        && request.resource.data.get('members', {}).get(me(), {}).get('role', 'member') != 'admin'
+        && (!('memberCount' in changed()) || request.resource.data.memberCount == afterList.size())
+        && (afterList.size() <= 50 || afterList.size() < beforeList.size());
+    }
+    match /groups/{groupId} {
+      // Created with the creator as the only member (others get invitations).
+      allow create: if createsAs('createdBy')
+        && request.resource.data.get('memberIds', [me()]) == [me()]
+        && request.resource.data.get('members', {}).keys().hasOnly([me()]);
+      // groupAdmin: rename, description, icon, pins, remove member, approve a
+      // join request, transfer creator, creator leaving. Staff: global admins
+      // edit / pin / delete any group.
+      allow update: if groupAdmin() || isStaff() || (signedIn() && ownMembershipOnly());
+      allow delete: if groupAdmin() || isStaff()
+        || (signedIn() && resource.data.get('memberIds', []) == [me()]);
+    }
+    match /group_invitations/{id} {
+      allow create: if createsAs('invitedBy');
+      allow update: if isStaff() || ownerIs('invitedBy')
+        || (ownerIs('invitedUserId')
+            && changed().hasOnly(['status', 'updatedAt', 'respondedAt'])
+            && request.resource.data.get('status', '') in ['accepted', 'declined']);
+      // Cleanup after a group is deleted runs from the deleting admin's
+      // device AFTER the group doc is gone, over invites other members sent.
+      allow delete: if signedIn();
+    }
+    match /group_join_requests/{id} {
+      allow create: if createsAs('requesterId') && request.resource.data.get('status', 'pending') == 'pending';
+      allow update: if isStaff() || ownerIs('creatorId') || ownerIs('requesterId');
+      allow delete: if signedIn();   // same post-delete cleanup as invitations
+    }
+
+    // ── Games and scores (Engagement/*.js) ──
+    match /games/{uid} {
+      allow write: if signedIn() && me() == uid;
+    }
+    // PetGuessingGame awardGameWin: read-then-set of the winner's count.
+    match /game_stats/{uid} {
+      allow create, update: if signedIn() && request.resource.data.keys().hasOnly(['petGameWins']);
+      allow delete: if isStaff();
+    }
+    match /game_scores/{gameId}/scores/{uid} {
+      allow write: if signedIn() && me() == uid;
+    }
+    match /game_scores/{gameId} {
+      allow write: if isStaff();
+    }
+    // Engagement/updateLeaderboardCache.js rewrites the whole top-20 array
+    // from the client after each game, so it cannot be owner-checked. Shape
+    // only (see NOTES: left partly open).
+    match /game_leaderboard_cache/{gameId} {
+      allow create, update: if isStaff() || (signedIn()
+        && request.resource.data.keys().hasOnly(['users', 'gameId', 'lastUpdated', 'userCount'])
+        && request.resource.data.get('gameId', gameId) == gameId
+        && request.resource.data.get('users', []) is list
+        && request.resource.data.get('users', []).size() <= 20);
+      allow delete: if isStaff();
+    }
+    // Server-written (functions/updateLeaderboardCache.js); no client writes.
+    match /leaderboard_cache/{id} {
+      allow write: if false;
+    }
+
+    // Find the Killer (Engagement/FindTheKiller.js): players bump the
+    // community counters; the in-app admin editor (staff) saves whole levels.
+    // The vote is written with setDoc(merge) and a key `suspectVotes.${id}`,
+    // which setDoc stores as a LITERAL top-level field named
+    // "suspectVotes.s1" (verified on the live lvl_1..lvl_5 docs), so those
+    // are the names allowed here. Suspect ids are s1..s4 today; s1..s9 allowed.
+    function voteFields() {
+      return ['suspectVotes.s1', 'suspectVotes.s2', 'suspectVotes.s3', 'suspectVotes.s4', 'suspectVotes.s5',
+              'suspectVotes.s6', 'suspectVotes.s7', 'suspectVotes.s8', 'suspectVotes.s9'];
+    }
+    function voteBump(k) { return !(k in changed()) || bumped(k, 1); }
+    function oneVoteOnly() {
+      return changed().difference(['totalAttempts', 'correctAttempts'].toSet()).size() <= 1
+        && voteBump('suspectVotes.s1') && voteBump('suspectVotes.s2') && voteBump('suspectVotes.s3')
+        && voteBump('suspectVotes.s4') && voteBump('suspectVotes.s5') && voteBump('suspectVotes.s6')
+        && voteBump('suspectVotes.s7') && voteBump('suspectVotes.s8') && voteBump('suspectVotes.s9');
+    }
+    match /mystery_levels/{levelId} {
+      allow create: if isStaff() || (signedIn()
+        && request.resource.data.keys().hasOnly(['totalAttempts', 'correctAttempts'].concat(voteFields()))
+        && request.resource.data.keys().size() <= 3
+        && request.resource.data.get('totalAttempts', 0) == 1
+        && request.resource.data.get('correctAttempts', 0) in [0, 1]);
+      allow update: if isStaff() || (signedIn()
+        && changed().hasOnly(['totalAttempts', 'correctAttempts'].concat(voteFields()))
+        && bumped('totalAttempts', 1)
+        && (bumped('correctAttempts', 0) || bumped('correctAttempts', 1))
+        && oneVoteOnly());
+      allow delete: if isStaff();
+    }
+    match /mystery_answers/{levelId}/answers/{uid} {
+      allow write: if signedIn() && me() == uid;
+    }
+    match /mystery_answers/{levelId} {
+      allow write: if isStaff();
+    }
+
+    // My Stuff → History (Engagement/journalUtils.js).
+    match /trade_journal/{uid}/{document=**} {
+      allow write: if signedIn() && me() == uid;
+    }
+
+    // ── Pet Guessing Game rooms and invites (old builds; OnlineUsersList
+    //    still sends invites). Players update the shared room state turn by
+    //    turn, so room updates stay open to signed-in users (Adopt Me rule).
+    match /petGuessingGame_rooms/{roomId} {
+      allow create: if createsAs('hostId');
+      allow update, delete: if signedIn();
+    }
+    match /petGuessingGame_userInvites/{inviteeUid}/invites/{roomId} {
+      allow create: if createsAs('fromUserId');
+      // The invitee, the sender, or anyone clearing an invite that has expired
+      // (cleanupExpiredInvites runs on whichever player opens the room).
+      allow update, delete: if signedIn() && (
+        me() == inviteeUid
+        || resource == null
+        || resource.data.get('fromUserId', null) == me()
+        || request.time.toMillis() > resource.data.get('expiresAt', 0));
+    }
+    match /petGuessingGame_userInvites/{inviteeUid} {
+      allow write: if isStaff();
+    }
+
+    // ── Moderation audit log (Helper/modLog.js) ──
+    // Staff read. Append-only: build 1.4.6 logs report auto-bans from an
+    // ordinary reporter's device, so create stays open to signed-in users;
+    // nobody may edit or erase a row.
     match /mod_actions/{actionId} {
       allow read: if isStaff();
+      allow create: if signedIn();
+      allow update, delete: if false;
     }
   }
 }
-
-// ═══════════════════════════════════════════════════════════════════════
-//  STAGE 2 — DRAFT, NOT ACTIVE.
-//
-//  Replace the catch-all above with per-collection rules once each one has
-//  been exercised in the Rules Playground against a real document. The
-//  ownership field differs per collection, and getting it wrong denies a
-//  write that the app treats as a silent failure.
-//
-//  Collections in use, with the field that identifies the owner:
-//
-//    trades_new             userId
-//    reviews                fromUserId (a review) / doc id == uid (profile doc)
-//    designPosts            userId          + subcollection comments (userId)
-//    statuses               userId
-//    user_profiles          doc id == uid
-//    user_ratings_summary   doc id == uid   ← written ABOUT a user BY a rater,
-//                                             so an owner-only rule breaks it
-//    game_stats, games      doc id == uid
-//    cosmetics_inventory    doc id == uid
-//    following              followerId
-//    notifications          written FOR another user (toUid) — owner-only
-//                                             rules break trade pings
-//    group_invitations      invitedBy
-//    group_join_requests    requesterId
-//    groups                 createdBy, plus member writes
-//    streaks                user1 / user2
-//    polls                  admin-only write, public read
-//    mod_actions            append-only moderation audit log (Code/Helper/modLog.js):
-//                           create if signed-in staff, NO update, NO delete —
-//                           a moderator must not be able to erase their own row.
-//                           Under the stage-1 catch-all this is a convention only.
-//                           READ is already staff-only (round 2, above). Note
-//                           build 1.4.6 creates rows from ordinary users'
-//                           devices (report auto-ban), so "create if staff"
-//                           breaks that logging until 1.4.6 is gone.
-//    mystery_levels         read-only from the client
-//    leaderboard,
-//    game_leaderboard_cache Cloud Function writes only
-//
-//  Two of those (user_ratings_summary, notifications) are deliberately
-//  written by someone other than the subject. Any "users can only write
-//  their own documents" rule breaks ratings and trade notifications, which
-//  is exactly the kind of regression that is hard to spot in testing and
-//  obvious to users.
-// ═══════════════════════════════════════════════════════════════════════

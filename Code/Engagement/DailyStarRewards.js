@@ -20,14 +20,17 @@ import {
 import { DAILY_REWARDS, getStarStatus, claimDailyStar } from './starUtils';
 import { getThemeColors } from '../Helper/themeColors';
 import { useTranslation } from 'react-i18next';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useModalWindowInsets } from '../Helper/useNavBarInset';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const DailyStarRewards = ({ visible, onClose, db, uid, isDarkMode = false }) => {
   const { t } = useTranslation();
   // Edge-to-edge modal on Android: the cycle line must clear the nav bar.
-  const insets = useSafeAreaInsets();
+  // Inside a <Modal>: on iOS useSafeAreaInsets() reads 0 there (App.js's root
+  // SafeAreaView pads instead), so the sheet takes the window's insets.
+  // Android: the same numbers as before.
+  const insets = useModalWindowInsets();
   const [status, setStatus] = useState(null);
   const [claiming, setClaiming] = useState(false);
   const [claimedReward, setClaimedReward] = useState(null);

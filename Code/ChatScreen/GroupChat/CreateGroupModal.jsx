@@ -15,7 +15,7 @@ import {
   ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useModalWindowInsets } from '../../Helper/useNavBarInset';
 import { useGlobalState } from '../../GlobelStats';
 import { createGroup, updateGroupName, updateGroupDescription, updateGroupAvatar } from '../utils/groupUtils';
 import { showSuccessMessage, showErrorMessage } from '../../Helper/MessageHelper';
@@ -30,7 +30,14 @@ const MAX_GROUP_MEMBERS = 50;
 
 const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = null, editGroupName = null, editGroupDescription = null, editGroupAvatar = null, isAdmin = false, onGroupUpdated = null }) => {
   const { theme, user, firestoreDB, appdatabase } = useGlobalState();
-  const insets = useSafeAreaInsets();
+  // Inside a <Modal>: on iOS useSafeAreaInsets() reads 0 there (App.js's root
+  // SafeAreaView pads instead), so the sheet takes the window's insets.
+  // Android: the same numbers as before.
+  const insets = useModalWindowInsets();
+  // The keyboard wrapper keeps iOS at 0, as before: the footer clears the
+  // home indicator, and padding here as well would leave an undimmed strip
+  // under the sheet. Android: unchanged.
+  const kavBottom = Platform.OS === 'ios' ? 0 : insets.bottom;
   const isEditMode = !!editGroupId;
   const { triggerHapticFeedback } = useHaptic();
   const navigation = useNavigation();
@@ -359,7 +366,7 @@ const CreateGroupModal = ({ visible, onClose, selectedUsers = [], editGroupId = 
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={[styles.keyboardAvoidingView, { paddingBottom: insets.bottom }]}
+        style={[styles.keyboardAvoidingView, { paddingBottom: kavBottom }]}
       >
         <View style={styles.overlay}>
           <View style={[styles.container, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff' }]}>

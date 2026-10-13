@@ -28,6 +28,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useModalWindowInsets } from '../Helper/useNavBarInset';
 import { doc, onSnapshot, setDoc, serverTimestamp } from '@react-native-firebase/firestore';
 import Icon from 'react-native-vector-icons/Ionicons';
 import ViewShot from 'react-native-view-shot';
@@ -203,6 +204,8 @@ export default function TradeMatchScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
+  // The dream picker is a <Modal>: on iOS useSafeAreaInsets() reads 0 there.
+  const sheetInsets = useModalWindowInsets();
   const { user, theme, firestoreDB, appdatabase } = useGlobalState();
   const { localState, updateLocalState } = useLocalState();
   const isDark = theme === 'dark';
@@ -681,7 +684,7 @@ export default function TradeMatchScreen() {
       {/* Dream item picker */}
       <Modal visible={pickerOpen} transparent animationType="slide" onRequestClose={() => setPickerOpen(false)}>
         <View style={styles.sheetBackdrop}>
-          <View style={[styles.sheet, { backgroundColor: c.bg, paddingBottom: insets.bottom + 12 }]}>
+          <View style={[styles.sheet, { backgroundColor: c.bg, paddingBottom: sheetInsets.bottom + 12 }]}>
             <View style={[styles.row, styles.sheetHead]}>
               <Text style={[styles.listTitle, styles.mt0, { color: c.text }]}>{t('trade_match.dream_pick')}</Text>
               <TouchableOpacity onPress={() => setPickerOpen(false)} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel={t('trade_match.close')}>

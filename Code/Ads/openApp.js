@@ -46,6 +46,11 @@ const MIN_INTERVAL_MS = APP_OPEN_MIN_INTERVAL_MS;
 const APP_START_AT = Date.now();          // module load ≈ JS start (App.js imports this at the top)
 const K_LAST_COLD_AD = 'appOpenLastColdStartAt';
 const K_LAUNCHED_BEFORE = 'appOpenHasLaunchedBefore';
+// Set by i18n.js just before it reloads the app for a layout-direction change
+// (switching to or from Arabic). That reload is not a launch, so it must not
+// get a launch ad. Honoured once, and only if it is fresh.
+export const K_SKIP_NEXT_COLD_AD = 'appOpenSkipNextColdStartAt';
+const SKIP_FLAG_MAX_AGE_MS = 60 * 1000;
 
 // isPro / proGranted are read straight from MMKV so every foreground show
 // respects the latest purchase state without any React wiring into this
@@ -129,6 +134,12 @@ class AppOpenAdManager {
     // file), and again (no-op) from App.js.
     if (this.coldStartDecided) return;
     this.coldStartDecided = true;
+    let skipAt = 0;
+    try {
+      skipAt = Number(storage?.getString(K_SKIP_NEXT_COLD_AD)) || 0;
+      if (skipAt) storage.remove(K_SKIP_NEXT_COLD_AD);
+    } catch (_) {}
+    if (skipAt && Date.now() - skipAt < SKIP_FLAG_MAX_AGE_MS) return;
     let lastCold = 0;
     try { lastCold = Number(storage?.getString(K_LAST_COLD_AD)) || 0; } catch (_) {}
     const eligible = launchedBefore && !noAppOpenAds() &&

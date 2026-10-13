@@ -1,5 +1,14 @@
 import {trackGrowthEvent} from './Code/Helper/growthAnalytics';
 import i18n from "i18next";
+import { I18nManager, NativeModules, Platform, Alert } from "react-native";
+import dayjs from "dayjs";
+import "dayjs/locale/pt-br";
+import "dayjs/locale/es";
+import "dayjs/locale/fr";
+import "dayjs/locale/de";
+import "dayjs/locale/ru";
+import "dayjs/locale/ja";
+import "dayjs/locale/ar";
 import { initReactI18next } from "react-i18next";
 import * as RNLocalize from "react-native-localize";
 import { createMMKV } from "react-native-mmkv";
@@ -87,11 +96,55 @@ i18n
     },
   });
 
+// dayjs dates and "5 minutes ago" follow the app language, not English
+// (same fix as Adopt Me's i18n.js). Spain uses the shared es locale, and pt
+// players are overwhelmingly Brazilian.
+const DAYJS_LOCALE = { en: 'en', pt: 'pt-br', es: 'es', 'es-ES': 'es', fr: 'fr', de: 'de', ru: 'ru', ja: 'ja', ar: 'ar' };
+const syncDayjsLocale = (lng) => dayjs.locale(DAYJS_LOCALE[lng] || 'en');
+syncDayjsLocale(initialLanguage);
+i18n.on('languageChanged', syncDayjsLocale);
+
+// ── Layout direction follows the IN-APP language, not the phone ──────────
+// Arabic is right-to-left; everything else is left-to-right. Before
+// 2026-10-13 the app never called I18nManager, so an Arabic phone got a
+// mirrored layout even with English picked in the app, and Arabic picked on
+// an English phone got Arabic text in a left-to-right layout.
+//
+// forceRTL only takes effect when the React host starts, so it is set on
+// every launch (correct from the next start) and, on a switch that changes
+// direction, the app reloads at once: Android through the AppReload native
+// module (android/.../AppReloadModule.kt); iOS has no such module yet, so the
+// player is asked to reopen the app.
+export const isRTLLanguage = (lng) => lng === 'ar';
+const applyLayoutDirection = (lng) => {
+  const rtl = isRTLLanguage(lng);
+  try {
+    I18nManager.allowRTL(rtl);
+    I18nManager.forceRTL(rtl);
+  } catch (e) { /* layout direction is cosmetic; never block startup */ }
+  return rtl;
+};
+applyLayoutDirection(initialLanguage);
+
+const reloadForDirection = () => {
+  const reload = NativeModules.AppReload?.reload;
+  if (Platform.OS === 'android' && typeof reload === 'function') {
+    // A reload is not a launch: no launch ad (Code/Ads/openApp.js).
+    storage.set('appOpenSkipNextColdStartAt', String(Date.now()));
+    // Let the language and MMKV writes land before the JS context goes away.
+    setTimeout(() => reload(), 150);
+    return;
+  }
+  Alert.alert(i18n.t('language.restart_title'), i18n.t('language.restart_body'));
+};
+
 // Function to update language and store in MMKV
 export const setAppLanguage = (languageCode) => {
   i18n.changeLanguage(languageCode);
   storage.set("appLanguage", languageCode);
   trackGrowthEvent("app_language_selected", {language: languageCode});
+  const rtl = applyLayoutDirection(languageCode);
+  if (rtl !== I18nManager.isRTL) reloadForDirection();
 };
 
 export default i18n;

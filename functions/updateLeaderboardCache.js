@@ -9,7 +9,7 @@
  *   1. Read every doc in user_ratings_summary
  *   2. Keep users with >= 1 review AND averageRating >= MIN_RATING_THRESHOLD
  *   3. Sort by review count desc, then rating desc as a tie-break
- *   4. Take the top 50
+ *   4. Take the top 50 (from the best 80, skipping deleted accounts)
  *   5. Attach displayName + avatar from RTDB users/{uid}
  *   6. Write the whole thing to one document
  *
@@ -35,6 +35,10 @@ const MIN_RATING_THRESHOLD = 3.7; // Minimum average rating to qualify
 const TOP_USERS_LIMIT = 50;       // Size of the cached leaderboard
 const DEFAULT_AVATAR = 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
 const RTDB_CONCURRENCY = 10;      // Parallel RTDB lookups per batch
+// Deleted accounts keep their user_ratings_summary doc, so some candidates
+// resolve to no profile and are dropped. Read a few extra so the cached list
+// still fills to TOP_USERS_LIMIT.
+const CANDIDATE_POOL = TOP_USERS_LIMIT + 30;
 
 /** Read user_ratings_summary and return the qualifying users, best first. */
 const collectTopUsers = async () => {
@@ -68,7 +72,7 @@ const collectTopUsers = async () => {
       : b.averageRating - a.averageRating
   ));
 
-  return eligible.slice(0, TOP_USERS_LIMIT);
+  return eligible.slice(0, CANDIDATE_POOL);
 };
 
 /**
@@ -85,12 +89,15 @@ const attachProfiles = async (topUsers) => {
   for (let i = 0; i < topUsers.length; i += RTDB_CONCURRENCY) {
     const batch = topUsers.slice(i, i + RTDB_CONCURRENCY);
     const resolved = await Promise.all(batch.map(async (user, offset) => {
-      const rank = i + offset + 1; // 1-based, positional
       let profile = null;
       try {
         const snap = await database.ref(`users/${user.userId}`).once('value');
+        // No users/{uid} at all = a deleted account (2026-10-13: three of the
+        // top 50 showed as "Anonymous" this way). Leave it off the board.
+        if (!snap.exists()) return null;
         profile = snap.val();
       } catch (error) {
+        // A failed read is not a deleted account: keep the entry.
         console.error(`[Leaderboard] profile read failed for ${user.userId}:`, error?.message);
       }
       return {
@@ -99,14 +106,16 @@ const attachProfiles = async (topUsers) => {
         averageRating: user.averageRating,
         displayName: profile?.displayName || 'Anonymous',
         avatar: profile?.avatar || DEFAULT_AVATAR,
-        rank,
         updatedAt: user.updatedAt,
       };
     }));
-    out.push(...resolved);
+    out.push(...resolved.filter(Boolean));
+    if (out.length >= TOP_USERS_LIMIT) break;
   }
 
-  return out;
+  // Rank comes from the position in the final list (1-based), after deleted
+  // accounts are gone, so ranks stay 1..N without gaps.
+  return out.slice(0, TOP_USERS_LIMIT).map((u, idx) => ({ ...u, rank: idx + 1 }));
 };
 
 /** Shared by the scheduled and manual entry points. */

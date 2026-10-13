@@ -94,7 +94,14 @@ exports.notifyPostLike = functions
             : `${likerName} liked your post`,
         },
         data: { type: 'post_like', postId, likerId },
-        android: { priority: 'high' },
+        // channelId 'default': the high-importance channel the app creates
+        // (Code/Helper/postNotifications.js) and notifyPostComment already
+        // names, as Adopt Me's notifyPostReaction does. Builds that never
+        // created it fall back to FCM's channel, exactly as before.
+        android: {
+          priority: 'high',
+          notification: { channelId: 'default', sound: 'default' },
+        },
         apns: { payload: { aps: { sound: 'default' } } },
       });
 

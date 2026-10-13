@@ -43,6 +43,22 @@ const { db, encodeEmailForBan, banEmailFor, logModAction } = require('./_userEma
 
 const OPTS = { region: 'us-central1', memory: '128MiB', timeoutSeconds: 60 };
 
+// Report counters are written by clients, so a counter alone must never be
+// able to remove staff (2026-10-13 audit: one write of reportCount = 2, or of
+// a post's `banned`, banned anyone). Staff = the role flags the RTDB rules'
+// STAFF expression checks. A failed lookup counts as staff: skipping one
+// auto-ban is cheaper than banning a moderator.
+const isStaffUid = async (uid) => {
+  if (!uid) return false;
+  try {
+    const u = (await db().ref(`users/${uid}`).once('value')).val() || {};
+    return u.admin === true || u.isAdmin === true || u.isModerator === true
+      || u.isBabyMod === true || u.isSeniorMod === true;
+  } catch (e) {
+    return true;
+  }
+};
+
 // The second report bans. ReportPopUp's old test was "reportCount >= 1 when
 // this report arrives", i.e. reaching 2.
 const MESSAGE_REPORT_THRESHOLD = 2;
@@ -83,6 +99,10 @@ const makeMessageAutoBan = (path) => onValueUpdated({ ...OPTS, ref: `/${path}/{m
     if (!message || typeof message !== 'object') return null;
 
     const senderId = message.senderId || null;
+    if (await isStaffUid(senderId)) {
+      console.log(`[autoBanOnMessageReports] ${path}/${messageId}: sender ${senderId} is staff; not banned, message kept`);
+      return null;
+    }
     const email = senderId ? await banEmailFor(senderId) : null;
 
     // Same guard the client had: no email, no ban — the message still goes.
@@ -168,8 +188,15 @@ exports.autoBanOnPostReports = onDocumentUpdated({ ...OPTS, document: 'designPos
   if (after.email) return null;           // the reporter's app handles it
   const userId = after.userId;
   if (!userId || userId === 'Anonymous') return null;
+  // ReportModal sets `banned` on the report that reaches 2, in the same
+  // write as reportCount. A bare `banned: true` is not a report.
+  if (!(Number(after.reportCount) >= 2)) return null;
 
   const { postId } = event.params;
+  if (await isStaffUid(userId)) {
+    console.log(`[autoBanOnPostReports] ${postId}: author ${userId} is staff; not banned`);
+    return null;
+  }
   try {
     const email = await banEmailFor(userId);
     if (!email) {

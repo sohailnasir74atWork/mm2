@@ -154,6 +154,29 @@ test('reindex: hide removes, show (or absent) restores', async () => {
   assert.strictEqual(await val('birthday_counts/1013'), 1);
 });
 
+test('reindex: a hidden 13+ player is listed server-side only (birthday email), and moves back on show', async () => {
+  await player('ann', { dob: '2000-10-13' });
+  await player('kid', { dob: '2016-10-13' });
+  await db.ref('birthday_prefs/ann').set({ show: false });
+  await db.ref('birthday_prefs/kid').set({ show: false });
+  await core.reindexBirthday('ann');
+  await core.reindexBirthday('kid');
+  assert.strictEqual(await val('birthday_server/hidden13/1013/ann'), true);
+  assert.strictEqual(await val('birthday_server/hidden_key/ann'), '1013');
+  assert.strictEqual(await val('birthday_server/hidden13/1013/kid'), null, 'under 13 is never on hidden13');
+  assert.strictEqual(await val('birthday_index/1013/ann'), null);
+  // A corrected DOB moves the hidden entry too.
+  await db.ref('users_private/ann/dateOfBirth').set('2000-03-05');
+  await core.reindexBirthday('ann');
+  assert.strictEqual(await val('birthday_server/hidden13/1013/ann'), null);
+  assert.strictEqual(await val('birthday_server/hidden13/0305/ann'), true);
+  await db.ref('birthday_prefs/ann').set({ show: true });
+  await core.reindexBirthday('ann');
+  assert.strictEqual(await val('birthday_server/hidden13/0305/ann'), null);
+  assert.strictEqual(await val('birthday_server/hidden_key/ann'), null);
+  assert.strictEqual(await val('birthday_index/0305/ann'), true);
+});
+
 test('reindex: under 13 is never indexed; refreshBirthdayAges adds them the day they turn 13', async () => {
   // Turns 13 on 2026-10-14.
   const r = await player('kid', { dob: '2013-10-14' });
@@ -706,4 +729,41 @@ test('rules: the app can add a first date of birth once, never change it', async
   const b = await signUp();
   assert.ok(!(await canWrite(`users_private/${b.uid}/dateOfBirth`, 'not-a-date', b.token)));
   assert.ok(!(await canWrite(`users_private/${b.uid}/dateOfBirth`, '2000-10-13', a.token)));
+});
+
+// ═══ birthday email (notifyBirthdayEmails.js, emailUnsubscribe.js) ═══════════
+
+test('birthday email: the unsubscribe write leaves email_prefs usable by the app (live rules)', async () => {
+  const { handle } = require('../emailUnsubscribe')._internals;
+  const { unsubToken } = require('../birthdayEmail');
+  const a = await signUp();
+  // What the app writes on sign-in (Code/Helper/emailOptIn.js saveEmailPrefs), with a DOB.
+  assert.strictEqual(await rest('PATCH', `email_prefs/${a.uid}`, {
+    token: a.token, body: { optIn: true, source: 'signin', updatedAt: { '.sv': 'timestamp' }, dob: '2000-10-13' },
+  }), 200);
+  const res = { code: 0 };
+  res.set = () => res;
+  res.status = (c) => { res.code = c; return res; };
+  res.send = () => res;
+  await handle({ method: 'POST', query: { u: a.uid, t: unsubToken(a.uid, 's3cret'), l: 'en' } }, res, { db, secret: 's3cret' });
+  assert.strictEqual(res.code, 200);
+  const prefs = await val(`email_prefs/${a.uid}`);
+  assert.deepStrictEqual([prefs.optIn, prefs.source, prefs.dob, typeof prefs.updatedAt], [false, 'settings', '2000-10-13', 'number']);
+  // The owner still reads it, and Settings → Email updates can turn it back on (same update the app sends).
+  assert.ok(await canRead(`email_prefs/${a.uid}`, a.token));
+  assert.strictEqual(await rest('PATCH', `email_prefs/${a.uid}`, {
+    token: a.token, body: { optIn: true, source: 'settings', updatedAt: { '.sv': 'timestamp' } },
+  }), 200);
+  assert.strictEqual(await val(`email_prefs/${a.uid}/optIn`), true);
+  // A player with no prefs yet: the unsubscribe creates a node the app can still update.
+  const b = await signUp();
+  await handle({ method: 'POST', query: { u: b.uid, t: unsubToken(b.uid, 's3cret') } }, res, { db, secret: 's3cret' });
+  assert.strictEqual(await rest('PATCH', `email_prefs/${b.uid}`, {
+    token: b.token, body: { optIn: true, source: 'settings', updatedAt: { '.sv': 'timestamp' }, dob: '2001-01-02' },
+  }), 200);
+  // Clients can neither read nor write the email claims or the hidden index.
+  for (const p of [`birthday_server/email_sent/2026/${a.uid}`, 'birthday_server/email_day', `birthday_server/hidden13/1013/${a.uid}`, `birthday_server/hidden_key/${a.uid}`]) {
+    assert.ok(!(await canWrite(p, 1, a.token)), `client wrote ${p}`);
+    assert.ok(!(await canRead(p, a.token)), `client read ${p}`);
+  }
 });

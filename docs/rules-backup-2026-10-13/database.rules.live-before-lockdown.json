@@ -1,0 +1,630 @@
+{
+  "rules": {
+    "email_prefs": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid && newData.exists()",
+        ".validate": "newData.hasChildren(['optIn', 'updatedAt', 'source']) && (!data.child('dob').exists() || newData.child('dob').val() === data.child('dob').val())",
+        "optIn": {
+          ".validate": "newData.isBoolean()"
+        },
+        "updatedAt": {
+          ".validate": "newData.val() === now"
+        },
+        "source": {
+          ".validate": "newData.val() === 'signin' || newData.val() === 'prompt' || newData.val() === 'settings'"
+        },
+        "dob": {
+          ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && (!data.exists() || data.val() === newData.val())"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "users": {
+      ".indexOn": [
+        "displayName",
+        "isSelectedReminderEnabled",
+        "isReminderEnabled",
+        "fcmToken",
+        "admin",
+        "isModerator",
+        "isBabyMod",
+        "isTrusted",
+        "isCMSR",
+        "isHelper",
+        "email",
+        "isAdmin",
+        "isSeniorMod"
+      ],
+      ".read": "auth != null",
+      "$userId": {
+        ".read": true,
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('admin').val() === true || root.child('users').child(auth.uid).child('isAdmin').val() === true || (auth.token.email_verified === true && (auth.token.email === 'thesolanalabs@gmail.com' || auth.token.email === 'sohailnasir74business@gmail.com' || auth.token.email === 'sohailnasir74@gmail.com')) || (newData.child('admin').val() === data.child('admin').val() && newData.child('isAdmin').val() === data.child('isAdmin').val() && newData.child('isSeniorMod').val() === data.child('isSeniorMod').val() && newData.child('isModerator').val() === data.child('isModerator').val() && (newData.child('isBabyMod').val() === data.child('isBabyMod').val() || root.child('jmd_granters').child(auth.uid).val() === true) && (newData.child('isTrusted').val() === data.child('isTrusted').val() || root.child('users').child(auth.uid).child('isModerator').val() === true) && (newData.child('isCMSR').val() === data.child('isCMSR').val() || root.child('users').child(auth.uid).child('isModerator').val() === true) && (newData.child('isHelper').val() === data.child('isHelper').val() || root.child('users').child(auth.uid).child('isModerator').val() === true)))"
+      }
+    },
+    "users_private": {
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('admin').val() === true || root.child('users').child(auth.uid).child('isAdmin').val() === true || root.child('users').child(auth.uid).child('isSeniorMod').val() === true || root.child('users').child(auth.uid).child('isModerator').val() === true || root.child('users').child(auth.uid).child('isBabyMod').val() === true || root.child('jmd_granters').child(auth.uid).exists() || (auth.token.email_verified === true && (auth.token.email === 'thesolanalabs@gmail.com' || auth.token.email === 'sohailnasir74business@gmail.com' || auth.token.email === 'sohailnasir74@gmail.com')))",
+      ".indexOn": [
+        "email"
+      ],
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid && newData.exists()",
+        ".validate": "(!data.child('email').exists() || newData.child('email').exists()) && (!data.child('dateOfBirth').exists() || newData.child('dateOfBirth').val() === data.child('dateOfBirth').val())",
+        "email": {
+          ".validate": "newData.isString() && auth.token.email != null && newData.val() === auth.token.email.toLowerCase()"
+        },
+        "dateOfBirth": {
+          ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && (!data.exists() || data.val() === newData.val())"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "birthday_prefs": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['show'])",
+        "show": {
+          ".validate": "newData.isBoolean()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "birthday_index": {
+      "$key": {
+        ".read": "auth != null"
+      },
+      ".write": false
+    },
+    "birthday_counts": {
+      "$key": {
+        ".read": "auth != null"
+      },
+      ".write": false
+    },
+    "birthday_server": {
+      ".read": false,
+      ".write": false
+    },
+    "birthday_wishes": {
+      "$year": {
+        "$toUid": {
+          ".read": "auth != null && auth.uid === $toUid"
+        }
+      },
+      ".write": false
+    },
+    "birthday_sent": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid"
+      },
+      ".write": false
+    },
+    "birthday_wish_counts": {
+      "$year": {
+        "$uid": {
+          ".read": "auth != null"
+        }
+      },
+      ".write": false
+    },
+    "birthday_wished_by": {
+      ".read": false,
+      ".write": false
+    },
+    "birthday_gifts": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid"
+      },
+      ".write": false
+    },
+    "xlsData": {
+      ".read": true,
+      ".write": true
+    },
+    "feedRanking": {
+      ".read": true,
+      ".write": false
+    },
+    "presence": {
+      ".indexOn": [
+        ".value"
+      ],
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "savedTrades": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "activeGroupChats": {
+      ".read": true,
+      ".write": true
+    },
+    "group_meta_data": {
+      ".read": true,
+      ".write": true
+    },
+    "group_messages": {
+      ".read": true,
+      ".write": true
+    },
+    "single_offer_wall": {
+      ".read": true,
+      ".write": true
+    },
+    "news": {
+      ".read": true,
+      ".write": false,
+      "updates": {
+        "$id": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('admin').val() === true || root.child('users').child(auth.uid).child('isAdmin').val() === true || (auth.token.email_verified === true && (auth.token.email === 'thesolanalabs@gmail.com' || auth.token.email === 'sohailnasir74business@gmail.com' || auth.token.email === 'sohailnasir74@gmail.com')))",
+          ".validate": "newData.hasChildren(['title', 'body', 'createdAt', 'updatedAt'])",
+          "title": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120"
+          },
+          "body": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 5000"
+          },
+          "createdAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "updatedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "order": {
+            ".validate": "newData.isNumber()"
+          },
+          "tag": {
+            ".validate": "newData.isString() && newData.val().length <= 30"
+          },
+          "by": {
+            ".validate": "newData.val() === auth.uid"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+    "news_feedback": {
+      ".indexOn": [
+        "createdAt"
+      ],
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('admin').val() === true || root.child('users').child(auth.uid).child('isAdmin').val() === true || root.child('users').child(auth.uid).child('isSeniorMod').val() === true || root.child('users').child(auth.uid).child('isModerator').val() === true || root.child('users').child(auth.uid).child('isBabyMod').val() === true || root.child('jmd_granters').child(auth.uid).exists() || (auth.token.email_verified === true && (auth.token.email === 'thesolanalabs@gmail.com' || auth.token.email === 'sohailnasir74business@gmail.com' || auth.token.email === 'sohailnasir74@gmail.com')))",
+      "$id": {
+        ".write": "(!data.exists() && newData.exists()) || (data.exists() && !newData.exists() && (auth != null && (root.child('users').child(auth.uid).child('admin').val() === true || root.child('users').child(auth.uid).child('isAdmin').val() === true || (auth.token.email_verified === true && (auth.token.email === 'thesolanalabs@gmail.com' || auth.token.email === 'sohailnasir74business@gmail.com' || auth.token.email === 'sohailnasir74@gmail.com')))))",
+        ".validate": "newData.hasChild('createdAt') && newData.child('createdAt').isNumber() && (newData.child('type').val() === 'poll_vote' || newData.child('type').val() === 'quick_suggestion' || newData.child('type').val() === 'custom_feedback') && (!newData.child('userId').exists() || newData.child('userId').val() === 'anonymous' || (auth != null && newData.child('userId').val() === auth.uid))",
+        "text": {
+          ".validate": "newData.isString() && newData.val().length <= 2000"
+        }
+      }
+    },
+    "user_reports": {
+      ".read": "(auth != null && (root.child('users').child(auth.uid).child('admin').val() === true || root.child('users').child(auth.uid).child('isAdmin').val() === true || (auth.token.email_verified === true && (auth.token.email === 'thesolanalabs@gmail.com' || auth.token.email === 'sohailnasir74business@gmail.com' || auth.token.email === 'sohailnasir74@gmail.com')))) || (auth != null && query.orderByChild === 'userId' && query.equalTo === auth.uid && query.limitToLast <= 30)",
+      ".indexOn": [
+        "createdAt",
+        "userId"
+      ],
+      "$id": {
+        ".write": "(auth != null && !data.exists() && newData.child('userId').val() === auth.uid) || (data.exists() && (auth != null && (root.child('users').child(auth.uid).child('admin').val() === true || root.child('users').child(auth.uid).child('isAdmin').val() === true || (auth.token.email_verified === true && (auth.token.email === 'thesolanalabs@gmail.com' || auth.token.email === 'sohailnasir74business@gmail.com' || auth.token.email === 'sohailnasir74@gmail.com')))))",
+        ".validate": "newData.hasChildren(['userId', 'type', 'text', 'createdAt', 'status']) && (data.exists() || newData.parent().parent().child('user_report_last').child(auth.uid).val() === now)",
+        "userId": {
+          ".validate": "newData.isString() && (data.exists() ? newData.val() === data.val() : newData.val() === auth.uid)"
+        },
+        "userName": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "avatar": {
+          ".validate": "newData.isString() && newData.val().length <= 500"
+        },
+        "type": {
+          ".validate": "newData.val() === 'complaint' || newData.val() === 'suggestion'"
+        },
+        "category": {
+          ".validate": "newData.isString() && newData.val().length <= 30"
+        },
+        "text": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 2000"
+        },
+        "images": {
+          "$i": {
+            ".validate": "$i.matches(/^[0-2]$/) && newData.isString() && newData.val().beginsWith('https://pull-gag.b-cdn.net/report-images/' + auth.uid + '/') && newData.val().length <= 200"
+          }
+        },
+        "app": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "createdAt": {
+          ".validate": "data.exists() ? newData.val() === data.val() : newData.val() === now"
+        },
+        "status": {
+          ".validate": "data.exists() ? (newData.val() === 'open' || newData.val() === 'done') : newData.val() === 'open'"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "user_report_last": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid && newData.exists()",
+        ".validate": "newData.val() === now && (!data.exists() || now - data.val() > 60000)"
+      }
+    },
+    "like_counter": {
+      ".read": true,
+      ".write": true
+    },
+    "pic_numbers": {
+      ".read": true,
+      ".write": true
+    },
+    "banned_users_by_email": {
+      ".indexOn": [
+        "bannedAt",
+        "displayName"
+      ],
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('admin').val() === true || root.child('users').child(auth.uid).child('isAdmin').val() === true || root.child('users').child(auth.uid).child('isSeniorMod').val() === true || root.child('users').child(auth.uid).child('isModerator').val() === true || root.child('users').child(auth.uid).child('isBabyMod').val() === true || root.child('jmd_granters').child(auth.uid).exists() || (auth.token.email_verified === true && (auth.token.email === 'thesolanalabs@gmail.com' || auth.token.email === 'sohailnasir74business@gmail.com' || auth.token.email === 'sohailnasir74@gmail.com')))",
+      ".write": "auth != null",
+      "$emailKey": {
+        ".read": true
+      }
+    },
+    "banned_users_by_email_post": {
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('admin').val() === true || root.child('users').child(auth.uid).child('isAdmin').val() === true || root.child('users').child(auth.uid).child('isSeniorMod').val() === true || root.child('users').child(auth.uid).child('isModerator').val() === true || root.child('users').child(auth.uid).child('isBabyMod').val() === true || root.child('jmd_granters').child(auth.uid).exists() || (auth.token.email_verified === true && (auth.token.email === 'thesolanalabs@gmail.com' || auth.token.email === 'sohailnasir74business@gmail.com' || auth.token.email === 'sohailnasir74@gmail.com')))",
+      ".write": "auth != null",
+      "$emailKey": {
+        ".read": true
+      }
+    },
+    "notifier": {
+      ".read": true,
+      ".write": true
+    },
+    "notifier_index": {
+      ".read": true,
+      ".write": true
+    },
+    "api": {
+      ".read": true,
+      ".write": true
+    },
+    "design": {
+      ".read": true,
+      ".write": true
+    },
+    "free_translation": {
+      ".read": true,
+      ".write": true
+    },
+    "server": {
+      ".read": true,
+      ".write": true
+    },
+    "users_server": {
+      ".read": false,
+      ".write": false
+    },
+    "staff_claims": {
+      ".read": false,
+      ".write": false
+    },
+    "fruit_data": {
+      ".read": true,
+      ".write": true
+    },
+    "ratings": {
+      ".read": true,
+      ".write": true
+    },
+    "averageRatings": {
+      ".read": true,
+      ".write": true
+    },
+    "noman_app_version": {
+      ".read": true,
+      ".write": true
+    },
+    "leader_board": {
+      ".read": true,
+      ".write": false
+    },
+    "previous_enrole": {
+      ".read": true,
+      ".write": true
+    },
+    "waqas_app_version": {
+      ".read": true,
+      ".write": true
+    },
+    "ios_version": {
+      ".read": true,
+      ".write": true
+    },
+    "featuredCounts": {
+      ".read": true,
+      ".write": true
+    },
+    "reward": {
+      ".read": true,
+      ".write": true
+    },
+    "prize": {
+      ".read": true,
+      ".write": true
+    },
+    "winners": {
+      ".read": true,
+      ".write": true
+    },
+    "calcData": {
+      ".read": true,
+      ".write": false
+    },
+    "chat_new": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "senderId",
+        "timestamp"
+      ]
+    },
+    "chat_es": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "senderId",
+        "timestamp"
+      ]
+    },
+    "chat_pt": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "senderId",
+        "timestamp"
+      ]
+    },
+    "chat_fr": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "senderId",
+        "timestamp"
+      ]
+    },
+    "chat_de": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "senderId",
+        "timestamp"
+      ]
+    },
+    "chat_ru": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "senderId",
+        "timestamp"
+      ]
+    },
+    "chat_ar": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "senderId",
+        "timestamp"
+      ]
+    },
+    "chat_id": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "senderId",
+        "timestamp"
+      ]
+    },
+    "chat_vi": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "senderId",
+        "timestamp"
+      ]
+    },
+    "chat_fil": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "senderId",
+        "timestamp"
+      ]
+    },
+    "pin_messages": {
+      ".read": true,
+      ".write": true
+    },
+    "privateChats": {
+      ".read": false,
+      ".write": false
+    },
+    "privateChat": {
+      ".read": false,
+      ".write": false
+    },
+    "bannedUsers": {
+      ".read": true,
+      ".write": true
+    },
+    "reports": {
+      ".read": true,
+      ".write": true
+    },
+    "lastseen": {
+      ".read": true,
+      ".write": false
+    },
+    "codes": {
+      ".read": true,
+      ".write": true
+    },
+    "factor": {
+      ".read": true,
+      ".write": true
+    },
+    "onlineUsers": {
+      ".read": true,
+      ".write": false,
+      ".indexOn": [
+        "status"
+      ]
+    },
+    "enrole": {
+      ".read": true,
+      ".write": true
+    },
+    "online_users_count": {
+      ".read": true,
+      ".write": true
+    },
+    "freeTradeUsed": {
+      ".read": true,
+      ".write": true
+    },
+    "tradeReports": {
+      ".read": true,
+      ".write": true
+    },
+    "activeChats": {
+      ".read": true,
+      ".write": true
+    },
+    "previousStock": {
+      ".read": true,
+      ".write": false
+    },
+    "onlineUsersCount": {
+      ".read": true,
+      ".write": false
+    },
+    "notifications": {
+      ".read": false,
+      ".write": false
+    },
+    "image_url": {
+      ".read": true,
+      ".write": true
+    },
+    "image_url_gg": {
+      ".read": true,
+      ".write": true
+    },
+    "appVersions": {
+      ".read": true,
+      ".write": true
+    },
+    "lastChecked": {
+      ".read": true,
+      ".write": true
+    },
+    "testing": {
+      ".read": true,
+      ".write": true
+    },
+    "private_chat_new": {
+      ".indexOn": [
+        "participants"
+      ],
+      ".read": true,
+      ".write": true,
+      "$chatId": {
+        "messages": {
+          ".indexOn": [
+            "timestamp"
+          ]
+        },
+        "participants": {
+          ".indexOn": [
+            "user1",
+            "user2"
+          ]
+        }
+      }
+    },
+    "chat_meta_data": {
+      ".read": true,
+      ".write": true,
+      "$uid": {
+        ".indexOn": [
+          "timestamp"
+        ]
+      }
+    },
+    "private_messages": {
+      ".read": true,
+      ".write": true
+    },
+    "private_chat": {
+      ".read": true,
+      ".write": true,
+      "$chatId": {
+        "messages": {
+          ".indexOn": [
+            "timestamp"
+          ]
+        },
+        "participants": {
+          ".indexOn": [
+            "user1",
+            "user2"
+          ]
+        }
+      }
+    },
+    "mods": {
+      ".read": true,
+      ".write": false
+    },
+    "trusted": {
+      ".read": true,
+      ".write": false
+    },
+    "cmsr": {
+      ".read": true,
+      ".write": false
+    },
+    "_serverTime": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "mod_controls_enabled": {
+      ".read": true,
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('admin').val() === true || root.child('users').child(auth.uid).child('isAdmin').val() === true || (auth.token.email_verified === true && (auth.token.email === 'thesolanalabs@gmail.com' || auth.token.email === 'sohailnasir74business@gmail.com' || auth.token.email === 'sohailnasir74@gmail.com')))"
+    },
+    "jmd_granters": {
+      ".read": true,
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('admin').val() === true || root.child('users').child(auth.uid).child('isAdmin').val() === true || (auth.token.email_verified === true && (auth.token.email === 'thesolanalabs@gmail.com' || auth.token.email === 'sohailnasir74business@gmail.com' || auth.token.email === 'sohailnasir74@gmail.com')))"
+    },
+    "helper": {
+      ".read": true,
+      ".write": false
+    }
+  }
+}
+

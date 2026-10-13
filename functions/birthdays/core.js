@@ -22,6 +22,11 @@
  *   birthday_server/index_key/{uid}      the key the uid is indexed under
  *   birthday_server/pending_key/{uid}    the key of an under-13 DOB
  *   birthday_server/pending13/{MMDD}/{uid}  under-13s, re-checked on their birthday
+ *   birthday_server/hidden_key/{uid}     the key of a 13+ player who hid their birthday
+ *   birthday_server/hidden13/{MMDD}/{uid}  13+ players who hid it (birthday email only:
+ *                                        never listed, never wished; 2026-10-13)
+ *   birthday_server/email_sent/{year}/{uid}, email_day   birthday email claims
+ *                                        (notifyBirthdayEmails.js)
  *   birthday_server/edits/{uid}          ms of the one-time correction
  *   birthday_server/sent_day/{uid}/{YYYY-MM-DD}  wishes sent that UTC day
  *   birthday_server/bday_pushed/{year}/{uid}, first_pushed/{year}/{uid},
@@ -154,22 +159,27 @@ async function setPresence(key, uid, present) {
 /**
  * Put `uid` where it belongs in birthday_index: under its DOB's 'MMDD' iff
  * the DOB is valid, the player is 13+ today (UTC) and has not hidden their
- * birthday. Under-13s go on the pending13 list for their birthday instead.
+ * birthday. Under-13s go on the pending13 list for their birthday instead;
+ * 13+ players who hid it go on hidden13 (read only by notifyBirthdayEmails).
  * Idempotent; safe to run any number of times. Resolves { key, pending }.
  */
 async function reindexBirthday(uid) {
   if (!okUid(uid)) return { key: null, pending: null };
   const today = D.utcToday(io.now());
-  const [dob, show, oldKey, oldPending] = await Promise.all([
+  const [dob, show, oldKey, oldPending, oldHidden] = await Promise.all([
     effectiveDob(uid),
     val(`birthday_prefs/${uid}/show`),
     val(`birthday_server/index_key/${uid}`),
     val(`birthday_server/pending_key/${uid}`),
+    val(`birthday_server/hidden_key/${uid}`),
   ]);
   const age = D.ageOn(dob, today);
   const dobKey = dob && age != null ? D.keyOf(dob.m, dob.d) : null;
   const key = dobKey && age >= MIN_AGE && show !== false ? dobKey : null;
   const pending = dobKey && age < MIN_AGE ? dobKey : null;
+  // 13+ but hidden: kept out of birthday_index (nobody sees or wishes them),
+  // listed server-side only so the birthday email still reaches them.
+  const hidden = dobKey && age >= MIN_AGE && show === false ? dobKey : null;
 
   if (typeof oldKey === 'string' && D.parseKey(oldKey) && oldKey !== key) await setPresence(oldKey, uid, false);
   if (key) await setPresence(key, uid, true);
@@ -182,6 +192,11 @@ async function reindexBirthday(uid) {
     updates[`birthday_server/pending13/${oldPending}/${uid}`] = null;
   }
   if (pending) updates[`birthday_server/pending13/${pending}/${uid}`] = true;
+  updates[`birthday_server/hidden_key/${uid}`] = hidden;
+  if (typeof oldHidden === 'string' && D.parseKey(oldHidden) && oldHidden !== hidden) {
+    updates[`birthday_server/hidden13/${oldHidden}/${uid}`] = null;
+  }
+  if (hidden) updates[`birthday_server/hidden13/${hidden}/${uid}`] = true;
   await ref('/').update(updates);
   return { key, pending };
 }
@@ -697,6 +712,7 @@ module.exports = {
   constants: { MIN_AGE, GIFT_STARS, DAILY_WISH_LIMIT, ACTIVE_DAYS, ACCOUNT_MIN_DAYS, TEMPLATES, DEFAULT_TOP_LIMIT, MAX_TOP_LIMIT },
   COPY,
   okUid,
+  accountOldEnough,
   effectiveDob,
   reindexBirthday,
   rankedToday,

@@ -1,6 +1,7 @@
 /**
  * uploadImage — every user image in the app (avatar, feed post, status,
- * group icon, group chat, private chat) goes to Bunny through here.
+ * group icon, group chat, private chat, report screenshot) goes to Bunny
+ * through here.
  *
  * Until 2026-10-11 the app PUT straight to storage.bunnycdn.com with the
  * post-gag zone's storage password compiled into the bundle, so anyone who
@@ -58,6 +59,9 @@ const KINDS = {
   chat: { dir: 'chat', maxBytes: 3 * MB },
   status: { dir: 'statuses', maxBytes: 3 * MB },
   group: { dir: 'groups', maxBytes: 3 * MB },
+  // More ▸ Complaints & ideas screenshots. The user_reports rule only accepts
+  // URLs under report-images/<the sender's uid>/.
+  report: { dir: 'report-images', maxBytes: 3 * MB },
 };
 
 // Per user, across all kinds. A chat message carries up to 3 images.

@@ -10,7 +10,7 @@
     "test:birthdays": "firebase emulators:exec --config ../firebase.test.json --project demo-mm2 --only database,firestore,auth 'node --test test/birthdays.test.js'"
   },
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "private": true,

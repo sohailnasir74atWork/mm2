@@ -73,6 +73,21 @@ for (const [name, fn] of Object.entries(chatMaintenance)) {
 exports.notifyPostComment = require('./notifyPostComment').notifyPostComment;
 exports.notifyPostLike = require('./notifyPostLike').notifyPostLike;
 
+// ── Group pushes (2026-10-13, ported from Adopt Me) ───────────────────
+// Invitations, join requests and new group messages. None of the three was
+// ever deployed on this project (checked against `gcloud functions list`
+// 2026-10-13). All read-only apart from clearing dead FCM tokens. Each honours
+// an opt-out under users/{uid}/notificationSettings — groupInvitationNotifications,
+// groupJoinRequestNotifications, groupChatNotifications; absent means on —
+// and skips players who blocked the sender (bannedUsers/{uid}/{sender}).
+// notifyGroupMessage also skips muted groups and readers of the chat, caps
+// pushes per group at 3 unread, and collapses each group to one notification.
+// Deploy by name:
+//   firebase deploy --only functions:notifyGroupInvitation,functions:notifyGroupJoinRequest,functions:notifyGroupMessage --project mm2vlaues-ed80c
+exports.notifyGroupInvitation = require('./notifyGroupInvitation').notifyGroupInvitation;
+exports.notifyGroupJoinRequest = require('./notifyGroupJoinRequest').notifyGroupJoinRequest;
+exports.notifyGroupMessage = require('./notifyGroupMessage').notifyGroupMessage;
+
 // ── Role rosters (mods / trusted / cmsr) ───────────────────────────────
 const rosters = require('./syncRoleRosters');
 exports.syncModRole_Moderator = rosters.syncModRole_Moderator;
@@ -106,6 +121,18 @@ exports.cleanupOldPosts = retention.cleanupOldPosts;
 // nothing ever writes that field.
 // exports.cleanupDeadGroups = require('./cleanupDeadGroups').cleanupDeadGroups;
 exports.expireFeaturedTrades = require('./expireFeaturedTrades').expireFeaturedTrades;
+
+// ── Feed Hot / Trending (2026-10-13) ───────────────────────────────────
+// The feed's Hot and Trending tabs read /feedRanking/{hot,trending}, which
+// only this function writes (every 30 min, ≤200 Firestore reads per run).
+// It lived in Code/CloudFunctions and was never deployed, so both tabs were
+// always empty.
+exports.computeFeedRanking = require('./computeFeedRanking').computeFeedRanking;
+
+// Every ban record gets `bannedAt`: the Banned List orders by it, and RTDB
+// leaves records missing the key out of that query (88 of 103 were). Ported
+// from Adopt Me 2026-10-13.
+exports.stampBanTimestamp = require('./stampBanTimestamp').stampBanTimestamp;
 
 // ── Email privacy, round 2 (2026-09-27) ────────────────────────────────
 // Emails leave every public node: users/{uid} → users_private/{uid}, and
@@ -155,3 +182,43 @@ for (const name of [
 ]) {
   exports[name] = birthdays[name];
 }
+
+// ── Birthday email (2026-10-13, ported from Adopt Me) ─────────────────
+// One email through Brevo on the player's birthday: every player turning 13+
+// today (shown or hidden birthday) unless email_prefs/{uid}.optIn === false;
+// never Apple relay addresses; at most 100 a UTC day (Brevo's free 300/day is
+// shared with Adopt Me and Blox). Claimed once per year in
+// birthday_server/email_sent, so a retry never double-sends. See
+// notifyBirthdayEmails.js, birthdayEmail.js and emailUnsubscribe.js.
+//
+// Needs the BREVO_API_KEY and EMAIL_UNSUB_SECRET secrets and the mm2values.app
+// sender authenticated in Brevo BEFORE the first deploy. It also relies on the
+// birthday_server/hidden13 index added to birthdays/core.js the same day, so
+// redeploy the reindexBirthday callers with it. Deploy by name:
+//   firebase deploy --only functions:emailUnsubscribe,functions:notifyBirthdayEmails,functions:birthdayIndexOnDob,functions:birthdayIndexOnEmailDob,functions:birthdayIndexOnShow,functions:updateMyBirthday,functions:refreshBirthdayAges --project mm2vlaues-ed80c
+//
+// notifyBirthdayEmails is a SCHEDULER: deploy it, then PAUSE it straight away
+// and leave it paused until the owner approves the first real send:
+//   gcloud scheduler jobs pause firebase-schedule-notifyBirthdayEmails-us-central1 --location us-central1 --project mm2vlaues-ed80c
+// Resume (owner's call only):
+//   gcloud scheduler jobs resume firebase-schedule-notifyBirthdayEmails-us-central1 --location us-central1 --project mm2vlaues-ed80c
+// A later `firebase deploy` of this function does not un-pause the job.
+// emailUnsubscribe is safe to leave live: it only ever turns email OFF.
+exports.notifyBirthdayEmails = require('./notifyBirthdayEmails').notifyBirthdayEmails;
+exports.emailUnsubscribe = require('./emailUnsubscribe').emailUnsubscribe;
+
+// ── Trade Match (2026-10-13) ───────────────────────────────────────────
+// Port of Adopt Me's Trade Match onto Firebase. tradeMatchIndex mirrors every
+// player's public lists (Firestore reviews/{uid}.ownedPets / .wishlistPets,
+// written by every build) into the RTDB inverted index trade_index/*, which
+// the app queries per item (Code/Helper/tradeMatch.js). Additive: new nodes
+// only. tradeMatchDreamAlerts pushes "your dream item is up for trade"; deploy
+// it after the app routes data.route 'TradeMatch'. Rules first (trade_index
+// block, with its .indexOn), then:
+//   firebase deploy --only functions:tradeMatchIndex --project mm2vlaues-ed80c
+//   node scripts/trade-match/backfillIndex.js --prod            (dry run)
+//   node scripts/trade-match/backfillIndex.js --prod --apply
+//   firebase deploy --only functions:tradeMatchDreamAlerts --project mm2vlaues-ed80c
+const tradeMatch = require('./tradeMatch');
+exports.tradeMatchIndex = tradeMatch.tradeMatchIndex;
+exports.tradeMatchDreamAlerts = tradeMatch.tradeMatchDreamAlerts;

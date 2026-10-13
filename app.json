@@ -2,6 +2,7 @@
   "name": "bloxfruitevalues",
   "displayName": "bloxfruitevalues",
   "react-native-google-mobile-ads": {
+    "android_sdk": "nextgen",
     "android_app_id": "ca-app-pub-5740215782746766~6229019896",
     "ios_app_id": "ca-app-pub-5740215782746766~6594069138",
     "delay_app_measurement_init": true,

@@ -4,6 +4,7 @@ import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import getAdUnitId from './ads';
 import { useLocalState } from '../LocalGlobelStats';
 import { useAdsReady } from './adsGate';
+import { logAdRevenue } from './adTelemetry';
 
 // NPA gating: only force non-personalized ads when we truly have to.
 // Forcing NPA on every user (the old behaviour) cut eCPM ~40-60% for ~80%
@@ -115,6 +116,10 @@ const BannerAdComponent = ({
   // the ad WebView on the UI thread, so doing it during Home's first render
   // also cost the first frame on low-end Android.
   const adsReady = useAdsReady();
+  const handlePaid = useCallback(
+    (paid) => logAdRevenue('banner', isCollapsible ? 'banner_collapsible' : 'banner', paid, unitId),
+    [isCollapsible, unitId],
+  );
   const suppressed = !!localState?.isPro || !visible || !adsReady;
   const showingAd = !suppressed && isAdLoaded;
 
@@ -146,7 +151,10 @@ const BannerAdComponent = ({
     : { height: 0, overflow: 'hidden' };
 
   return (
+    // collapsable={false}: keeps this wrapper a real view under Fabric (the
+    // addViewAt IndexOutOfBounds crash fixed in Adopt Me 04aa038 / Blox 2b9ab6e).
     <View
+      collapsable={false}
       style={containerStyle}
       onLayout={(e) => setMeasuredHeight(e.nativeEvent.layout.height)}
     >
@@ -161,6 +169,7 @@ const BannerAdComponent = ({
         requestOptions={requestOptions}
         onAdLoaded={handleAdLoaded}
         onAdFailedToLoad={handleAdFailedToLoad}
+        onPaid={handlePaid}
       />
     </View>
   );

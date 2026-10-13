@@ -17,6 +17,8 @@ import { View, useWindowDimensions } from 'react-native';
 import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import getAdUnitId from './ads';
 import { useLocalState } from '../LocalGlobelStats';
+import { useAdsReady } from './adsGate';
+import { logAdRevenue } from './adTelemetry';
 
 // Horizontal gutter the feed cards use, so the ad lines up with content.
 const CARD_GUTTER = 12;
@@ -38,6 +40,9 @@ const FeedBannerAd = ({ adKey, isDarkMode = false }) => {
   const retryTimer = useRef(null);
 
   const unitId = getAdUnitId('feedBanner');
+  // Not before consent + SDK init (adsGate.js), like the bottom banner.
+  const adsReady = useAdsReady();
+  const handlePaid = useCallback((paid) => logAdRevenue('banner', 'feed', paid, unitId), [unitId]);
   const width = Math.max(200, Math.floor(screenWidth - CARD_GUTTER * 2));
 
   const requestOptions = useMemo(
@@ -71,10 +76,14 @@ const FeedBannerAd = ({ adKey, isDarkMode = false }) => {
     retriedRef.current = false;
   }, [adKey]);
 
-  if (localState?.isPro) return null;
+  if (localState?.isPro || !adsReady) return null;
 
   return (
+    // collapsable={false}: Fabric must keep this wrapper as a real view, or
+    // list clipping can remove the native ad view out from under it (the
+    // addViewAt IndexOutOfBounds crash fixed in Adopt Me 04aa038 / Blox 2b9ab6e).
     <View
+      collapsable={false}
       style={
         loaded
           ? {
@@ -96,6 +105,7 @@ const FeedBannerAd = ({ adKey, isDarkMode = false }) => {
         requestOptions={requestOptions}
         onAdLoaded={handleAdLoaded}
         onAdFailedToLoad={handleAdFailedToLoad}
+        onPaid={handlePaid}
       />
     </View>
   );

@@ -24,6 +24,8 @@ export const checkForUpdate = async () => {
         },
       });
 
+      // The Play update sheet backgrounds the app: no app-open ad on return.
+      require('../Ads/openApp').default.skipNextForeground(2 * 60 * 1000);
       await inAppUpdates.startUpdate(updateOptions);
     }
   } catch (err) {

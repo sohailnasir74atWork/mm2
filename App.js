@@ -33,7 +33,6 @@ import MyStuffScreen from './Code/MyStuff/MyStuffScreen';
 import ValueScreen from './Code/ValuesScreen/ValueScreen';
 import { useGlobalState } from './Code/GlobelStats';
 import { useLocalState } from './Code/LocalGlobelStats';
-import { AdsConsent, AdsConsentStatus } from 'react-native-google-mobile-ads';
 import MainTabs from './Code/AppHelper/MainTabs';
 import SocialDashboard from './Code/AppHelper/SocialDashboard';
 import { getTrackingStatus, requestTrackingPermission } from 'react-native-tracking-transparency';
@@ -54,8 +53,9 @@ import AppOpenAdManager from './Code/Ads/openApp';
 // sign in meanwhile).
 const SPLASH_LOGIN_CAP_MS = 3000;
 const JS_STARTED_AT = Date.now();
-import { ensureAdsInitialized, canRequestAdsFromLastSession } from './Code/Ads/init';
-import { markAdsReady, whenAdsReady } from './Code/Ads/adsGate';
+import { ensureAdsInitialized, gatherAdsConsent, openAdsGate } from './Code/Ads/init';
+import { installLeaveAppGuard } from './Code/Ads/leaveAppGuard';
+import { markAdsReady } from './Code/Ads/adsGate';
 import RNBootSplash from "react-native-bootsplash";
 import SystemNavigationBar from 'react-native-system-navigation-bar';
 import { checkForUpdate } from './Code/AppHelper/InAppUpdateChecker';
@@ -63,6 +63,10 @@ import PrivateChatScreen from './Code/ChatScreen/PrivateChat/PrivateChat';
 import PrivateChatHeader from './Code/ChatScreen/PrivateChat/PrivateChatHeader';
 
 const Stack = createNativeStackNavigator();
+
+// No app-open ad when the player comes back from a share sheet, photo
+// picker, sign-in or link they opened from the app (Code/Ads/leaveAppGuard.js).
+installLeaveAppGuard();
 
 // Wrapper for PrivateChat used from root stack (SocialDashboard → Chat)
 // Manages its own drawer state since it's outside ChatNavigator
@@ -125,21 +129,23 @@ function App() {
           }
         }
 
-        // Step 2: UMP / GDPR consent
-        await handleUserConsent();
-
-        // Step 3: Apply the AdMob request configuration (maxAdContentRating 'T',
-        // child-treatment flag) BEFORE the first ad request, then init ads.
-        // ensureAdsInitialized() is a shared one-shot promise; every ad manager
-        // also awaits it, so ordering (config-before-load) is guaranteed.
-        await ensureAdsInitialized();
-        InterstitialAdManager.init();
+        // Step 2: UMP / GDPR consent, through the SDK's own gatherConsent
+        // (requestInfoUpdate + loadAndShowConsentFormIfRequired, Code/Ads/init.js).
+        const consentInfo = await gatherAdsConsent();
+        if (consentInfo?.status) saveConsentStatus(consentInfo.status);
       } catch (error) {
-        // Still init ads even if consent fails, to avoid no ads at all
-        InterstitialAdManager.init();
+        // Fall through: ensureAdsInitialized re-checks canRequestAds itself.
       } finally {
-        // Banners and the App Open manager wait for this (Code/Ads/adsGate.js),
-        // so nothing requests an ad before ATT + consent have run.
+        // This session's consent flow is done: init may go ahead (it still
+        // requires canRequestAds), then banners and the managers may request.
+        openAdsGate();
+        try {
+          // Request configuration (maxAdContentRating 'T', child flags) lands
+          // before initialize(), and both before the first ad request.
+          await ensureAdsInitialized();
+        } catch (_) { /* no consent yet: ads stay off this session */ }
+        InterstitialAdManager.init();
+        // Banners wait for this (Code/Ads/adsGate.js).
         markAdsReady();
       }
     };
@@ -150,29 +156,6 @@ function App() {
   const saveConsentStatus = (status) => {
     updateLocalState('consentStatus', status);
   };
-
-  const handleUserConsent = async () => {
-    try {
-      const consentInfo = await AdsConsent.requestInfoUpdate();
-
-      if (
-        consentInfo.status === AdsConsentStatus.OBTAINED ||
-        consentInfo.status === AdsConsentStatus.NOT_REQUIRED
-      ) {
-        saveConsentStatus(consentInfo.status);
-        return;
-      }
-
-      if (consentInfo.isConsentFormAvailable) {
-        const formResult = await AdsConsent.showForm();
-        saveConsentStatus(formResult.status);
-      }
-    } catch (error) {
-      console.warn("Consent error:", error);
-    }
-  };
-
-
 
   const navRef = useRef();
 
@@ -336,7 +319,7 @@ export default function AppWrapper() {
   //
   // The manager starts once consent allows ads: at once when consent from an
   // earlier session still stands, otherwise after this session's consent
-  // flow (whenAdsReady).
+  // flow (openAdsGate in the consent chain above).
   // Launch App Open ad: decided once per launch. The splash no longer waits
   // for it; it shows when it loads, over the splash or Home, under the window
   // and no-touch rules in Code/Ads/openApp.js / adPolicy.js (same flow as
@@ -351,14 +334,17 @@ export default function AppWrapper() {
         AppOpenAdManager.prepareColdStart();
       }
     }
-    if (localState.showOnBoardingScreen || localState.isPro) return undefined;
-    let cancelled = false;
-    // Consent from an earlier session lets the launch ad's request go out now,
-    // inside the splash window; otherwise wait for this session's consent.
-    canRequestAdsFromLastSession()
-      .then((alreadyConsented) => (alreadyConsented ? undefined : whenAdsReady()))
-      .then(() => { if (!cancelled) AppOpenAdManager.start(); });
-    return () => { cancelled = true; };
+    if (localState.isPro) {
+      // Bought Pro this session: no more full-screen ads.
+      AppOpenAdManager.stop();
+      InterstitialAdManager.cleanup();
+      return;
+    }
+    if (localState.showOnBoardingScreen) return;
+    // start() gates its own requests on consent + init (Code/Ads/openApp.js):
+    // at once when consent from an earlier session stands, else after this
+    // session's consent flow.
+    AppOpenAdManager.start();
   }, [localState.isPro, localState.showOnBoardingScreen]);
 
   const [splashCapReached, setSplashCapReached] = useState(false);

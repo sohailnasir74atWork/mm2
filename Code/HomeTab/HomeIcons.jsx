@@ -49,6 +49,34 @@ const drawings = {
     <Circle cx="16" cy="16" r="3" />
     <Path d="M16 4v4m0 16v4M4 16h4m16 0h4M7.5 7.5l2.8 2.8m11.4 11.4 2.8 2.8M7.5 24.5l2.8-2.8m11.4-11.4 2.8-2.8" strokeWidth={3} />
   </>,
+  cake: <>
+    <Rect x="5" y="15" width="22" height="12" rx="3" fill="currentColor" fillOpacity={0.12} />
+    <Rect x="5" y="15" width="22" height="12" rx="3" />
+    <Path d="M5 20c3 2 5-2 8 0s5 2 8 0 4-2 6 0M11 15v-4m5 4v-4m5 4v-4" />
+    <Path d="M11 6.5c0 1-1 1.5-1 2.5a1 1 0 0 0 2 0c0-1-1-1.5-1-2.5Zm5 0c0 1-1 1.5-1 2.5a1 1 0 0 0 2 0c0-1-1-1.5-1-2.5Zm5 0c0 1-1 1.5-1 2.5a1 1 0 0 0 2 0c0-1-1-1.5-1-2.5Z" fill="currentColor" fillOpacity={0.5} />
+  </>,
+  news: <>
+    <Rect x="5" y="6" width="19" height="21" rx="3" fill="currentColor" fillOpacity={0.12} />
+    <Path d="M24 11h3v13a3 3 0 0 1-6 0V9a3 3 0 0 0-3-3H8a3 3 0 0 0-3 3v15a3 3 0 0 0 3 3h16" />
+    <Rect x="9" y="10" width="6" height="5" rx="1" />
+    <Path d="M9 19h8m-8 3.5h8" />
+  </>,
+  report: <>
+    <Path d="M6 5h20a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H13l-6 5v-5H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="currentColor" fillOpacity={0.12} />
+    <Path d="M6 5h20a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H13l-6 5v-5H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />
+    <Path d="M16 10v5" strokeWidth={2.4} />
+    <Circle cx="16" cy="18.5" r="1.3" fill="currentColor" stroke="none" />
+  </>,
+  inbox: <>
+    <Path d="M4 18 8 7h16l4 11v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" fill="currentColor" fillOpacity={0.12} />
+    <Path d="M4 18 8 7h16l4 11v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Zm0 0h7l2 3h6l2-3h7" />
+  </>,
+  // Trade Match: two players' items swapping, with the dream star between.
+  match: <>
+    <Circle cx="16" cy="16" r="5" fill="currentColor" fillOpacity={0.12} />
+    <Path d="M4 9h20m0 0-4-4m4 4-4 4M28 23H8m0 0 4-4m-4 4 4 4" />
+    <Path d="m16 13 .9 1.9 2.1.3-1.5 1.4.4 2.1-1.9-1-1.9 1 .4-2.1-1.5-1.4 2.1-.3Z" fill="currentColor" stroke="none" opacity={0.8} />
+  </>,
 };
 
 function HomeIcon({ name, size = 24, color = '#6A5ACD' }) {

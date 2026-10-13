@@ -9,6 +9,8 @@ import config from '../Helper/Environment';
 import { showErrorMessage } from '../Helper/MessageHelper';
 import InterstitialAdManager from '../Ads/IntAd';
 import { resolveItemImage } from '../Helper/valueSources';
+import { useTranslation } from 'react-i18next';
+import { tradeStatus as wflStatus } from '../Helper/tradeStatus';
 
 // ✅ Migration helper: Normalize hasTotal/wantsTotal to handle both old (object.value) and new (number) formats
 const normalizeTotal = (total) => {
@@ -24,13 +26,11 @@ const normalizeTotal = (total) => {
     return 0;
 };
 
-const getTradeStatus = (hasTotal, wantsTotal) => {
-    const hasValue = normalizeTotal(hasTotal);
-    const wantsValue = normalizeTotal(wantsTotal);
-    if (hasValue > 0 && wantsValue === 0) return 'lose';
-    if (hasValue === 0 && wantsValue > 0) return 'win';
-    return 'fair';
-};
+// Same verdict as the calculator (Code/Helper/tradeStatus.js), so the share
+// card can't disagree with the screen behind it. It used to return 'fair' for
+// every trade with value on both sides.
+const getTradeStatus = (hasTotal, wantsTotal) =>
+    wflStatus(normalizeTotal(hasTotal), normalizeTotal(wantsTotal));
 
 // ✅ Format values with K, M, B, T abbreviations
 const formatValue = (value) => {
@@ -52,6 +52,7 @@ const formatValue = (value) => {
 
 const ShareTradeModal = ({ visible, onClose, hasItems, wantsItems, hasTotal, wantsTotal, description }) => {
     const viewRef = useRef();
+    const { t } = useTranslation();
     const { theme } = useGlobalState();
     const { localState } = useLocalState();
     const isDarkMode = theme === 'dark';
@@ -132,7 +133,7 @@ const ShareTradeModal = ({ visible, onClose, hasItems, wantsItems, hasTotal, wan
          
         } catch (error) {
             console.error('Error sharing trade screenshot:', error);
-            showErrorMessage('Error', 'Could not share the trade screenshot.');
+            showErrorMessage(t('home.alert.error'), t('share_trade.share_failed'));
         }
     };
 
@@ -263,15 +264,15 @@ const ShareTradeModal = ({ visible, onClose, hasItems, wantsItems, hasTotal, wan
                                             <Text style={[
                                                 styles.statusText,
                                                 tradeStatus === 'win' ? styles.statusActive : styles.statusInactive
-                                            ]}>WIN</Text>
+                                            ]}>{t('home.win')}</Text>
                                             <Text style={[
                                                 styles.statusText,
                                                 tradeStatus === 'fair' ? styles.statusActive : styles.statusInactive
-                                            ]}>FAIR</Text>
+                                            ]}>{t('home.fair')}</Text>
                                             <Text style={[
                                                 styles.statusText,
                                                 tradeStatus === 'lose' ? styles.statusActive : styles.statusInactive
-                                            ]}>LOSE</Text>
+                                            ]}>{t('home.lose')}</Text>
                                         </View>
                                         <Text style={styles.bigNumber}>{formatValue(wantsTotalValue)}</Text>
                                     </View>
@@ -282,9 +283,9 @@ const ShareTradeModal = ({ visible, onClose, hasItems, wantsItems, hasTotal, wan
                                         </View>
                                     </View>
                                     <View style={styles.labelContainer}>
-                                        <Text style={styles.offerLabel}>YOUR OFFER</Text>
+                                        <Text style={styles.offerLabel}>{t('share_trade.your_offer')}</Text>
                                         <Text style={styles.dividerText}>|</Text>
-                                        <Text style={styles.offerLabel}>THEIR OFFER</Text>
+                                        <Text style={styles.offerLabel}>{t('share_trade.their_offer')}</Text>
                                     </View>
                                 </View>
                             </View>
@@ -315,8 +316,8 @@ const ShareTradeModal = ({ visible, onClose, hasItems, wantsItems, hasTotal, wan
                     </ViewShot>
 
                     <View style={styles.toggleContainer}>
-                        {renderToggleButton('stats-chart', 'Summary', showSummary, setShowSummary, (!showLeftGrid && showRightGrid) || (showLeftGrid && !showRightGrid))}
-                        {renderToggleButton('trending-up', 'Profit/Loss', showProfitLoss, setShowProfitLoss)}
+                        {renderToggleButton('stats-chart', t('share_trade.summary'), showSummary, setShowSummary, (!showLeftGrid && showRightGrid) || (showLeftGrid && !showRightGrid))}
+                        {renderToggleButton('trending-up', t('share_trade.profit_loss'), showProfitLoss, setShowProfitLoss)}
                         {/* {renderToggleButton('grid', 'Left Grid', showLeftGrid, setShowLeftGrid)} */}
                         {/* {renderToggleButton('grid', 'Right Grid', showRightGrid, setShowRightGrid)} */}
                         {/* {renderToggleButton('ribbon', 'Badges', showBadges, setShowBadges)} */}
@@ -325,10 +326,10 @@ const ShareTradeModal = ({ visible, onClose, hasItems, wantsItems, hasTotal, wan
 
                     <View style={styles.buttonContainer}>
                         <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-                            <Text style={styles.buttonText}>Cancel</Text>
+                            <Text style={styles.buttonText}>{t('trade.cancel')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-                            <Text style={styles.buttonText}>Share</Text>
+                            <Text style={styles.buttonText}>{t('share_trade.share')}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

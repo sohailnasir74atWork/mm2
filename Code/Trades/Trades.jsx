@@ -557,8 +557,8 @@ const TradeList = ({ route }) => {
           
           if (validFeaturedTrades.length >= 2) {
             Alert.alert(
-              "Limit Reached",
-              "You can only feature 2 trades every 24 hours."
+              t("trade.limit_reached_title"),
+              t("trade.feature_limit_24h")
             );
             return;
           }
@@ -571,8 +571,8 @@ const TradeList = ({ route }) => {
       // Check limit only if we didn't already check in fallback
       if (!limitChecked && featuredSnapshot && featuredSnapshot.size >= 2) {
         Alert.alert(
-          "Limit Reached",
-          "You can only feature 2 trades every 24 hours."
+          t("trade.limit_reached_title"),
+          t("trade.feature_limit_24h")
         );
         return;
       }
@@ -674,8 +674,8 @@ const TradeList = ({ route }) => {
         );
       } else if (errorCode === 'permission-denied') {
         Alert.alert(
-          "Permission Denied",
-          "You don't have permission to feature trades. Please check your account status."
+          t("trade.permission_denied"),
+          t("trade.feature_permission_denied")
         );
       } else {
         Alert.alert(t("home.alert.error") || "Error", errorMessage);
@@ -1214,15 +1214,15 @@ const TradeList = ({ route }) => {
       } else {
         // For other errors, show a generic alert
         Alert.alert(
-          'Error Loading Trades',
-          'Unable to load trades. Please check the console for error details.\n\nError: ' + (error?.message || 'Unknown error'),
-          [{ text: 'OK' }]
+          t('trade.load_error_title'),
+          t('trade.load_error_msg', { error: error?.message || t('trade.unknown_error') }),
+          [{ text: t('stock.ok') }]
         );
       }
     } finally {
       setLoading(false);
     }
-  }, [firestoreDB, appdatabase]);
+  }, [firestoreDB, appdatabase, t]);
 
   // handleSearchTrades is defined ABOVE this function and needs to call it
   // when the query is cleared. Going through a ref avoids both the
@@ -1558,7 +1558,7 @@ const TradeList = ({ route }) => {
     // (or migrated/optimistic rows) which have no .toDate() and would crash render.
     const formattedTime = item.timestamp
       ? dayjs(typeof item.timestamp?.toDate === 'function' ? item.timestamp.toDate() : item.timestamp).fromNow()
-      : "Anonymous";
+      : t('group_chat.anonymous');
     const selectedUser = {
       senderId: item.userId,
       sender: item.traderName,
@@ -1644,7 +1644,7 @@ const TradeList = ({ route }) => {
                 ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#888', borderRadius: 5, paddingHorizontal: 3, paddingVertical: 1 }}>
                     <Icon name="star-outline" size={8} color="white" style={{ marginRight: 2 }} />
-                    <Text style={{ fontSize: 8, color: 'white' }}>N/A</Text>
+                    <Text style={{ fontSize: 8, color: 'white' }}>{t('trade.no_rating')}</Text>
                   </View>
                 )}
               </View>
@@ -1658,7 +1658,7 @@ const TradeList = ({ route }) => {
             {item.isFeatured && (
               <View
                 style={[styles.statusBadge, styles.featuredBadge]}
-                accessibilityLabel="Featured"
+                accessibilityLabel={t('trade.featured_label')}
               >
                 <Icon name="star" size={11} color="white" />
               </View>
@@ -1674,7 +1674,7 @@ const TradeList = ({ route }) => {
                 }
               ]}>
                 <Text style={styles.statusBadgeText}>
-                  {item.status === 'w' ? 'Win' : item.status === 'f' ? 'Fair' : 'Lose'}
+                  {item.status === 'w' ? t('trade.verdict_win') : item.status === 'f' ? t('trade.verdict_fair') : t('trade.verdict_lose')}
                 </Text>
               </View>
             )}
@@ -1750,7 +1750,7 @@ const TradeList = ({ route }) => {
                               exactly as they always did. */}
                           {tradeItem.valueConfidence && tradeItem.valueConfidence !== 'observed' ? (
                             <Text style={styles.unpricedItemNote} numberOfLines={1}>
-                              {tradeItem.valueText || 'not in total'}
+                              {tradeItem.valueText || t('trade.not_in_total')}
                             </Text>
                           ) : null}
                         </View>
@@ -1762,7 +1762,7 @@ const TradeList = ({ route }) => {
             </View>
           ) : (
             <TouchableOpacity style={styles.dealContainerSingle} onPress={() => handleOpenProfile(item)}>
-              <Text style={styles.dealText}>Give offer</Text>
+              <Text style={styles.dealText}>{t('settings.give_offer')}</Text>
             </TouchableOpacity>
           )}
           {/* Transfer Icon */}
@@ -1819,7 +1819,7 @@ const TradeList = ({ route }) => {
                               exactly as they always did. */}
                           {tradeItem.valueConfidence && tradeItem.valueConfidence !== 'observed' ? (
                             <Text style={styles.unpricedItemNote} numberOfLines={1}>
-                              {tradeItem.valueText || 'not in total'}
+                              {tradeItem.valueText || t('trade.not_in_total')}
                             </Text>
                           ) : null}
                         </View>
@@ -1831,7 +1831,7 @@ const TradeList = ({ route }) => {
             </View>
           ) : (
             <TouchableOpacity style={styles.dealContainerSingle} onPress={() => handleOpenProfile(item)}>
-              <Text style={styles.dealText}>Give offer</Text>
+              <Text style={styles.dealText}>{t('settings.give_offer')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -1840,7 +1840,7 @@ const TradeList = ({ route }) => {
         <View style={styles.tradeTotals}>
           {item.hasItems && item.hasItems.length > 0 && (
             <Text style={[styles.priceText, styles.hasBackground]}>
-              ME: {formatValue(hasTotalValue)}
+              {t('trade.total_me', { value: formatValue(hasTotalValue) })}
             </Text>
           )}
           <View style={styles.transfer}>
@@ -1870,7 +1870,7 @@ const TradeList = ({ route }) => {
           </View>
           {item.wantsItems && item.wantsItems.length > 0 && (
             <Text style={[styles.priceText, styles.wantBackground]}>
-              YOU: {formatValue(wantsTotalValue)}
+              {t('trade.total_you', { value: formatValue(wantsTotalValue) })}
             </Text>
           )}
         </View>
@@ -1884,7 +1884,7 @@ const TradeList = ({ route }) => {
             {!item.isFeatured && (
               <TouchableOpacity onPress={() => handleMakeFeatureTrade(item)} style={[styles.ownerBtn, { backgroundColor: '#8B5CF6' }]}>
                 <Icon name="rocket-outline" size={12} color="white" />
-                <Text style={styles.ownerBtnText}>BOOST IT</Text>
+                <Text style={styles.ownerBtnText}>{t('trade.boost_it')}</Text>
               </TouchableOpacity>
             )}
             {/* Watch-an-ad boost. Hidden from Pro members on purpose: they
@@ -1898,7 +1898,7 @@ const TradeList = ({ route }) => {
             )}
             <TouchableOpacity onPress={() => handleDelete(item)} style={[styles.ownerBtn, { backgroundColor: '#EF4444' }]}>
               <Icon name="trash-outline" size={12} color="white" />
-              <Text style={styles.ownerBtnText}>DELETE IT</Text>
+              <Text style={styles.ownerBtnText}>{t('trade.delete_it')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -1949,7 +1949,7 @@ const TradeList = ({ route }) => {
                     );
                   }
                 } catch (e) {
-                  showErrorMessage(t('home.alert.error'), e?.message || 'Error');
+                  showErrorMessage(t('home.alert.error'), e?.message || t('home.alert.error'));
                 }
               }}
               style={[styles.socialBtn, !!savedTradeRefs[item.id] && { backgroundColor: '#F59E0B20' }]}

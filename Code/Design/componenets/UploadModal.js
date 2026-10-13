@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { pickImages } from '../../Helper/imagePicker';
 import { uploadImage, UPLOAD_KIND } from '../../Helper/imageUpload';
-import { Image as CompressorImage } from 'react-native-compressor';
+import { safeCompressImage } from '../../Helper/safeCompressImage';
 import config from '../../Helper/Environment';
 import { useGlobalState } from '../../GlobelStats';
 import { useLocalState } from '../../LocalGlobelStats';
@@ -26,6 +26,10 @@ import RNFS from 'react-native-fs';
 import { validateContent } from '../../Helper/ContentModeration';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
+import { FEED_TAG_VALUES, feedTagLabel } from './PostsHeader';
+import { flipInRTL } from '../../Helper/rtl';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import useNavBarInset from '../../Helper/useNavBarInset';
 
 
 const CLOUD_NAME = 'djtqw0jb5';
@@ -38,11 +42,20 @@ const UploadModal = ({ visible, onClose, onUpload, user }) => {
   const [imageUris, setImageUris] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedTags, setSelectedTags] = useState(['Discussion']);
-  const {currentUserEmail, appdatabase} = useGlobalState();
+  // strikeInfo is renamed: the local strikeInfo below is the feed-only ban
+  // node (banned_users_by_email_post), a different thing.
+  const {currentUserEmail, appdatabase, isUserBlocked, strikeInfo: accountBanInfo, deviceBanInfo} = useGlobalState();
   const [strikeInfo, setStrikeInfo] = useState(null)
   const { theme } = useGlobalState();
   const isDark = theme === 'dark';
   const {localState} = useLocalState()
+  // Full-screen modal on Android, edge-to-edge: the header clears the status
+  // bar and the Post button the nav bar (the latter only while the keyboard is
+  // down, or it would float a nav bar above the keyboard). On iOS this is a
+  // pageSheet that starts below the status bar, so the top inset reads 0
+  // there (root SafeAreaView) and only the home indicator is added.
+  const insets = useSafeAreaInsets();
+  const navBarInset = useNavBarInset();
   const { t } = useTranslation();
   
   // ✅ Session-based last post time (resets on app close/reopen - simple state, no storage)
@@ -96,29 +109,28 @@ const pickAndCompress = useCallback(async () => {
       const rejectedCount = [];
 
       for (const asset of result.assets) {
-        try {
-          // ✅ Always compress to ensure < 1MB and good quality
-          const uri = await CompressorImage.compress(asset.uri, {
-            maxWidth: 1024,
-            quality: 0.7,
-            returnableOutputType: 'uri',
-          });
-          compressed.push(uri);
-        } catch (error) {
-          console.error('Compression failed:', error);
-          if (asset?.uri) {
-            try {
-              const filePath = asset.uri.replace('file://', '');
-              const fileInfo = await RNFS.stat(filePath);
-              const fileSize = fileInfo.size || 0;
-              if (fileSize <= MAX_SIZE_BYTES) {
-                compressed.push(asset.uri);
-              } else {
-                rejectedCount.push(asset.fileName || 'image');
-              }
-            } catch (statError) {
-              console.warn('Could not check file size:', statError);
+        // ✅ Always compress to ensure < 1MB and good quality. safeCompressImage
+        // never throws (it guards the iOS NSException); when it could not
+        // compress, the original file is kept only if it is under 1 MB.
+        const out = await safeCompressImage(asset?.uri, {
+          maxWidth: 1024,
+          quality: 0.7,
+          returnableOutputType: 'uri',
+        });
+        if (out.compressed) {
+          compressed.push(out.uri);
+        } else if (asset?.uri) {
+          try {
+            const filePath = asset.uri.replace('file://', '');
+            const fileInfo = await RNFS.stat(filePath);
+            const fileSize = fileInfo.size || 0;
+            if (fileSize <= MAX_SIZE_BYTES) {
+              compressed.push(asset.uri);
+            } else {
+              rejectedCount.push(asset.fileName || 'image');
             }
+          } catch (statError) {
+            console.warn('Could not check file size:', statError);
           }
         }
       }
@@ -180,6 +192,18 @@ const pickAndCompress = useCallback(async () => {
       Alert.alert(t('feed.missing_email'), t('feed.missing_email_msg'));
       return;
     }
+
+    // Email ban OR device ban (GlobelStats, server-time validated), as in
+    // Adopt Me's UploadModal. Client-side gate only.
+    if (isUserBlocked) {
+      const info = accountBanInfo || deviceBanInfo;
+      const isPermanent = info?.bannedUntil === 'permanent';
+      const message = info?.strikeCount
+        ? t(isPermanent ? 'feed.banned_permanent_strike' : 'feed.banned_temporary_strike', { strike: info.strikeCount })
+        : t(isPermanent ? 'feed.banned_permanent' : 'feed.banned_temporary');
+      Alert.alert(t('feed.banned_title'), message);
+      return;
+    }
   
     if (!desc && imageUris.length === 0) {
       return Alert.alert(t('feed.missing_info'), t('feed.missing_info_msg'));
@@ -201,7 +225,7 @@ const pickAndCompress = useCallback(async () => {
       const secondsLeft = Math.ceil((60000 - (now - lastPostTime)) / 1000);
       showMessage({
         message: t('feed.cooldown_active'),
-        description: `Please wait ${secondsLeft} second${secondsLeft === 1 ? '' : 's'} before posting again.`,
+        description: t('feed.post_cooldown_msg', { count: secondsLeft }),
         type: 'warning',
         duration: 3000,
       });
@@ -225,11 +249,13 @@ const pickAndCompress = useCallback(async () => {
         const totalMinutes = Math.ceil((bannedUntil - now) / 60000);
         const hours = Math.floor(totalMinutes / 60);
         const minutes = totalMinutes % 60;
-        const timeLeftText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+        const timeLeftText = hours > 0
+          ? t('feed.ban_time_hours_minutes', { hours, minutes })
+          : t('feed.ban_time_minutes', { minutes });
 
         showMessage({
-          message: `⚠️ Strike ${strikeCount}`,
-          description: `You are banned from chatting for ${timeLeftText} more minute(s).`,
+          message: t('feed.strike_title', { number: strikeCount }),
+          description: t('feed.strike_banned_msg', { time: timeLeftText }),
           type: 'warning',
           duration: 5000,
 
@@ -290,14 +316,14 @@ const pickAndCompress = useCallback(async () => {
       });
     });
   
-  }, [loading, user?.id, desc, imageUris, selectedTags, uploadToBunny, onUpload, onClose, localState.isPro, currentUserEmail, lastPostTime, strikeInfo]);
+  }, [loading, user?.id, desc, imageUris, selectedTags, uploadToBunny, onUpload, onClose, localState.isPro, currentUserEmail, lastPostTime, strikeInfo, isUserBlocked, accountBanInfo, deviceBanInfo]);
   
 
   const themedStyles = useMemo(() => getStyles(isDark), [isDark]);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <View style={themedStyles.fullScreenContainer}>
+      <View style={[themedStyles.fullScreenContainer, { paddingTop: themedStyles.fullScreenContainer.paddingTop + insets.top, paddingBottom: 24 + navBarInset }]}>
         {/* Header - Fixed at top */}
         <View style={themedStyles.header}>
           <Text style={themedStyles.headerTitle}>{t('feed.create_post')}</Text>
@@ -328,7 +354,7 @@ const pickAndCompress = useCallback(async () => {
             {/* Tags */}
             <Text style={themedStyles.sectionLabel}>{t('feed.select_topic')}</Text>
             <View style={themedStyles.tagSelector}>
-              {['Scam Alert', 'Looking for Trade', 'Discussion', 'Real or Fake', 'Need Help', 'Misc'].map((tag) => (
+              {FEED_TAG_VALUES.map((tag) => (
                 <TouchableOpacity
                   key={tag}
                   style={[
@@ -345,7 +371,7 @@ const pickAndCompress = useCallback(async () => {
                       fontWeight: '600',
                     }}
                   >
-                    {tag}
+                    {feedTagLabel(tag, t)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -396,7 +422,7 @@ const pickAndCompress = useCallback(async () => {
               ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Text style={themedStyles.btnText}>{t('feed.post_now')}</Text>
-                  <Icon name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 6 }} />
+                  <Icon name="arrow-forward" size={18} color="#fff" style={[{ marginLeft: 6 }, flipInRTL]} />
                 </View>
               )}
             </TouchableOpacity>

@@ -1,19 +1,22 @@
 /**
- * HomeTabScreen — home: search, tools, portfolio, status feed, cosmetics
+ * HomeTabScreen — home: search, tools, portfolio, status feed
  *
  * Layout follows FischValues' Home (FischValues/Code/HomeTab/HomeTabScreen.jsx):
  * a coloured header band, a search bar that lands on Values results, a 2x2
  * tool grid, then the secondary extras at a smaller weight.
  *
+ * Home holds only the core tools. Cosmetics (egg hatching), Our Team and
+ * Invite moved to the More tab (Code/More/MoreHubScreen.jsx) on 2026-10-13;
+ * nothing appears on both screens, so add a tool to one or the other.
+ *
  * The mini-games row is no longer on Home. The game screens (ArrowGameScreen,
  * GameScreen) are still registered in App.js, so nothing that deep-links into
- * them breaks; they just have no entry point here. Egg hatching stays, because
- * it is the cosmetics unlock, not a game.
+ * them breaks; they just have no entry point here.
  */
 import React, { useMemo, useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Platform, Share, StatusBar, Modal, TextInput,
+  Platform, StatusBar, Modal, TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FontAwesome from 'react-native-vector-icons/FontAwesome6';
@@ -31,8 +34,8 @@ import { useLanguage } from '../Translation/LanguageProvider';
 import { useNavigation, useFocusEffect, useIsFocused } from '@react-navigation/native';
 import BannerAdComponent from '../Ads/bannerAds';
 import HomeIcon from './HomeIcons';
+import { accentFor } from './accents';
 import { SCREEN_GUTTER } from '../Helper/layout';
-import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 
 import DailyStarRewards from '../Engagement/DailyStarRewards';
 import SignInDrawer from '../Firebase/SigninDrawer';
@@ -41,11 +44,16 @@ import StatusFeed from '../Design/StatusFeed';
 import FramedAvatar from '../ChatScreen/GroupChat/FramedAvatar';
 import { getMyCosmetics, syncMyCosmetics } from '../Helper/cosmeticsCache';
 import BirthdayHomeCard from '../Birthdays/BirthdayHomeCard';
+import BanStatusCard from './BanStatusCard';
+import { flipInRTL } from '../Helper/rtl';
 
 const LANGUAGES = [
   { code: 'en', name: 'English', flag: '🇺🇸' },
   { code: 'es', name: 'Español (Latinoamérica)', flag: '🇲🇽' },
   { code: 'es-ES', name: 'Español (España)', flag: '🇪🇸' },
+  // pt was auto-picked on Portuguese phones but missing here, so a player who
+  // switched away could never come back. Complete since 2026-10-13.
+  { code: 'pt', name: 'Português (Brasil)', flag: '🇧🇷' },
   { code: 'fr', name: 'Français', flag: '🇫🇷' },
   { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
   { code: 'ru', name: 'Русский', flag: '🇷🇺' },
@@ -69,22 +77,6 @@ const HEADER_BTN_BG = 'rgba(255,255,255,0.16)';
 // as a rounded card instead. Android is edge-to-edge and keeps the full bleed.
 const HEADER_FLOATS = Platform.OS === 'ios';
 
-// One hue per tool, tuned per theme: dark mode needs a LIGHTER ink on a dark
-// tint, not the light ink on a darker background (that measured ~2.5 contrast
-// in Fisch). Same values as FischValues/Code/Design/tokens.js ACCENT.
-const ACCENT = {
-  //         light-mode ink   light tint   dark-mode ink   dark tint
-  blue:   { light: '#2F5FB8', tintLight: '#E1EAF8', dark: '#7FA6EC', tintDark: '#172A4C' },
-  coral:  { light: '#C2453F', tintLight: '#FBE6E4', dark: '#EC8B84', tintDark: '#48201E' },
-  amber:  { light: '#B06E12', tintLight: '#FBEFDB', dark: '#E3A445', tintDark: '#41300F' },
-  violet: { light: '#6247B5', tintLight: '#EAE5F8', dark: '#A692EC', tintDark: '#282050' },
-  kelp:   { light: '#237A55', tintLight: '#DFF1E8', dark: '#5EC395', tintDark: '#123A2A' },
-  rose:   { light: '#B33A72', tintLight: '#FAE4EE', dark: '#E883B0', tintDark: '#3F1A2D' },
-};
-const accentFor = (name, dark) => {
-  const a = ACCENT[name] || ACCENT.violet;
-  return { color: dark ? a.dark : a.light, tint: dark ? a.tintDark : a.tintLight };
-};
 
 const FONT_BOLD = 'Lato-Bold';
 const FONT_REGULAR = 'Lato-Regular';
@@ -138,12 +130,12 @@ const HomeTabScreen = ({ selectedTheme }) => {
 
   // Stable, so memo(StatusFeed) holds while typing in the search box.
   const requireSignInForStatus = useCallback(() => {
-    setSigninMsg('Sign in to post a status');
+    setSigninMsg(t('home.signin_status'));
     setSigninVis(true);
-  }, []);
+  }, [t]);
 
   const guard = (fn, msg) => {
-    if (!user?.id) { setSigninMsg(msg || 'Sign in first'); setSigninVis(true); return; }
+    if (!user?.id) { setSigninMsg(msg || t('home.signin_continue')); setSigninVis(true); return; }
     fn();
   };
 
@@ -240,7 +232,7 @@ const HomeTabScreen = ({ selectedTheme }) => {
           )}
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Change language"
+            accessibilityLabel={t('home.change_language')}
             onPress={() => setShowLangPicker(true)}
             style={[$.iconBtn, { backgroundColor: HEADER_BTN_BG }]}
           >
@@ -248,7 +240,7 @@ const HomeTabScreen = ({ selectedTheme }) => {
           </TouchableOpacity>
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Open profile and settings"
+            accessibilityLabel={t('home.open_profile')}
             style={$.profileTouch}
             onPress={() => nav.navigate('Setting')}
             activeOpacity={0.8}
@@ -268,6 +260,11 @@ const HomeTabScreen = ({ selectedTheme }) => {
         {/* ── Search: the app's primary job ──
             A values app exists to answer "what is this worth". The query rides
             through as a route param so this lands on results. */}
+        {/* ── Ban status ── a signed-in player under a live account or device
+            ban sees why, and for how long (renders nothing otherwise). First,
+            above search, as in Adopt Me. */}
+        <BanStatusCard />
+
         <View style={[$.searchBar, { backgroundColor: C.bgAlt, borderColor: C.border }]}>
           <FontAwesome name="magnifying-glass" size={17} color={accentFor('violet', dark).color} />
           <TextInput
@@ -304,8 +301,8 @@ const HomeTabScreen = ({ selectedTheme }) => {
             // destinations that have no tab of their own.
             { icon: 'values', accent: 'violet', label: t('home.values'), sub: t('home.values_sub', { defaultValue: 'Latest item values' }), onPress: () => nav.navigate('Values') },
             { icon: 'trophy', accent: 'rose', label: t('home.top_rated'), sub: t('home.top_rated_sub', { defaultValue: 'Most trusted traders' }), onPress: () => nav.navigate('Leaderboard') },
-            { icon: 'friends', accent: 'blue', label: t('home.friends') || 'Friends', sub: t('home.friends_sub', { defaultValue: 'Your trading circle' }), onPress: () => guard(() => nav.navigate('SocialDashboard'), 'Sign in') },
-            { icon: 'star', accent: 'amber', label: t('home.daily_stars'), sub: t('home.daily_stars_sub', { defaultValue: 'Collect your daily reward' }), onPress: () => guard(() => setShowDailyStars(true), 'Sign in') },
+            { icon: 'friends', accent: 'blue', label: t('home.friends') || 'Friends', sub: t('home.friends_sub', { defaultValue: 'Your trading circle' }), onPress: () => guard(() => nav.navigate('SocialDashboard'), t('home.signin_continue')) },
+            { icon: 'star', accent: 'amber', label: t('home.daily_stars'), sub: t('home.daily_stars_sub', { defaultValue: 'Collect your daily reward' }), onPress: () => guard(() => setShowDailyStars(true), t('home.signin_continue')) },
           ].map((tool) => {
             const a = accentFor(tool.accent, dark);
             return (
@@ -321,7 +318,7 @@ const HomeTabScreen = ({ selectedTheme }) => {
                   <View style={[$.toolIcon, { backgroundColor: dark ? '#FFFFFF0D' : '#FFFFFFB3' }]}>
                     <HomeIcon name={tool.icon} size={30} color={a.color} />
                   </View>
-                  <FontAwesome name="arrow-up-right-from-square" size={12} color={a.color} />
+                  <FontAwesome name="arrow-up-right-from-square" size={12} color={a.color} style={flipInRTL} />
                 </View>
                 <Text style={[$.toolLabel, { color: C.text }]} numberOfLines={1}>{tool.label}</Text>
                 <Text style={[$.toolSub, { color: a.color }]} numberOfLines={1}>{tool.sub}</Text>
@@ -330,9 +327,32 @@ const HomeTabScreen = ({ selectedTheme }) => {
           })}
         </View>
 
+        {/* ── Trade Match ── the owner wanted it on Home, not in More (2026-10-13).
+            Full width under Explore: finding a trade partner is the next thing
+            a trader does after checking a value. */}
+        <TouchableOpacity
+          onPress={() => guard(() => nav.navigate('TradeMatch'), t('trade_match.sign_in'))}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`${t('trade_match.title')}. ${t('trade_match.subtitle')}`}
+          style={[$.matchCard, { backgroundColor: accentFor('blue', dark).tint, borderColor: accentFor('blue', dark).tint }]}
+        >
+          <View style={[$.toolIcon, { backgroundColor: dark ? '#FFFFFF0D' : '#FFFFFFB3' }]}>
+            <HomeIcon name="match" size={30} color={accentFor('blue', dark).color} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[$.toolLabel, { color: C.text }]} numberOfLines={1}>{t('trade_match.title')}</Text>
+            <Text style={[$.toolSub, { color: accentFor('blue', dark).color }]} numberOfLines={2}>{t('trade_match.subtitle')}</Text>
+          </View>
+          <View style={[$.matchBtn, { backgroundColor: accentFor('blue', dark).color }]}>
+            <Text style={[$.matchBtnText, { color: dark ? C.bg : '#FFFFFF' }]} numberOfLines={1}>{t('trade_match.home_cta')}</Text>
+            <FontAwesome name="arrow-right" size={11} color={dark ? C.bg : '#FFFFFF'} style={flipInRTL} />
+          </View>
+        </TouchableOpacity>
+
         {/* ── My Stuff Worth ── personal, but secondary to lookup */}
         <TouchableOpacity
-          onPress={() => guard(() => nav.navigate('MyStuff'), 'Sign in')}
+          onPress={() => guard(() => nav.navigate('MyStuff'), t('home.signin_continue'))}
           activeOpacity={0.8}
           style={[$.myStuffCard, { backgroundColor: accentFor('kelp', dark).tint, borderColor: accentFor('kelp', dark).tint }]}
         >
@@ -346,7 +366,7 @@ const HomeTabScreen = ({ selectedTheme }) => {
                 <FontAwesome name="tags" size={10} color={dark ? C.bg : '#FFFFFF'} solid />
                 <Text style={[$.worthText, { color: dark ? C.bg : '#FFFFFF' }]}>{fmt(portfolio)}</Text>
               </View>
-              <FontAwesome name="chevron-right" size={12} color={accentFor('kelp', dark).color} />
+              <FontAwesome name="chevron-right" size={12} color={accentFor('kelp', dark).color} style={flipInRTL} />
             </View>
           </View>
         </TouchableOpacity>
@@ -364,82 +384,6 @@ const HomeTabScreen = ({ selectedTheme }) => {
           isDarkMode={dark}
           onRequireSignIn={requireSignInForStatus}
         />
-
-        {/* ── Cosmetics ── a gradient hero card. The one place on Home that is
-            about fun rather than data, so it gets colour and a big motif, and
-            both actions are real buttons instead of two look-alike tiles. */}
-        <View style={$.heroCard}>
-          <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none" viewBox="0 0 100 100">
-            <Defs>
-              <LinearGradient id="cosmeticsHero" x1="0" y1="0" x2="1" y2="1">
-                <Stop offset="0" stopColor="#6A5ACD" />
-                <Stop offset="0.55" stopColor="#8B4FC9" />
-                <Stop offset="1" stopColor="#C2417F" />
-              </LinearGradient>
-            </Defs>
-            <Rect x="0" y="0" width="100" height="100" fill="url(#cosmeticsHero)" />
-          </Svg>
-          <View pointerEvents="none" style={$.heroMotif}>
-            <HomeIcon name="egg" size={120} color="rgba(255,255,255,0.22)" />
-          </View>
-          <View style={$.heroBadge}>
-            <HomeIcon name="cosmetics" size={14} color="#FFFFFF" />
-            <Text style={$.heroBadgeText}>{t('home.cosmetics', { defaultValue: 'Cosmetics' })}</Text>
-          </View>
-          <Text style={$.heroTitle}>{t('home.cosmetics_hero_title', { defaultValue: 'Hatch. Collect. Flex.' })}</Text>
-          <Text style={$.heroSub}>{t('home.cosmetics_hero_sub', { defaultValue: 'Win frames and badges that show in chat' })}</Text>
-          <View style={$.heroActions}>
-            <TouchableOpacity
-              style={[$.heroBtn, $.heroBtnSolid]}
-              onPress={() => guard(() => nav.navigate('MysteryEggScreen'), 'Sign in to open eggs')}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-            >
-              <HomeIcon name="egg" size={18} color="#5B3FB0" />
-              <Text style={[$.heroBtnText, { color: '#5B3FB0' }]}>{t('home.win_cosmetics', { defaultValue: 'Win Cosmetics' })}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[$.heroBtn, $.heroBtnGhost]}
-              onPress={() => guard(() => nav.navigate('MyCosmeticsScreen'), 'Sign in to see cosmetics')}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-            >
-              <Text style={[$.heroBtnText, { color: '#FFFFFF' }]}>{t('home.my_cosmetics', { defaultValue: 'My Cosmetics' })}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* ── Community ── two compact tiles in the same tinted language as the
-            Explore grid, so the bottom of the page matches the top. */}
-        <View style={$.duoRow}>
-          {[
-            { icon: 'shield', accent: 'violet', label: t('home.our_team', { defaultValue: 'Our Team' }), sub: t('home.our_team_sub', { defaultValue: 'Meet the mods' }), onPress: () => nav.navigate('ModsScreen') },
-            { icon: 'friends', accent: 'blue', label: t('home.invite'), sub: t('home.invite_sub', { defaultValue: 'Share the app' }), onPress: async () => {
-              const link = Platform.OS === 'ios' ? config.IOsShareLink : config.andriodShareLink;
-              try { await Share.share({ message: `${t('home.share_message')} ${link}` }); } catch {}
-            } },
-          ].map((r) => {
-            const a = accentFor(r.accent, dark);
-            return (
-              <TouchableOpacity
-                key={r.icon}
-                style={[$.duoTile, { backgroundColor: a.tint, borderColor: a.tint }]}
-                onPress={r.onPress}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel={r.label}
-              >
-                <View style={[$.duoIcon, { backgroundColor: dark ? '#FFFFFF0D' : '#FFFFFFB3' }]}>
-                  <HomeIcon name={r.icon} size={22} color={a.color} />
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={[$.rowTitle, { color: C.text }]} numberOfLines={1}>{r.label}</Text>
-                  <Text style={[$.rowSub, { color: a.color }]} numberOfLines={1}>{r.sub}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
 
         {/* ── Footer ── */}
         <Text style={[$.footer, { color: C.textSecondary }]}>{t('home.made_with_love')}</Text>
@@ -518,6 +462,11 @@ const $ = StyleSheet.create({
   toolLabel: { fontSize: 15, fontFamily: FONT_BOLD },
   toolSub: { fontSize: 12, fontFamily: FONT_REGULAR, marginTop: 3 },
 
+  // Trade Match
+  matchCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: SCREEN_GUTTER, marginTop: 12, padding: 14, borderRadius: 20, borderWidth: 1 },
+  matchBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, maxWidth: 140 },
+  matchBtnText: { fontSize: 12.5, fontFamily: FONT_BOLD },
+
   // My Stuff
   myStuffCard: { marginHorizontal: SCREEN_GUTTER, marginTop: 14, paddingHorizontal: 14, paddingVertical: 14, borderRadius: 16, borderWidth: 1 },
   myStuffCardInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
@@ -527,30 +476,6 @@ const $ = StyleSheet.create({
   // Section header with a trailing meta line
   sectionHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 },
   sectionMeta: { fontSize: 12, fontFamily: FONT_REGULAR },
-
-  // Cosmetics hero
-  heroCard: { marginHorizontal: SCREEN_GUTTER, marginTop: 22, borderRadius: 22, overflow: 'hidden', padding: 18 },
-  heroMotif: { position: 'absolute', right: -22, top: -22, transform: [{ rotate: '14deg' }] },
-  heroBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  heroBadgeText: { fontSize: 11, fontFamily: FONT_BOLD, color: '#FFFFFF', letterSpacing: 0.4 },
-  heroTitle: { fontSize: 22, fontFamily: FONT_BOLD, color: '#FFFFFF', marginTop: 12, letterSpacing: -0.3 },
-  heroSub: { fontSize: 13, fontFamily: FONT_REGULAR, color: 'rgba(255,255,255,0.85)', marginTop: 4, maxWidth: '75%' },
-  heroActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  heroBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, borderRadius: 14, paddingHorizontal: 10 },
-  heroBtnSolid: { backgroundColor: '#FFFFFF' },
-  heroBtnGhost: { backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' },
-  heroBtnText: { fontSize: 13, fontFamily: FONT_BOLD },
-
-  // Community tiles
-  duoRow: { flexDirection: 'row', gap: 12, marginHorizontal: SCREEN_GUTTER, marginTop: 12 },
-  duoTile: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 18, borderWidth: 1 },
-  duoIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  rowTitle: { fontSize: 14, fontFamily: FONT_BOLD },
-  rowSub: { fontSize: 12, fontFamily: FONT_REGULAR, marginTop: 2 },
 
   // Footer
   footer: { textAlign: 'center', fontSize: 11, fontFamily: FONT_REGULAR, marginTop: 24, paddingBottom: 8 },

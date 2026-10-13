@@ -18,7 +18,8 @@ import appleAuth, { AppleButton } from '@invertase/react-native-apple-authentica
 import { useHaptic } from '../Helper/HepticFeedBack';
 import { useGlobalState } from '../GlobelStats';
 import ConditionalKeyboardWrapper from '../Helper/keyboardAvoidingContainer';
-import { useTranslation } from 'react-i18next';
+import useNavBarInset from '../Helper/useNavBarInset';
+import { Trans, useTranslation } from 'react-i18next';
 import { showSuccessMessage, showErrorMessage, showWarningMessage } from '../Helper/MessageHelper';
 import { requestPermission } from '../Helper/PermissionCheck';
 import { setPendingSigninChoice, clearPendingSigninChoice, emailOptInDefault } from '../Helper/emailOptIn';
@@ -65,6 +66,9 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
   const { triggerHapticFeedback } = useHaptic();
   const { theme, robloxUsernameRef, user } = useGlobalState();
   const { t } = useTranslation();
+  // Bottom sheet: clears the Android nav bar / iOS home indicator while the
+  // keyboard is down (Modals are edge-to-edge on Android).
+  const navBarInset = useNavBarInset();
 
   // 🔐 Modular Auth instance
   const app = getApp();
@@ -111,16 +115,16 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
     return appleAuth.onCredentialRevoked(async () => {
       try {
         await signOut(auth);
-        showWarningMessage('Session Expired', 'Please sign in again.');
+        showWarningMessage(t('settings.session_expired'), t('signin.sign_in_again'));
       } catch (e) {
         // Error during signOut on Apple revoke
       }
     });
-  }, [auth]);
+  }, [auth, t]);
 
   const handleForgotPassword = async () => {
     if (!email) {
-      Alert.alert(t('home.alert.error'), 'Enter valid email address');
+      Alert.alert(t('home.alert.error'), t('signin.error_invalid_email'));
       return;
     }
 
@@ -205,8 +209,8 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
           await signOut(auth);
 
           Alert.alert(
-            '✅ Account Created',
-            "Please check your inbox to verify your email. If you don't see it, check the Spam or Promotions folder."
+            t('signin.account_created_title'),
+            t('signin.verify_email_sent')
           );
           return;
         }
@@ -222,8 +226,8 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
           await signOut(auth);
 
           Alert.alert(
-            '📩 Email Not Verified',
-            'A new verification link has been sent to your email. Please check your inbox or spam folder before signing in.'
+            t('signin.email_not_verified_title'),
+            t('signin.verify_email_resent')
           );
           return;
         }
@@ -335,7 +339,7 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
     return (
       <Modal visible animationType="slide" transparent onRequestClose={onClose}>
         <Pressable style={styles.modalOverlay} onPress={onClose} />
-        <View style={[styles.drawer, { backgroundColor: isDarkMode ? config.colors.surfaceDark : config.colors.surfaceLight }]}>
+        <View style={[styles.drawer, { backgroundColor: isDarkMode ? config.colors.surfaceDark : config.colors.surfaceLight, paddingBottom: navBarInset }]}>
           <View style={styles.restoringBox}>
             <ActivityIndicator size="large" color={selectedTheme.colors.text} />
             <Text style={[styles.text, styles.restoringText, { color: selectedTheme.colors.text }]}>{t('signin.restoring')}</Text>
@@ -350,12 +354,12 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
       <Pressable style={styles.modalOverlay} onPress={onClose} />
       <ConditionalKeyboardWrapper>
         <Pressable onPress={() => {}}>
-          <View style={[styles.drawer, { backgroundColor: isDarkMode ? config.colors.surfaceDark : config.colors.surfaceLight }]}>
+          <View style={[styles.drawer, { backgroundColor: isDarkMode ? config.colors.surfaceDark : config.colors.surfaceLight, paddingBottom: navBarInset }]}>
             <Text style={[styles.title, { color: selectedTheme.colors.text }]}>
               {isRegisterMode
                 ? t('signin.title_register')
                 : isForgotPasswordMode
-                ? 'Forget Password'
+                ? t('signin.title_forgot')
                 : t('signin.title_signin')}
             </Text>
 
@@ -428,7 +432,7 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
                 styles.secondaryButtonText,
                 { color: isDarkMode ? config.colors.linkDark : config.colors.linkLight }
               ]}>
-                {isForgotPasswordMode ? 'Signin Mode' : 'Forgetpassword Mode'}
+                {isForgotPasswordMode ? t('signin.back_to_signin') : t('signin.forgot_password_link')}
               </Text>
             </TouchableOpacity>
 
@@ -458,7 +462,7 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
                 {isLoading ? (
                   <ActivityIndicator size="small" color="white" />
                 ) : (
-                  <Text style={styles.primaryButtonText}>Send Reset Link</Text>
+                  <Text style={styles.primaryButtonText}>{t('signin.send_reset_link')}</Text>
                 )}
               </TouchableOpacity>
             ) : (
@@ -536,15 +540,15 @@ const SignInDrawer = ({ visible, onClose, selectedTheme, message, screen }) => {
             </TouchableOpacity>
 
             <Text style={[styles.legalText, { color: selectedTheme.colors.text }]}>
-              {t('signin.legal_prefix', { defaultValue: 'By continuing, you agree to our ' })}
-              <Text style={styles.legalLink} onPress={handleOpenTerms}>
-                {t('signin.legal_terms', { defaultValue: 'Terms' })}
-              </Text>
-              {t('signin.legal_and', { defaultValue: ' and ' })}
-              <Text style={styles.legalLink} onPress={handleOpenPrivacy}>
-                {t('signin.legal_privacy', { defaultValue: 'Privacy Policy' })}
-              </Text>
-              .
+              {/* One sentence with tagged links, so each language can order it. */}
+              <Trans
+                t={t}
+                i18nKey="signin.legal_text"
+                components={{
+                  terms: <Text style={styles.legalLink} onPress={handleOpenTerms} />,
+                  privacy: <Text style={styles.legalLink} onPress={handleOpenPrivacy} />,
+                }}
+              />
             </Text>
           </View>
         </Pressable>

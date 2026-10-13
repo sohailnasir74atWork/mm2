@@ -26,6 +26,7 @@ const NAV_INITIAL_METRICS = initialWindowMetrics && Platform.OS === 'ios'
   : initialWindowMetrics;
 import { NavigationContainer } from '@react-navigation/native';
 import { navigationRef } from './Code/Helper/navigationService';
+import { trackCurrentScreen, setCrashUserId } from './Code/Helper/screenTracking';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import SettingsScreen from './Code/SettingScreen/Setting';
 import EmailOptInGate from './Code/AppHelper/EmailOptInGate';
@@ -87,6 +88,13 @@ function App() {
   const { theme, user, appdatabase } = useGlobalState();
   const { t } = useTranslation();
   const isDark = theme === 'dark';
+
+  // Crash reports carry the signed-in uid (never an email or a name), and
+  // lose it on sign-out (Code/Helper/screenTracking.js). Set here rather than
+  // in GlobelStats so it follows the user state whichever path signs in.
+  useEffect(() => {
+    setCrashUserId(user?.id || '');
+  }, [user?.id]);
 
   useEffect(() => {
     SystemNavigationBar.setNavigationColor(isDark ? '#000000' : '#FFFFFF', !isDark);
@@ -164,7 +172,13 @@ function App() {
   return (
     <SafeAreaView edges={LEGACY_SAFE_AREA_EDGES} style={{ flex: 1, backgroundColor: selectedTheme.colors.background }} onTouchStartCapture={AppOpenAdManager.noteUserTouch}>
       <SafeAreaProvider initialMetrics={NAV_INITIAL_METRICS}>
-        <NavigationContainer ref={navigationRef} theme={selectedTheme}>
+        <NavigationContainer
+          ref={navigationRef}
+          theme={selectedTheme}
+          // Names the screen in crash reports (Code/Helper/screenTracking.js).
+          onReady={trackCurrentScreen}
+          onStateChange={trackCurrentScreen}
+        >
           <StatusBar
             barStyle={isDark ? 'light-content' : 'dark-content'}
           />
@@ -200,7 +214,7 @@ function App() {
             <Stack.Screen
               name="MyStuff"
               options={{
-                title: 'My Stuff',
+                title: t('mystuff.title'),
                 headerStyle: { backgroundColor: selectedTheme.colors.background },
                 headerTintColor: selectedTheme.colors.text,
                 headerTitleStyle: { fontFamily: 'Lato-Bold', fontSize: 20 },
@@ -228,11 +242,14 @@ function App() {
             {/* Birthdays (Home card, Settings, and birthday pushes with
                 route 'Birthdays'). Draws its own header. */}
             <Stack.Screen name="Birthdays" options={{ headerShown: false }} getComponent={() => require('./Code/Birthdays/BirthdaysScreen').default} />
+            {/* Trade Match (More hub card; params { tab: 'wanters' }). Draws
+                its own header. Port of Adopt Me's, on the RTDB trade_index. */}
+            <Stack.Screen name="TradeMatch" options={{ headerShown: false }} getComponent={() => require('./Code/TradeMatch/TradeMatchScreen').default} />
 
             <Stack.Screen
               name="SocialDashboard"
               options={{
-                title: 'Social Dashboard',
+                title: t('misc.social_dashboard'),
                 headerStyle: { backgroundColor: selectedTheme.colors.background },
                 headerTintColor: selectedTheme.colors.text,
                 headerTitleStyle: { fontFamily: 'Lato-Bold', fontSize: 20 },
@@ -244,7 +261,7 @@ function App() {
             <Stack.Screen
               name="Values"
               options={{
-                title: 'Values',
+                title: t('tabs.values'),
                 headerStyle: { backgroundColor: selectedTheme.colors.background },
                 headerTintColor: selectedTheme.colors.text,
                 headerTitleStyle: { fontFamily: 'Lato-Bold', fontSize: 20 },

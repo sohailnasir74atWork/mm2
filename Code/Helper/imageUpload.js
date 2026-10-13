@@ -23,6 +23,7 @@ export const UPLOAD_KIND = {
   group: 'group', // group icon
   chat: 'chat', // group chat images
   dm: 'dm', // private chat images
+  report: 'report', // More ▸ Complaints & ideas screenshots
 };
 
 /**

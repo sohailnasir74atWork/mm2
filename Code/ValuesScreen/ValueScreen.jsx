@@ -28,6 +28,7 @@ import { ref, update } from '@react-native-firebase/database';
 import { Menu, MenuOption, MenuOptions, MenuTrigger } from 'react-native-popup-menu';
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
+import ScreenBottomBanner from '../Ads/ScreenBottomBanner';
 import {
   resolveItemImage, buildItemPool, unwrapFeed, priceOf, displayValueText,
   DEFAULT_VALUE_SOURCE, categoryKey, VALUE_SOURCE,
@@ -108,6 +109,9 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
   // ✅ MM2 Categories - matching HomeScreen (without INVENTORY for ValueScreen)
   // ✅ Use useMemo to prevent new array reference on every render
   const CATEGORIES = useMemo(() => ['ALL', 'ANCIENT', 'UNIQUE', 'CHROMA', 'GODLY', 'LEGEND', 'RARE', 'UNCOMMON', 'COMMON', 'VINTAGE', 'PETS'], []);
+  // Filters stay English constants for logic; ALL and PETS get a translated
+  // label (rarity names are MM2 game terms).
+  const filterLabel = (f) => (f === 'ALL' ? t('calc.filter_all') : f === 'PETS' ? t('calc.filter_pets') : f);
   const hideBadge = []; // MM2 doesn't use badges for hiding
 
   // console.log(selectedFruits)
@@ -489,7 +493,7 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
             {!fromChat && !fromSetting && <Menu>
               <MenuTrigger onPress={() => { }}>
                 <View style={styles.filterButton}>
-                  <Text style={styles.filterText}>{displayedFilter}</Text>
+                  <Text style={styles.filterText}>{filterLabel(displayedFilter)}</Text>
                   <Icon name="chevron-down-outline" size={18} color="white" />
                 </View>
               </MenuTrigger>
@@ -500,7 +504,7 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
                     onSelect={() => applyFilter(filter)}
                   >
                     <Text style={[styles.filterOptionText, selectedFilter === filter && styles.selectedOption]}>
-                      {filter}
+                      {filterLabel(filter)}
                     </Text>
                   </MenuOption>
                 ))}
@@ -561,7 +565,7 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
                   accessibilityState={{ selected: active }}
                 >
                   <Text style={[styles.sourceSwitchText, active && styles.sourceSwitchTextActive]}>
-                    {src === VALUE_SOURCE.SUPREME ? 'Supreme values' : 'MM2 values'}
+                    {src === VALUE_SOURCE.SUPREME ? t('value.source_supreme') : t('value.source_mm2')}
                   </Text>
                 </TouchableOpacity>
               );
@@ -630,6 +634,9 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
               {t("value.no_results")}
             </Text>
           )}
+          {/* Full-screen page: rows stop above the Android nav bar. Embedded
+              in PetModal's sheet, the sheet pads it instead. */}
+          {!fromChat && !fromSetting && <ScreenBottomBanner ad={false} />}
         </View>
         <CodesDrawer isVisible={isDrawerVisible} toggleModal={toggleDrawer} codes={codesData} />
       </GestureHandlerRootView>

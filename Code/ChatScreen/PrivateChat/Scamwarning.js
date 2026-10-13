@@ -51,7 +51,7 @@ export default function ScamSafetyBox({
       try {
         const summaryRef = doc(firestoreDB, 'user_ratings_summary', selectedUserId);
         const snap = await getDoc(summaryRef);
-        if (!cancelled && snap.exists) {
+        if (!cancelled && snap.exists()) {
           const data = snap.data();
           setRatingSummary({
             value: data.averageRating || 0,
@@ -118,7 +118,7 @@ export default function ScamSafetyBox({
         <Text style={[styles.warningText, {
           color: isDarkMode ? '#CBD5E1' : '#78716C',
         }]} numberOfLines={1}>
-          Trade safe · Too good = scam · Never share login
+          {t('private_chat.trade_safe_strip')}
         </Text>
       </View>
 
@@ -143,7 +143,7 @@ export default function ScamSafetyBox({
                 <Text style={[styles.reviewCountText, {
                   color: isDarkMode ? '#a5b4fc' : '#6366f1',
                 }]}>
-                  {ratingSummary.count} {ratingSummary.count === 1 ? t('private_chat.recent_reviews', { defaultValue: 'review' }).split(' ').pop() : 'reviews'}
+                  {t('private_chat.review_count', { count: ratingSummary.count })}
                 </Text>
               </View>
             </>

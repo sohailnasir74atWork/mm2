@@ -23,9 +23,18 @@ import config from '../Helper/Environment';
 import PetModal from '../ChatScreen/PrivateChat/PetsModel';
 import SignInDrawer from '../Firebase/SigninDrawer';
 import { useTranslation } from 'react-i18next';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
 import { syncValueAlertTopics } from '../Helper/valueAlerts';
 import { getJournalRevision, clearJournal, deleteJournalEntry } from '../Engagement/journalUtils';
+import { rtlX } from '../Helper/rtl';
+// Same For Trade rule as the Trade Match index (missing flag = For Trade).
+import { isListed } from '../TradeMatch/matchCore';
+import ScreenBottomBanner from '../Ads/ScreenBottomBanner';
+
+// For Trade / Private tag colours (Adopt Me's My Pets tags).
+const TRADE_ON = '#10B981';
+const TRADE_OFF = '#F59E0B';
+const TRADE_OFF_TEXT = '#D97706';
 
 const { width: W } = Dimensions.get('window');
 const GRID_COLS = 4;
@@ -50,9 +59,9 @@ const TABS = [
 
 // Trade-result palette, shared with the calculator's Log Trade flow
 const RESULT_META = {
-  win:  { emoji: '🏆', label: 'Win',  color: '#10B981' },
-  fair: { emoji: '🤝', label: 'Fair', color: '#F59E0B' },
-  loss: { emoji: '📉', label: 'Loss', color: '#EF4444' },
+  win:  { emoji: '🏆', labelKey: 'home.win',  color: '#10B981' },
+  fair: { emoji: '🤝', labelKey: 'home.fair', color: '#F59E0B' },
+  loss: { emoji: '📉', labelKey: 'home.loss', color: '#EF4444' },
 };
 
 const HISTORY_PAGE = 15;
@@ -71,14 +80,108 @@ const categoryRank = (key) => {
 };
 const titleCase = (s) => s.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase());
 
+// One card in the Items grid. Memoised, so a select-mode tap re-renders the
+// card that was tapped, not the whole grid (same technique as Adopt Me's
+// OwnedPetCard). Props are primitives plus the stable theme palette and
+// callbacks; the value is computed by the parent so a catalogue or value-
+// source change still reaches every card.
+const OwnedItemCard = React.memo(function OwnedItemCard(props) {
+  const {
+    item, index, val, selectMode, isSelected, C, unknownLabel, onToggle, onRemove,
+    forTrade, forTradeLabel, privateLabel, onToggleTrade,
+  } = props;
+  // In select mode the whole card is the tap target. Outside it the card is
+  // inert and invisible to screen readers as a unit, exactly like the plain
+  // View it used to be. Kept the same element type either way so toggling
+  // the mode doesn't remount every cell (and reload every image).
+  return (
+    <TouchableOpacity
+      disabled={!selectMode}
+      accessible={selectMode}
+      accessibilityRole={selectMode ? 'checkbox' : undefined}
+      accessibilityState={selectMode ? { checked: isSelected } : undefined}
+      onPress={() => onToggle(index)}
+      activeOpacity={0.7}
+      style={[
+        $.card,
+        { backgroundColor: C.bgAlt, borderColor: C.border },
+        isSelected && { backgroundColor: config.colors.primary + '14', borderColor: config.colors.primary },
+      ]}
+    >
+      {selectMode ? (
+        <View
+          style={[
+            $.cardCheck,
+            isSelected
+              ? { backgroundColor: config.colors.primary, borderColor: config.colors.primary }
+              : { backgroundColor: C.bg, borderColor: C.textSecondary },
+          ]}
+        >
+          {isSelected && <FontAwesome name="check" size={8} color="#fff" solid />}
+        </View>
+      ) : (
+        /* Remove button */
+        <TouchableOpacity
+          onPress={() => onRemove(index)}
+          style={$.cardRemoveBtn}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        >
+          <FontAwesome name="xmark" size={9} color="#fff" />
+        </TouchableOpacity>
+      )}
+      <Image resizeMethod="resize"
+        source={{ uri: item.imageUrl || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
+        style={$.cardImage}
+        resizeMode="contain"
+      />
+      <Text style={[$.cardName, { color: C.text }]} numberOfLines={1}>
+        {item.name || unknownLabel}
+      </Text>
+      {val > 0 && (
+        <View style={[$.cardValueBadge, { backgroundColor: config.colors.primary + '18' }]}>
+          <Text style={[$.cardValueText, { color: config.colors.primary }]}>
+            {fmt(val)}
+          </Text>
+        </View>
+      )}
+      {/* For Trade / Private (Trade Match). Disabled in select mode: the tap
+          falls through to the card. */}
+      <TouchableOpacity
+        disabled={selectMode}
+        onPress={() => onToggleTrade(index)}
+        style={[
+          $.tradeTag,
+          forTrade
+            ? { backgroundColor: TRADE_ON + '20', borderColor: TRADE_ON }
+            : { backgroundColor: TRADE_OFF + '20', borderColor: TRADE_OFF },
+        ]}
+        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: forTrade }}
+        accessibilityLabel={forTrade ? forTradeLabel : privateLabel}
+      >
+        <Text style={[$.tradeTagText, { color: forTrade ? TRADE_ON : TRADE_OFF_TEXT }]} numberOfLines={1}>
+          {forTrade ? forTradeLabel : privateLabel}
+        </Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+});
+
 const MyStuffScreen = ({ selectedTheme }) => {
   const { user, firestoreDB } = useGlobalState();
   const { localState, updateLocalState } = useLocalState();
   const C = useThemeColors();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const route = useRoute();
 
-  const [activeTab, setActiveTab] = useState('items');
+  // Trade Match links here with { initialTab: 'items' | 'goals' }.
+  const [activeTab, setActiveTab] = useState(() => (route?.params?.initialTab === 'goals' ? 'goals' : 'items'));
+  const requestedTab = route?.params?.initialTab;
+  useEffect(() => {
+    if (requestedTab === 'goals' || requestedTab === 'items') setActiveTab(requestedTab);
+  }, [requestedTab]);
   const [ownedPets, setOwnedPets] = useState([]);
   const [wishlistPets, setWishlistPets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -161,14 +264,26 @@ const MyStuffScreen = ({ selectedTheme }) => {
   // not price leaderboard awards at all. An item the pool does not know falls
   // back to whatever value was stored with it, which is what this always did.
   // See Code/Helper/valueSources.js.
+  // name → first catalogue entry with that name (what .find() returned), built
+  // once per catalogue load: lookupVal runs for every grid cell on each
+  // select-mode tap, and scanning the whole pool per cell was the slow part.
+  const pricedByName = useMemo(() => {
+    const m = new Map();
+    parsedData.forEach(d => {
+      const n = (d?.name || '').toLowerCase().trim();
+      if (!m.has(n)) m.set(n, d);
+    });
+    return m;
+  }, [parsedData]);
+
   const lookupVal = useCallback((item) => {
     if (!item?.name) return 0;
     const n = (item.name || '').toLowerCase().trim();
-    const f = parsedData.find(d => (d?.name || '').toLowerCase().trim() === n);
+    const f = pricedByName.get(n);
     const priced = priceOf(f || item, valueSource);
     if (isSummable(priced)) return priced.value || 0;
     return 0;
-  }, [parsedData, valueSource]);
+  }, [pricedByName, valueSource]);
 
   // Portfolio stats
   const stats = useMemo(() => {
@@ -226,6 +341,24 @@ const MyStuffScreen = ({ selectedTheme }) => {
 
   const removeWishlistPet = useCallback((index) => {
     const newWishlist = wishlistPets.filter((_, i) => i !== index);
+    setWishlistPets(newWishlist);
+    savePetsToReviews(ownedPets, newWishlist);
+  }, [ownedPets, wishlistPets, savePetsToReviews]);
+
+  // ── For Trade / Private (Trade Match) ──
+  // An additive per-item flag: `availableForTrade: false` keeps an item out of
+  // Trade Match; a missing flag (every item older builds saved) means listed.
+  // Older builds keep the flag because they save the item objects they read.
+  const toggleOwnedForTrade = useCallback((index) => {
+    if (!ownedPets[index]) return;
+    const newOwned = ownedPets.map((p, i) => (i === index ? { ...p, availableForTrade: !isListed(p) } : p));
+    setOwnedPets(newOwned);
+    savePetsToReviews(newOwned, wishlistPets);
+  }, [ownedPets, wishlistPets, savePetsToReviews]);
+
+  const toggleWishlistForTrade = useCallback((index) => {
+    if (!wishlistPets[index]) return;
+    const newWishlist = wishlistPets.map((p, i) => (i === index ? { ...p, availableForTrade: !isListed(p) } : p));
     setWishlistPets(newWishlist);
     savePetsToReviews(ownedPets, newWishlist);
   }, [ownedPets, wishlistPets, savePetsToReviews]);
@@ -339,76 +472,60 @@ const MyStuffScreen = ({ selectedTheme }) => {
     );
   }, [selectedIdx, ownedPets, wishlistPets, savePetsToReviews, t]);
 
+  // Bulk For Trade / Private on the selected items (no confirm: reversible).
+  const bulkSetForTrade = useCallback((available) => {
+    if (!selectedIdx.size) return;
+    const newOwned = ownedPets.map((p, i) => (selectedIdx.has(i) ? { ...p, availableForTrade: available } : p));
+    setOwnedPets(newOwned);
+    savePetsToReviews(newOwned, wishlistPets);
+    setSelectMode(false);
+    setSelectedIdx(new Set());
+  }, [selectedIdx, ownedPets, wishlistPets, savePetsToReviews]);
+
   const currentList = activeTab === 'items' ? ownedPets : wishlistPets;
 
-  // Render compact item card
-  const renderItem = useCallback(({ item, index }) => {
-    const val = lookupVal(item);
-    const isSelected = selectMode && selectedIdx.has(index);
-    // In select mode the whole card is the tap target. Outside it the card is
-    // inert and invisible to screen readers as a unit, exactly like the plain
-    // View it used to be. Kept the same element type either way so toggling
-    // the mode doesn't remount every cell (and reload every image).
-    return (
-      <TouchableOpacity
-        disabled={!selectMode}
-        accessible={selectMode}
-        accessibilityRole={selectMode ? 'checkbox' : undefined}
-        accessibilityState={selectMode ? { checked: isSelected } : undefined}
-        onPress={() => toggleSelected(index)}
-        activeOpacity={0.7}
-        style={[
-          $.card,
-          { backgroundColor: C.bgAlt, borderColor: C.border },
-          isSelected && { backgroundColor: config.colors.primary + '14', borderColor: config.colors.primary },
-        ]}
-      >
-        {selectMode ? (
-          <View
-            style={[
-              $.cardCheck,
-              isSelected
-                ? { backgroundColor: config.colors.primary, borderColor: config.colors.primary }
-                : { backgroundColor: C.bg, borderColor: C.textSecondary },
-            ]}
-          >
-            {isSelected && <FontAwesome name="check" size={8} color="#fff" solid />}
-          </View>
-        ) : (
-          /* Remove button */
-          <TouchableOpacity
-            onPress={() => removeOwnedPet(index)}
-            style={$.cardRemoveBtn}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          >
-            <FontAwesome name="xmark" size={9} color="#fff" />
-          </TouchableOpacity>
-        )}
-        <Image resizeMethod="resize"
-          source={{ uri: item.imageUrl || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
-          style={$.cardImage}
-          resizeMode="contain"
-        />
-        <Text style={[$.cardName, { color: C.text }]} numberOfLines={1}>
-          {item.name || t('mystuff.unknown')}
-        </Text>
-        {val > 0 && (
-          <View style={[$.cardValueBadge, { backgroundColor: config.colors.primary + '18' }]}>
-            <Text style={[$.cardValueText, { color: config.colors.primary }]}>
-              {fmt(val)}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
-    );
-  }, [lookupVal, C, removeOwnedPet, selectMode, selectedIdx, toggleSelected]);
+  // removeOwnedPet changes with every list edit; the cards call it through a
+  // ref so their onRemove prop keeps one identity and the memo holds.
+  const removeOwnedPetRef = useRef(removeOwnedPet);
+  removeOwnedPetRef.current = removeOwnedPet;
+  const onRemoveOwnedCard = useCallback((index) => removeOwnedPetRef.current(index), []);
+  const toggleOwnedRef = useRef(toggleOwnedForTrade);
+  toggleOwnedRef.current = toggleOwnedForTrade;
+  const onToggleOwnedTrade = useCallback((index) => toggleOwnedRef.current(index), []);
+  const forTradeLabel = t('trade_match.pill_for_trade');
+  const privateLabel = t('trade_match.pill_private');
+
+  // Render compact item card (memoised OwnedItemCard; see above)
+  const unknownLabel = t('mystuff.unknown');
+  const renderItem = useCallback(({ item, index }) => (
+    <OwnedItemCard
+      item={item}
+      index={index}
+      val={lookupVal(item)}
+      selectMode={selectMode}
+      isSelected={selectMode && selectedIdx.has(index)}
+      C={C}
+      unknownLabel={unknownLabel}
+      onToggle={toggleSelected}
+      onRemove={onRemoveOwnedCard}
+      forTrade={isListed(item)}
+      forTradeLabel={forTradeLabel}
+      privateLabel={privateLabel}
+      onToggleTrade={onToggleOwnedTrade}
+    />
+  ), [lookupVal, C, selectMode, selectedIdx, toggleSelected, onRemoveOwnedCard, unknownLabel, forTradeLabel, privateLabel, onToggleOwnedTrade]);
 
   // ── Intelligent Goal Card ──
+  // Owned items by value, highest first. Same for every goal card, so it is
+  // built once per list/catalogue change instead of once per card.
+  const ownedByValue = useMemo(() => (
+    ownedPets.map(p => ({ name: p.name, value: lookupVal(p) }))
+      .filter(p => p.value > 0).sort((a, b) => b.value - a.value)
+  ), [ownedPets, lookupVal]);
+
   const renderGoalCard = useCallback(({ item, index }) => {
     const petVal = lookupVal(item);
-    const ownedSorted = ownedPets.map(p => ({ name: p.name, value: lookupVal(p) }))
-      .filter(p => p.value > 0).sort((a, b) => b.value - a.value);
-    const bestOwnedValue = ownedSorted.length > 0 ? ownedSorted[0].value : 0;
+    const bestOwnedValue = ownedByValue.length > 0 ? ownedByValue[0].value : 0;
 
     // Progress
     const progress = petVal > 0 && bestOwnedValue > 0
@@ -429,7 +546,7 @@ const MyStuffScreen = ({ selectedTheme }) => {
     }
 
     // Smart tip
-    const closestPet = ownedSorted.find(op => op.value >= petVal * 0.7 && op.value <= petVal * 2.5);
+    const closestPet = ownedByValue.find(op => op.value >= petVal * 0.7 && op.value <= petVal * 2.5);
     let tip = null;
     if (canAfford && closestPet) {
       tip = { emoji: '🎉', text: t('mystuff.tip_trade', { name: closestPet.name }), color: '#10B981' };
@@ -475,6 +592,22 @@ const MyStuffScreen = ({ selectedTheme }) => {
               )}
             </View>
           </View>
+          {/* Looking for / Private (Trade Match) */}
+          <TouchableOpacity
+            onPress={() => toggleWishlistForTrade(index)}
+            style={[
+              $.goalTradeTag,
+              isListed(item)
+                ? { backgroundColor: TRADE_ON + '20', borderColor: TRADE_ON }
+                : { backgroundColor: TRADE_OFF + '20', borderColor: TRADE_OFF },
+            ]}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: isListed(item) }}
+          >
+            <Text style={[$.goalTradeTagText, { color: isListed(item) ? TRADE_ON : TRADE_OFF_TEXT }]}>
+              {isListed(item) ? t('trade_match.pill_looking') : t('trade_match.pill_private')}
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => removeWishlistPet(index)} style={{ padding: 6 }}>
             <FontAwesome name="xmark" size={12} color="#cbd5e1" />
           </TouchableOpacity>
@@ -498,7 +631,7 @@ const MyStuffScreen = ({ selectedTheme }) => {
         )}
       </View>
     );
-  }, [lookupVal, ownedPets, C, removeWishlistPet, t]);
+  }, [lookupVal, ownedPets, ownedByValue, C, removeWishlistPet, toggleWishlistForTrade, t]);
 
   // ── Trade history: Firestore trade_journal/{uid}/trades, newest first ──
   const fetchHistory = useCallback(async (reset = false) => {
@@ -718,7 +851,7 @@ const MyStuffScreen = ({ selectedTheme }) => {
         <View style={$.histTop}>
           <View style={[$.histBadge, { backgroundColor: meta.color + '1F' }]}>
             <Text style={{ fontSize: 11 }}>{meta.emoji}</Text>
-            <Text style={[$.histBadgeText, { color: meta.color }]}>{meta.label}</Text>
+            <Text style={[$.histBadgeText, { color: meta.color }]}>{t(meta.labelKey)}</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Text style={[$.histDate, { color: C.textSecondary }]}>{date}</Text>
@@ -755,7 +888,9 @@ const MyStuffScreen = ({ selectedTheme }) => {
   const tabWidth = (W - 32) / TABS.length;
   const indicatorTranslateX = tabAnim.interpolate({
     inputRange: TABS.map((_, i) => i),
-    outputRange: TABS.map((_, i) => i * tabWidth),
+    // The indicator starts at the leading edge; in RTL that is the right, so
+    // it moves left (translateX is not mirrored by RN).
+    outputRange: TABS.map((_, i) => rtlX(i * tabWidth)),
   });
 
   if (loading) {
@@ -956,6 +1091,12 @@ const MyStuffScreen = ({ selectedTheme }) => {
                   </TouchableOpacity>
                 </View>
 
+                {!selectMode && (
+                  <Text style={[$.tradeHint, { color: C.textSecondary }]}>
+                    {t('trade_match.mystuff_hint')}
+                  </Text>
+                )}
+
                 {/* Select all, or a whole category at once — chips combine */}
                 {selectMode && (
                   <ScrollView
@@ -1003,6 +1144,23 @@ const MyStuffScreen = ({ selectedTheme }) => {
           <Text style={[$.selectBarCount, { color: C.text }]}>
             {t('mystuff.selected_count', { count: selectedIdx.size, defaultValue: '{{count}} selected' })}
           </Text>
+          <View style={$.selectBarActions}>
+          <TouchableOpacity
+            style={[$.selectBarTag, { borderColor: TRADE_ON }, !selectedIdx.size && $.selectBarRemoveDisabled]}
+            onPress={() => bulkSetForTrade(true)}
+            disabled={!selectedIdx.size}
+            activeOpacity={0.8}
+          >
+            <Text style={[$.selectBarTagText, { color: TRADE_ON }]}>{forTradeLabel}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[$.selectBarTag, { borderColor: TRADE_OFF }, !selectedIdx.size && $.selectBarRemoveDisabled]}
+            onPress={() => bulkSetForTrade(false)}
+            disabled={!selectedIdx.size}
+            activeOpacity={0.8}
+          >
+            <Text style={[$.selectBarTagText, { color: TRADE_OFF_TEXT }]}>{privateLabel}</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[$.selectBarRemove, !selectedIdx.size && $.selectBarRemoveDisabled]}
             onPress={removeSelected}
@@ -1014,6 +1172,7 @@ const MyStuffScreen = ({ selectedTheme }) => {
               {t('mystuff.remove', { defaultValue: 'Remove' })}
             </Text>
           </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -1061,6 +1220,11 @@ const MyStuffScreen = ({ selectedTheme }) => {
             }
           />
         )
+      )}
+
+      {/* Clears the Android nav bar; the bulk action bar pads it itself. */}
+      {!(activeTab === 'items' && selectMode && ownedPets.length > 0) && (
+        <ScreenBottomBanner background={C.bg} ad={false} />
       )}
 
       {/* PetModal */}
@@ -1223,7 +1387,7 @@ const $ = StyleSheet.create({
     paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  selectBarCount: { fontSize: 13, fontWeight: '800' },
+  selectBarCount: { fontSize: 13, fontWeight: '800', flexShrink: 1, marginEnd: 8 },
   selectBarRemove: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1234,6 +1398,16 @@ const $ = StyleSheet.create({
     borderRadius: 10,
   },
   selectBarRemoveDisabled: { opacity: 0.4 },
+  selectBarActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  selectBarTag: { paddingHorizontal: 10, paddingVertical: 9, borderRadius: 10, borderWidth: 1.5 },
+  selectBarTagText: { fontSize: 12, fontWeight: '800' },
+
+  // For Trade / Private tags (Trade Match)
+  tradeTag: { marginTop: 3, paddingVertical: 2, paddingHorizontal: 5, borderRadius: 5, borderWidth: 1, maxWidth: '100%' },
+  tradeTagText: { fontSize: 7.5, fontWeight: '800', textAlign: 'center' },
+  goalTradeTag: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
+  goalTradeTagText: { fontSize: 9, fontWeight: '800' },
+  tradeHint: { fontSize: 10.5, fontWeight: '500', marginBottom: 8, lineHeight: 14 },
   selectBarRemoveText: { color: '#fff', fontSize: 13, fontWeight: '800' },
 
   // Goal Card

@@ -14,6 +14,7 @@ import {
   categoryKey,
 } from '../Helper/valueSources';
 import ConditionalKeyboardWrapper from '../Helper/keyboardAvoidingContainer';
+import useNavBarInset, { useModalWindowInsets } from '../Helper/useNavBarInset';
 import { useHaptic } from '../Helper/HepticFeedBack';
 import { getDatabase, ref } from '@react-native-firebase/database';
 import { useLocalState } from '../LocalGlobelStats';
@@ -32,6 +33,8 @@ import SubscriptionScreen from '../SettingScreen/OfferWall';
 import { SCREEN_GUTTER } from '../Helper/layout';
 import { matchesItemName } from '../Helper/itemSearch';
 import { trackTradePosted } from '../Helper/growthAnalytics';
+import { timeAgo } from '../Helper/timeAgo';
+import { tradeStatus as wflStatus } from '../Helper/tradeStatus';
 
 const GRID_STEPS = [4, 8, 12, 16];
 
@@ -56,9 +59,17 @@ const createEmptySlots = (count) => Array(count).fill(null);
 // derived from bundle pricing, `none` has no price at all.
 // See Code/Helper/valueSources.js.
 const excludedCount = (summary) => (summary?.modeled || 0) + (summary?.unpriced || 0);
-const excludedLabel = (summary) => {
+const excludedLabel = (summary, t) => {
   const n = excludedCount(summary);
-  return n ? `${n} item${n === 1 ? '' : 's'}` : '—';
+  return n ? t('calc.items_count', { count: n }) : '—';
+};
+
+// Category chips: the constants drive filtering, only these three get a
+// translated label (rarity names are MM2 game terms and stay as they are).
+const CATEGORY_LABEL_KEYS = {
+  INVENTORY: 'calc.filter_inventory',
+  ALL: 'calc.filter_all',
+  PETS: 'calc.filter_pets',
 };
 
 // Value and demand are different things, and the community's most-repeated
@@ -91,22 +102,16 @@ const getDemandAdvice = (hasAvg, wantsAvg) => {
   const gap = a - b;
   if (Math.abs(gap) < DEMAND_GAP_THRESHOLD) return null;
   return gap > 0
-    ? { text: 'Their side is harder to trade on', tone: 'caution' }
-    : { text: 'Your side is harder to trade on', tone: 'good' };
+    ? { textKey: 'calc.their_side_harder', tone: 'caution' }
+    : { textKey: 'calc.your_side_harder', tone: 'good' };
 };
 
 const getTradeStatus = (hasTotal, wantsTotal) => {
   // If both are 0 (initial state), show WIN
   if (hasTotal === 0 && wantsTotal === 0) return 'win';
-
-  // If only has items are selected (wantsTotal is 0), show LOSE
-  if (hasTotal > wantsTotal) return 'lose';
-
-  // If only wants items are selected (hasTotal is 0), show WIN
-  if (hasTotal < wantsTotal) return 'win';
-
-  // If both have equal values, show FAIR
-  return 'fair';
+  // You give hasItems and get wantsItems; within 5% either way is FAIR
+  // (Code/Helper/tradeStatus.js, the same rule as the share card).
+  return wflStatus(hasTotal, wantsTotal);
 };
 
 // ✅ Format values as simple numbers with commas
@@ -166,6 +171,10 @@ const HomeScreen = ({ selectedTheme }) => {
   const { t } = useTranslation();
   const isDarkMode = theme === 'dark';
   const insets = useSafeAreaInsets();
+  // The two bottom-sheet modals below clear the Android nav bar / iOS home
+  // indicator (Modals are edge-to-edge and outside the root SafeAreaView).
+  const modalInsets = useModalWindowInsets();
+  const navBarInset = useNavBarInset();
   const bannerBottomPos = 0; // tab bar is docked (in layout flow), so screen bottom == tab bar top; banner sits flush above it
   const viewRef = useRef();
   // ✅ Add refs to track timeouts and animation frames for cleanup
@@ -223,8 +232,7 @@ const HomeScreen = ({ selectedTheme }) => {
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     if (diffMins < 1) return t('home.just_now', { defaultValue: 'just now' });
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffHours < 24) return timeAgo(lastUpdatedTime, t, 'short');
     return lastUpdatedTime.toLocaleDateString();
   }, [lastUpdatedTime, t]);
 
@@ -583,7 +591,7 @@ const HomeScreen = ({ selectedTheme }) => {
 
           <View style={styles.favoriteItemInfo}>
             <Text style={styles.favoriteItemName} numberOfLines={1}>{item.name || item.Name}</Text>
-            <Text style={styles.favoriteItemValue}>Value: {valueLabel}</Text>
+            <Text style={styles.favoriteItemValue}>{t('calc.value_label', { value: valueLabel })}</Text>
             {reference ? <Text style={styles.referenceValue}>{reference}</Text> : null}
             {item.Tier && (
               <Text style={styles.favoriteItemRarity}>{item.Tier}</Text>
@@ -604,7 +612,7 @@ const HomeScreen = ({ selectedTheme }) => {
         </TouchableOpacity>
       </View>
     );
-  }, [selectedSection, hasItems, wantsItems, maybeExpandGrid, triggerHapticFeedback, toggleFavorite, isDarkMode, getImageUrl]);
+  }, [selectedSection, hasItems, wantsItems, maybeExpandGrid, triggerHapticFeedback, toggleFavorite, isDarkMode, getImageUrl, t]);
 
   // ✅ MM2: Simplified grid item render
   const renderGridItem = useCallback(({ item }) => {
@@ -936,9 +944,12 @@ const HomeScreen = ({ selectedTheme }) => {
         const minutesLeft = Math.floor(secondsLeft / 60);
         const remainingSeconds = secondsLeft % 60;
         const timeMessage = minutesLeft > 0
-          ? `${minutesLeft} minute${minutesLeft === 1 ? '' : 's'} and ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'}`
-          : `${secondsLeft} second${secondsLeft === 1 ? '' : 's'}`;
-        showErrorMessage(t("home.alert.error"), `Please wait ${timeMessage} before creating a new trade.`);
+          ? t('calc.duration_min_sec', {
+            minutes: t('calc.duration_minutes', { count: minutesLeft }),
+            seconds: t('calc.duration_seconds', { count: remainingSeconds }),
+          })
+          : t('calc.duration_seconds', { count: secondsLeft });
+        showErrorMessage(t("home.alert.error"), t('calc.wait_before_trade', { time: timeMessage }));
         setIsSubmitting(false);
         return;
       }
@@ -956,7 +967,7 @@ const HomeScreen = ({ selectedTheme }) => {
       // Step 3: Define the success callback
       const callbackfunction = () => {
         if (!isMountedRef.current) return;
-        showSuccessMessage(t("home.alert.success"), "Your trade has been posted successfully!");
+        showSuccessMessage(t("home.alert.success"), t('calc.trade_posted'));
       };
 
       // Step 4: Update timestamp and analytics
@@ -1003,7 +1014,7 @@ const HomeScreen = ({ selectedTheme }) => {
 
     } catch (error) {
       console.error("Error creating trade:", error);
-      showErrorMessage(t("home.alert.error"), "Something went wrong while posting the trade.");
+      showErrorMessage(t("home.alert.error"), t('calc.trade_post_failed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -1185,7 +1196,7 @@ const HomeScreen = ({ selectedTheme }) => {
                         <View style={styles.demandSummaryPill}>
                           <Text style={styles.demandSummaryText}>{hasAvgDemand || '—'}/10</Text>
                         </View>
-                        <Text style={styles.demandSummaryLabel}>Demand</Text>
+                        <Text style={styles.demandSummaryLabel}>{t('calc.demand')}</Text>
                         <View style={styles.demandSummaryPill}>
                           <Text style={styles.demandSummaryText}>{wantsAvgDemand || '—'}/10</Text>
                         </View>
@@ -1198,9 +1209,9 @@ const HomeScreen = ({ selectedTheme }) => {
                         See Code/Helper/valueSources.js. */}
                     {(excludedCount(hasSummary) > 0 || excludedCount(wantsSummary) > 0) && (
                       <View style={styles.demandSummaryRow}>
-                        <Text style={styles.excludedText}>{excludedLabel(hasSummary)}</Text>
-                        <Text style={styles.demandSummaryLabel}>Unpriced</Text>
-                        <Text style={styles.excludedText}>{excludedLabel(wantsSummary)}</Text>
+                        <Text style={styles.excludedText}>{excludedLabel(hasSummary, t)}</Text>
+                        <Text style={styles.demandSummaryLabel}>{t('calc.unpriced')}</Text>
+                        <Text style={styles.excludedText}>{excludedLabel(wantsSummary, t)}</Text>
                       </View>
                     )}
 
@@ -1238,7 +1249,7 @@ const HomeScreen = ({ selectedTheme }) => {
                   <Text style={[
                     styles.noticeText,
                     { color: demandAdvice.tone === 'good' ? NOTICE_GOOD_FG : NOTICE_CAUTION_FG },
-                  ]}>{demandAdvice.text}</Text>
+                  ]}>{t(demandAdvice.textKey)}</Text>
                 </View>
               ) : null}
 
@@ -1404,7 +1415,7 @@ const HomeScreen = ({ selectedTheme }) => {
                   <Icon name="time-outline" size={14} color={isDarkMode ? '#aaa' : '#888'} style={{ marginRight: 6 }} />
                 )}
                 <Text style={[styles.lastUpdatedText, { color: isDarkMode ? '#aaa' : '#666' }]}>
-                  {refreshing ? t('home.updating', { defaultValue: 'Updating...' }) : `${t('home.updated_prefix', { defaultValue: 'Updated ' })}${getLastUpdatedText()}`}
+                  {refreshing ? t('home.updating', { defaultValue: 'Updating...' }) : t('calc.updated_ago', { time: getLastUpdatedText() })}
                 </Text>
                 {!refreshing && (
                   <Icon name="refresh-outline" size={14} color={config.colors.primary} style={{ marginLeft: 6 }} />
@@ -1420,11 +1431,11 @@ const HomeScreen = ({ selectedTheme }) => {
             onRequestClose={() => setIsDrawerVisible(false)}
           >
             <Pressable style={styles.modalOverlay} onPress={() => setIsDrawerVisible(false)} />
-            <View style={styles.drawerContainer}>
+            <View style={[styles.drawerContainer, { paddingBottom: modalInsets.bottom }]}>
               <View style={styles.drawerHeader}>
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search..."
+                  placeholder={t('home.search_placeholder')}
                   value={searchText}
                   onChangeText={setSearchText}
                   placeholderTextColor={isDarkMode ? '#999' : '#666'}
@@ -1465,7 +1476,7 @@ const HomeScreen = ({ selectedTheme }) => {
                       <Text style={[
                         styles.categoryButtonText,
                         selectedPetType === category && styles.categoryButtonTextActive
-                      ]}>{category}</Text>
+                      ]}>{CATEGORY_LABEL_KEYS[category] ? t(CATEGORY_LABEL_KEYS[category]) : category}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -1499,7 +1510,7 @@ const HomeScreen = ({ selectedTheme }) => {
             <Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)} />
             <ConditionalKeyboardWrapper>
               <View style={{ flexDirection: 'row', flex: 1 }}>
-                <View style={[styles.drawerContainer2, { backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : 'white' }]}>
+                <View style={[styles.drawerContainer2, { backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : 'white', paddingBottom: navBarInset }]}>
                   <Text style={styles.modalMessage}>
                     {t("home.trade_description")}
                   </Text>

@@ -22,14 +22,29 @@ const SORT_MODES = [
 
 const SORT_LABELS = { latest: 'feed.sort_latest', hot: 'feed.sort_hot', trending: 'feed.sort_trending' };
 
-const availableTags = [
-  { label: 'Scam Alert',        value: 'Scam Alert' },
-  { label: 'Looking for Trade', value: 'Looking for Trade' },
-  { label: 'Discussion',        value: 'Discussion' },
-  { label: 'Real or Fake',      value: 'Real or Fake' },
-  { label: 'Need Help',         value: 'Need Help' },
-  { label: 'Misc',              value: 'Misc' },
-];
+// `value` is the English tag stored on every post in Firestore (and queried
+// by fetchPostsByTag), so it never changes; only the label is translated.
+// Keyed by the lowercased value so PostCard can label old posts too
+// ("Misc." came from an earlier build).
+export const FEED_TAG_KEYS = {
+  'scam alert':        'feed.tag_scam_alert',
+  'looking for trade': 'feed.tag_looking_for_trade',
+  'discussion':        'feed.tag_discussion',
+  'real or fake':      'feed.tag_real_or_fake',
+  'need help':         'feed.tag_need_help',
+  'misc':              'feed.tag_misc',
+  'misc.':             'feed.tag_misc',
+};
+
+// Display label for a stored tag value; unknown tags show as stored.
+export const feedTagLabel = (tag, t) => {
+  const key = FEED_TAG_KEYS[String(tag || '').toLowerCase()];
+  return key ? t(key) : tag;
+};
+
+export const FEED_TAG_VALUES = ['Scam Alert', 'Looking for Trade', 'Discussion', 'Real or Fake', 'Need Help', 'Misc'];
+
+const availableTags = FEED_TAG_VALUES.map((value) => ({ value }));
 
 const PostsHeader = ({
   selectedTag,
@@ -163,7 +178,7 @@ const PostsHeader = ({
       <View style={[styles.separator, { backgroundColor: isDark ? '#334155' : '#e2e8f0' }]} />
 
       {/* ── Tag pills ── */}
-      {availableTags.map(({ label, value }) => {
+      {availableTags.map(({ value }) => {
         const cfg = TAG_CONFIG[value] || { icon: 'tag', color: config.colors.primary };
         const isActive = selectedTag === value;
         return (
@@ -193,7 +208,7 @@ const PostsHeader = ({
                 isActive && { color: cfg.color, fontWeight: '800' },
               ]}
             >
-              {label}
+              {feedTagLabel(value, t)}
             </Text>
           </TouchableOpacity>
         );

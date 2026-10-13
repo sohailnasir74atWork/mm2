@@ -93,14 +93,15 @@ export const getStyles = (isDarkMode) =>
       color: isDarkMode ? '#FFFFFF' : '#000000',
       fontFamily: 'Lato-Regular',
       lineHeight: 18,
-      textAlign: 'left',
+      // 'auto' aligns each message by its own script (Arabic right, Latin left).
+      textAlign: 'auto',
     },
     otherMessageTextOnly: {
       fontSize: 14,
       color: isDarkMode ? '#FFFFFF' : '#000000',
       fontFamily: 'Lato-Regular',
       lineHeight: 18,
-      textAlign: 'left',
+      textAlign: 'auto',
     },
     timestamp: {
       fontSize: 10,

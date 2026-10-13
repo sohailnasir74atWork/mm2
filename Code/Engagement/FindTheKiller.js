@@ -403,7 +403,7 @@ const FindTheKiller = ({ visible, onClose, screenMode = false }) => {
     try {
       if (firestoreDB) {
         const levelDoc = await getDoc(doc(firestoreDB, 'mystery_levels', currentLevel.id));
-        if (levelDoc.exists) {
+        if (levelDoc.exists()) {
           const data = levelDoc.data();
           setCommunityStats({
             total: data.totalAttempts || 0,

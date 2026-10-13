@@ -107,7 +107,11 @@ const [bannerHeight, setBannerHeight] = useState(0); // measured, 0 when no ad i
   useEffect(() => {
     if (isAtBottom && pendingMessages.length > 0) {
       // console.log("✅ User scrolled to bottom. Releasing held messages...");
-      setMessages((prev) => [...pendingMessages, ...prev]);
+      // A held message can also arrive via a page load while it waits here.
+      setMessages((prev) => {
+        const seen = new Set(prev.map((msg) => msg?.id).filter(Boolean));
+        return [...pendingMessages.filter((msg) => !seen.has(msg?.id)), ...prev];
+      });
       setPendingMessages([]); // Clear the queue
     }
   }, [isAtBottom, pendingMessages]);
@@ -213,6 +217,18 @@ const startPrivateChat = useCallback(() => {
     () => ref(appdatabase, activeChannel.path),
     [appdatabase, activeChannel.path],
   );
+
+  // A page request that resolves after a channel switch belongs to the old
+  // room; compare against the live ref and drop it. The in-flight flag stops
+  // onEndReached (which fires repeatedly) from requesting the same page twice.
+  // Same fix as FischValues (2026-09-23).
+  const currentChatRef = useRef(chatRef);
+  currentChatRef.current = chatRef;
+  const loadingMoreRef = useRef(false);
+  // Bumped by every reset, so a load-more page that resolves after one (pull
+  // to refresh, channel switch) cannot append old-cursor rows to the new list.
+  const resetGenRef = useRef(0);
+  const resetsInFlightRef = useRef(0);
   const pinnedMessagesRef = useMemo(() => ref(appdatabase, 'pin_messages'), []);
 
   // const isAdmin = user?.admin || false;
@@ -248,6 +264,15 @@ const startPrivateChat = useCallback(() => {
 
   const loadMessages = useCallback(
     async (reset = false) => {
+      // Guard OUTSIDE the try: an early return inside it would run `finally`
+      // and clear the flag that the in-flight request still owns.
+      if (!reset) {
+        if (loadingMoreRef.current || resetsInFlightRef.current > 0) return;
+        loadingMoreRef.current = true;
+      } else {
+        resetsInFlightRef.current += 1;
+      }
+      const gen = reset ? ++resetGenRef.current : resetGenRef.current;
       try {
         if (reset) {
           // console.log('Resetting messages and loading the latest ones.');
@@ -257,14 +282,31 @@ const startPrivateChat = useCallback(() => {
 
         // console.log(`Fetching messages. Reset: ${reset}, LastLoadedKey: ${lastLoadedKey}`);
 
+        const requestRef = chatRef;
+
         // ✅ Use INITIAL_PAGE_SIZE for first load, PAGE_SIZE for pagination
+        //
+        // endAt() is INCLUSIVE: a page ending at the cursor re-reads the cursor
+        // message, which is already on screen. That was the duplicate bug —
+        // every page appended one repeat (React's "two children with the same
+        // key"), and in a short room onEndReached kept firing and appended the
+        // same message again and again. Fetch one extra and drop the cursor key.
         const limitSize = reset ? INITIAL_PAGE_SIZE : PAGE_SIZE;
         const messageQuery = reset
           ? dbQuery(chatRef, orderByKey(), limitToLast(limitSize))
-          : dbQuery(chatRef, orderByKey(), endAt(lastLoadedKey), limitToLast(limitSize));
+          : dbQuery(chatRef, orderByKey(), endAt(lastLoadedKey), limitToLast(limitSize + 1));
 
         const snapshot = await get(messageQuery);
+        if (currentChatRef.current !== requestRef) return; // channel switched mid-request
+        if (resetGenRef.current !== gen) return; // a newer reset owns the list now
         const data = snapshot.val() || {};
+        if (!reset && lastLoadedKey) delete data[lastLoadedKey];
+
+        // The cursor comes from the RAW keys, before the banned-user filter:
+        // push keys sort chronologically, and a page whose oldest rows were
+        // all filtered out must still move the cursor past them.
+        const rawKeys = Object.keys(data).sort();
+        const oldestKey = rawKeys.length > 0 ? rawKeys[0] : null;
 
         // if (developmentMode) {
         //   const dataSize = JSON.stringify(data).length / 1024;
@@ -290,7 +332,7 @@ const startPrivateChat = useCallback(() => {
   
         // console.log('Parsed Messages:', parsedMessages);
 
-        if (parsedMessages.length === 0 && !reset) {
+        if (!oldestKey && !reset) {
           // console.log('No more messages to load.');
           setLastLoadedKey(null);
           return;
@@ -300,19 +342,29 @@ const startPrivateChat = useCallback(() => {
           setMessages(parsedMessages);
           // console.log('Resetting messages:', parsedMessages);
         } else {
-          setMessages((prev) => [...prev, ...parsedMessages]);
+          // Merge by id: the realtime listener may already hold some of these rows.
+          setMessages((prev) => {
+            const seen = new Set(prev.map((msg) => msg?.id).filter(Boolean));
+            return [...prev, ...parsedMessages.filter((msg) => !seen.has(msg.id))];
+          });
           // console.log('Appending messages:', parsedMessages);
         }
 
-        if (parsedMessages.length > 0) {
-          // Use the last key from the newly fetched messages
-          setLastLoadedKey(parsedMessages[parsedMessages.length - 1].id);
-          // console.log('Updated LastLoadedKey:', parsedMessages[parsedMessages.length - 1].id);
-        }
+        // A page shorter than its limit reached the start of the room: there is
+        // nothing older, so stop paging instead of re-querying forever.
+        const reachedStart = rawKeys.length < limitSize;
+        setLastLoadedKey(reachedStart ? null : oldestKey);
       } catch (error) {
         // console.error('Error loading messages:', error);
       } finally {
-        if (reset) setLoading(false);
+        if (reset) {
+          resetsInFlightRef.current = Math.max(0, resetsInFlightRef.current - 1);
+          // Only the last reset standing hides the spinner: an older one that
+          // was superseded (channel switch) must not reveal a half-loaded room.
+          if (resetsInFlightRef.current === 0) setLoading(false);
+        } else {
+          loadingMoreRef.current = false;
+        }
       }
     },
     [chatRef, lastLoadedKey, validateMessage, bannedUsers, appdatabase]
@@ -365,13 +417,20 @@ const startPrivateChat = useCallback(() => {
   useEffect(() => {
     const platform = Platform.OS; // "ios" or "android"
   
-    // console.log('Initial loading of messages.');
-    loadMessages(true); // Reset and load the latest messages
     if (setChatFocused && typeof setChatFocused === 'function') {
       setChatFocused(false);
     }
     setDevice(platform);
   }, [ setChatFocused]);
+
+  // Reset and load the latest messages — on mount AND on every channel
+  // switch. This used to run on mount only, so a switched-to room showed
+  // nothing but the one message the realtime listener delivers, with
+  // pagination dead (no cursor) until a pull-to-refresh.
+  useEffect(() => {
+    loadMessages(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatRef]);
 
   // const bannedUserIds = bannedUsers.map((user) => user.id); // Extract IDs from bannedUsers
 
@@ -429,7 +488,7 @@ const startPrivateChat = useCallback(() => {
       Alert.alert(
         t('misc.loginToStartChat'),
         t('misc.loginRequired'),
-        [{ text: 'OK', onPress: () => setIsSigninDrawerVisible(true) }]
+        [{ text: t('stock.ok'), onPress: () => setIsSigninDrawerVisible(true) }]
       );
       setSigninMessage(true);
       return;
@@ -536,8 +595,8 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
   // Must be logged in
   if (!user?.id || !currentUserEmail) {
     showMessage({
-      message: 'You are not loggedin',
-      description: 'You must be logged in to send Messages',
+      message: t('chat.sign_in_required_title'),
+      description: t('chat.must_sign_in_to_send'),
       type: 'danger',
     });
     return;
@@ -563,8 +622,8 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
     // Permanent ban
     if (bannedUntil === 'permanent') {
       showMessage({
-        message: '⛔ Permanently Banned',
-        description: 'You are permanently banned from sending messages.',
+        message: t('feed.permanently_banned'),
+        description: t('feed.banned_msg'),
         type: 'danger',
       });
       return;
@@ -575,12 +634,12 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
       const totalMinutes = Math.ceil((bannedUntil - now) / 60000);
       const hours = Math.floor(totalMinutes / 60);
       const minutes = totalMinutes % 60;
-      const timeLeftText =
-        hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 
       showMessage({
-        message: `⚠️ Strike ${strikeCount}`,
-        description: `You are banned from chatting for ${timeLeftText} more minute(s).`,
+        message: t('chat.strike_title', { strike: strikeCount }),
+        description: hours > 0
+          ? t('chat.strike_ban_hours', { hours, minutes })
+          : t('chat.strike_ban_minutes', { count: minutes }),
         type: 'warning',
         duration: 5000,
       });
@@ -593,13 +652,13 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
 
   // ✅ Validate fruits count - maximum 18 fruits allowed
   if (hasFruits && fruits.length > 18) {
-    Alert.alert(t('home.alert.error'), 'You can only send up to 18 pets in a message.');
+    Alert.alert(t('home.alert.error'), t('group_chat.limit_pets'));
     return;
   }
 
   // Disallow empty text + no fruits
   if (!trimmedInput && !hasFruits && !emojiUrl) {
-    Alert.alert(t('home.alert.error'), 'Message cannot be empty.');
+    Alert.alert(t('home.alert.error'), t('chat.cannot_empty'));
     return;
   }
 
@@ -644,7 +703,7 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
     if (isDuplicate) {
       Alert.alert(
         t('home.alert.error'),
-        'You cannot send the same message twice. Please modify your message.',
+        t('chat.duplicate_message'),
       );
       return;
     }
@@ -714,7 +773,7 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
     console.error('Error sending message:', error);
     Alert.alert(
       t('home.alert.error'),
-      'Could not send your message. Please try again.',
+      t('group_chat.could_not_send'),
     );
   }
 };

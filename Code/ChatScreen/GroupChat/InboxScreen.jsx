@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { memo, useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,69 @@ import { getCachedProfile, warmProfileCache } from '../../Helper/profileCache';
 // ✅ Constants for pagination (moved outside component to avoid recreation)
 const INITIAL_LOAD = 15; // ✅ Initial chats to display
 const LOAD_MORE = 10; // ✅ Load 10 more on scroll
+
+const DEFAULT_AVATAR = 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
+
+// One inbox row. Memoised on primitive props (plus the theme's styles and the
+// stable handlers), so a realtime update to one chat re-renders that row
+// only. Before, renderChatItem depended on the whole `user` object, so any
+// profile or realtime change re-rendered every row, framed SVG avatar and
+// popup Menu on screen. Same technique as Adopt Me's ChatRow.
+const ChatRow = memo(function ChatRow(props) {
+  const {
+    chatId, otherUserId, otherUserName, otherUserAvatar, avatarUri, frame,
+    lastMessage, unreadCount, onlineLabel, deleteLabel, isDarkMode, styles,
+    onOpen, onDelete,
+  } = props;
+  return (
+    <View style={styles.itemContainer}>
+      <TouchableOpacity
+        style={styles.chatItem}
+        onPress={() => onOpen(chatId, otherUserId, otherUserName, otherUserAvatar)}
+      >
+        <FramedAvatar
+          avatarUri={avatarUri}
+          frame={frame}
+          isDarkMode={isDarkMode}
+          avatarSize={50}
+        />
+        <View style={styles.textContainer}>
+          <Text style={styles.userName}>
+            {otherUserName}
+            {onlineLabel ? (
+              <Text style={{ color: config.colors.hasBlockGreen }}> - {onlineLabel}</Text>
+            ) : null}
+          </Text>
+          <Text style={styles.lastMessage} numberOfLines={1}>
+            {lastMessage}
+          </Text>
+        </View>
+        {unreadCount > 0 && (
+          <View style={styles.unreadBadge}>
+            <Text style={styles.unreadBadgeText}>
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+      <Menu>
+        <MenuTrigger>
+          <Icon
+            name="ellipsis-vertical-outline"
+            size={20}
+            color={config.colors.primary}
+            style={{ paddingLeft: 10 }}
+          />
+        </MenuTrigger>
+        <MenuOptions customStyles={{}}>
+          <MenuOption onSelect={() => onDelete(chatId)}>
+            <Text style={{ color: 'red', fontSize: 16, padding: 10 }}> {deleteLabel}</Text>
+          </MenuOption>
+        </MenuOptions>
+      </Menu>
+    </View>
+  );
+});
 
 const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
   const navigation = useNavigation();
@@ -134,7 +197,16 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
   );
 
   // ✅ Use local chats if available, fallback to props for backward compatibility
-  const allChats = localChats.length > 0 ? localChats : (chats || []);
+  // Memoised so the list (and every memoised row) keeps its identity across
+  // renders that don't change the chats.
+  const allChats = useMemo(
+    () => (localChats.length > 0 ? localChats : (chats || [])),
+    [localChats, chats],
+  );
+  // handleDelete reads the latest list through this ref, so it keeps one
+  // identity and doesn't re-render every ChatRow on each realtime update.
+  const allChatsRef = useRef(allChats);
+  allChatsRef.current = allChats;
   const displayLoading = localLoading || loading;
 
   // ✅ Safety check for bannedUsers array and filter
@@ -203,12 +275,13 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
               return;
             }
 
-            if (!Array.isArray(allChats) || allChats.length === 0) {
+            const currentChats = allChatsRef.current;
+            if (!Array.isArray(currentChats) || currentChats.length === 0) {
               console.error('❌ Chats array not available');
               return;
             }
 
-            const chatToDelete = allChats.find(chat => chat?.chatId === chatId);
+            const chatToDelete = currentChats.find(chat => chat?.chatId === chatId);
             if (!chatToDelete) {
               console.error('❌ Chat not found');
               return;
@@ -255,7 +328,7 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
     ],
     { cancelable: true }
   );
-}, [allChats, user?.id, setChats, t]);
+}, [user?.id, setChats, t]);
 
 
 
@@ -306,7 +379,7 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
       console.error("Error opening chat:", error);
       Alert.alert(t('home.alert.error'), t('inbox.open_failed'));
     }
-  }, [user?.id, setChats, navigation]);
+  }, [user?.id, setChats, navigation, t]);
   
 
 
@@ -314,71 +387,41 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
 
 
 
-  // ✅ Memoize renderChatItem with useCallback
+  // ✅ Memoize renderChatItem with useCallback. Rows get primitives; ChatRow's
+  // memo skips the unchanged ones. profileCacheVersion is not read here — the
+  // FlatList's extraData carries it so rows pick up warmed frames.
+  const userId = user?.id;
+  const userAvatarRaw = user?.avatar;
   const renderChatItem = useCallback(({ item }) => {
     // ✅ Safety checks
     if (!item || typeof item !== 'object') return null;
 
-    const chatId = item.chatId;
     const otherUserId = item.otherUserId;
-    const otherUserName = item.otherUserName || t('private_chat.anonymous');
-    const otherUserAvatar = item.otherUserAvatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
-    const userAvatar = user?.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
-    const lastMessage = item.lastMessage || t('chat.no_messages_yet');
-    const unreadCount = item.unreadCount || 0;
+    const otherUserAvatar = item.otherUserAvatar || DEFAULT_AVATAR;
+    const userAvatar = userAvatarRaw || DEFAULT_AVATAR;
     const isOnline = item.isOnline || false;
     const isBanned = item.isBanned || false;
 
     return (
-      <View style={styles.itemContainer}>
-        <TouchableOpacity
-          style={styles.chatItem}
-          onPress={() => handleOpenChat(chatId, otherUserId, otherUserName, otherUserAvatar)}
-        >
-          <FramedAvatar
-            avatarUri={(otherUserId !== user?.id ? otherUserAvatar : userAvatar) || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png'}
-            frame={getCachedProfile(otherUserId)?.profileFrame || null}
-            isDarkMode={isDarkMode}
-            avatarSize={50}
-          />
-          <View style={styles.textContainer}>
-            <Text style={styles.userName}>
-              {otherUserName}
-              {isOnline && !isBanned && (
-                <Text style={{ color: config.colors.hasBlockGreen }}> - {t('inbox.online')}</Text>
-              )}
-            </Text>
-            <Text style={styles.lastMessage} numberOfLines={1}>
-              {lastMessage}
-            </Text>
-          </View>
-          {unreadCount > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        <Menu>
-          <MenuTrigger>
-            <Icon
-              name="ellipsis-vertical-outline"
-              size={20}
-              color={config.colors.primary}
-              style={{ paddingLeft: 10 }}
-            />
-          </MenuTrigger>
-          <MenuOptions customStyles={{}}>
-            <MenuOption onSelect={() => handleDelete(chatId)}>
-              <Text style={{ color: 'red', fontSize: 16, padding: 10 }}> {t("chat.delete")}</Text>
-            </MenuOption>
-          </MenuOptions>
-        </Menu>
-      </View>
+      <ChatRow
+        chatId={item.chatId}
+        otherUserId={otherUserId}
+        otherUserName={item.otherUserName || t('private_chat.anonymous')}
+        otherUserAvatar={otherUserAvatar}
+        avatarUri={(otherUserId !== userId ? otherUserAvatar : userAvatar) || DEFAULT_AVATAR}
+        frame={getCachedProfile(otherUserId)?.profileFrame || null}
+        lastMessage={item.lastMessage || t('chat.no_messages_yet')}
+        unreadCount={item.unreadCount || 0}
+        onlineLabel={isOnline && !isBanned ? t('inbox.online') : null}
+        deleteLabel={t('chat.delete')}
+        isDarkMode={isDarkMode}
+        styles={styles}
+        onOpen={handleOpenChat}
+        onDelete={handleDelete}
+      />
     );
     // isDarkMode: FramedAvatar needs the theme
-  }, [styles, user, handleOpenChat, handleDelete, t, isDarkMode]);
+  }, [styles, userId, userAvatarRaw, handleOpenChat, handleDelete, t, isDarkMode]);
 
   return (
     <View style={styles.container}>
@@ -393,6 +436,8 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
           data={displayedChats}
           keyExtractor={(item, index) => item?.chatId || `chat-${index}`}
           renderItem={renderChatItem}
+          // Rows read frames from the profile cache; repaint when it warms.
+          extraData={profileCacheVersion}
           removeClippedSubviews={false}
           maxToRenderPerBatch={10}
           windowSize={10}
@@ -497,4 +542,4 @@ const getStyles = (isDarkMode) =>
     }
   });
 
-export default InboxScreen;
+export default memo(InboxScreen);

@@ -51,7 +51,7 @@ const PrivateChatHeader = React.memo(({ selectedUser, selectedTheme, bannedUsers
     if (!code || typeof code !== 'string') return;
     triggerHapticFeedback('impactLight');
     Clipboard.setString(code);
-    showSuccessMessage(t("value.copy"), "Copied to Clipboard");
+    showSuccessMessage(t("value.copy"), t('chat.copied_to_clipboard'));
   }, [triggerHapticFeedback, t]);
 
   // ✅ Fetch user data from Firebase if roblox data is missing
@@ -316,7 +316,7 @@ const PrivateChatHeader = React.memo(({ selectedUser, selectedTheme, bannedUsers
               { color: isOnline ? ONLINE_COLOR : OFFLINE_COLOR },
             ]}
           >
-            {isOnline ? 'Online' : 'Offline'}
+            {isOnline ? t('inbox.online') : t('private_chat.offline')}
           </Text>
           {badgeTypes.map((type) => (
             <UserBadgePill

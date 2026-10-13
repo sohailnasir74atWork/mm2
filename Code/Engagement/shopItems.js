@@ -1115,3 +1115,37 @@ export const EGG_LIST = Object.values(EGGS);
 export const getItemsByRarity = (rarity) => {
   return Object.values(ALL_ITEMS).filter(item => item.rarity === rarity);
 };
+
+// ════════════════════════════════════════════════════════════
+//  DISPLAY NAMES (i18n)
+//  ids, English `name`s and rarity values above are written to RTDB
+//  (activeItems, inventory) and used in logic, so they stay as they are.
+//  Screens translate at render time instead, through these helpers; the
+//  strings live under `cosmetics.items.*`, `cosmetics.eggs.*` and
+//  `cosmetics.rarity.*` in Code/Translation/*.json. An id with no key (an
+//  item retired from the catalog but still in someone's inventory) falls
+//  back to the stored English name.
+// ════════════════════════════════════════════════════════════
+
+// The trade-background and chat-bubble catalogs both use the id 'mint_fresh'
+// with different names, so the chat bubble gets its own key.
+const ITEM_KEY_OVERRIDES = {
+  [`${COSMETIC_TYPE.CHAT_BG}:mint_fresh`]: 'mint_fresh_chat',
+};
+
+// item: a catalog entry or a stored copy ({ id, name } or { itemId, itemName }).
+// type: pass it when the item itself has no `type` (MyCosmetics groups by type).
+export const cosmeticName = (item, t, type) => {
+  if (!item) return '';
+  const id = item.id || item.itemId;
+  const fallback = item.name || item.itemName || '';
+  if (!id) return fallback;
+  const keyId = ITEM_KEY_OVERRIDES[`${type || item.type}:${id}`] || id;
+  return t(`cosmetics.items.${keyId}`, { defaultValue: fallback });
+};
+
+export const eggName = (egg, t) =>
+  (egg?.id ? t(`cosmetics.eggs.${egg.id}`, { defaultValue: egg.name }) : egg?.name || '');
+
+export const rarityLabel = (rarity, t) =>
+  t(`cosmetics.rarity.${rarity}`, { defaultValue: RARITY_CONFIG[rarity]?.label || rarity || '' });

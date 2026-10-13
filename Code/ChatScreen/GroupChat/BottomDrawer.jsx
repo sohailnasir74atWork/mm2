@@ -31,6 +31,7 @@ import ProfileReviewsSection from './ProfileReviewsSection';
 import ProfileTradesSection from './ProfileTradesSection';
 import ProfilePostsSection from './ProfilePostsSection';
 import CompactPortfolio from './CompactPortfolio';
+import { timeAgo } from '../../Helper/timeAgo';
 
 import { getThemeColors } from '../../Helper/themeColors';
 import {
@@ -64,6 +65,22 @@ import { resolveItemImage } from '../../Helper/valueSources';
 dayjs.extend(relativeTime);
 
 const REVIEWS_PAGE_SIZE = 3; // how many reviews per page
+
+// Feed posts store their tags as English text (data). Map the known ones to
+// their feed.tag_* key for display; anything else shows as stored.
+const POST_TAG_KEYS = {
+  'scam alert': 'feed.tag_scam_alert',
+  'looking for trade': 'feed.tag_looking_for_trade',
+  'discussion': 'feed.tag_discussion',
+  'real or fake': 'feed.tag_real_or_fake',
+  'need help': 'feed.tag_need_help',
+  'misc': 'feed.tag_misc',
+  'misc.': 'feed.tag_misc',
+};
+const postTagLabel = (tag, t) => {
+  const key = POST_TAG_KEYS[String(tag || '').toLowerCase()];
+  return key ? t(key) : tag;
+};
 
 // ✅ Helper function to format fruit names for image URLs
 const formatName = (name) => {
@@ -445,11 +462,11 @@ const ProfileBottomDrawer = ({
       }
     } catch (err) {
       console.error('Error toggling follow:', err);
-      Alert.alert('Error', 'Could not update follow status.');
+      Alert.alert(t('chat.error'), t('profile.follow_failed'));
     } finally {
       setFollowLoading(false);
     }
-  }, [user?.id, selectedUserId, firestoreDB, isFollowing, triggerHapticFeedback]);
+  }, [user?.id, selectedUserId, firestoreDB, isFollowing, triggerHapticFeedback, t]);
 
   // ✅ Merge selectedUser with fetched userData
   const mergedUser = useMemo(() => {
@@ -480,7 +497,7 @@ const ProfileBottomDrawer = ({
   const copyToClipboard = (code) => {
     triggerHapticFeedback('impactLight');
     Clipboard.setString(code);
-    showSuccessMessage(t('value.copy'), 'Copied to Clipboard');
+    showSuccessMessage(t('value.copy'), t('chat.copied_to_clipboard'));
   };
 
   // ─────────────────────────────────────────────
@@ -513,7 +530,7 @@ const ProfileBottomDrawer = ({
       }
 
       if (!robloxWebUrl) {
-        Alert.alert('Error', 'Could not open Roblox profile. Missing username or user ID.');
+        Alert.alert(t('chat.error'), t('profile.roblox_missing_id'));
         return;
       }
 
@@ -534,35 +551,17 @@ const ProfileBottomDrawer = ({
       await Linking.openURL(robloxWebUrl);
     } catch (error) {
       console.error('Error opening Roblox profile:', error);
-      Alert.alert('Error', 'Could not open Roblox profile. Please try again.');
+      Alert.alert(t('chat.error'), t('profile.roblox_open_failed'));
     }
-  }, [mergedUser?.robloxUsername, mergedUser?.robloxUserId, triggerHapticFeedback]);
+  }, [mergedUser?.robloxUsername, mergedUser?.robloxUserId, triggerHapticFeedback, t]);
 
-  // ✅ Memoize formatCreatedAt
+  // ✅ Memoize formatCreatedAt — shared helper, so plural forms follow the
+  // app language (time.* keys).
   const formatCreatedAt = useCallback((timestamp) => {
     if (!timestamp) return null;
-
-    const now = Date.now();
-    const diffMs = now - timestamp;
-
-    if (diffMs < 0) return null;
-
-    const minutes = Math.floor(diffMs / 60000);
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
-
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
-
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
-
-    const months = Math.floor(days / 30);
-    if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
-
-    const years = Math.floor(months / 12);
-    return `${years} year${years === 1 ? '' : 's'} ago`;
-  }, []);
+    if (Date.now() - timestamp < 0) return null;
+    return timeAgo(timestamp, t);
+  }, [t]);
 
   // ✅ Memoize getTimestampMs
   const getTimestampMs = useCallback((ts) => {
@@ -624,8 +623,8 @@ const ProfileBottomDrawer = ({
                 showSuccessMessage(
                   t('home.alert.success'),
                   isBlock
-                    ? `${userName} ${t('chat.user_unblocked')}`
-                    : `${userName} ${t('chat.user_blocked')}`,
+                    ? t('chat.user_unblocked_name', { name: userName })
+                    : t('chat.user_blocked_name', { name: userName }),
                 );
               }, 100);
             } catch (error) {
@@ -904,7 +903,7 @@ const ProfileBottomDrawer = ({
           }
         }
         // ✅ Set bio value (use default if not found or empty)
-        setUserBio(bioValue || 'Hi there, I am new here');
+        setUserBio(bioValue || null);
 
         if (createdSnap.exists()) {
           const raw = createdSnap.val();
@@ -1338,7 +1337,7 @@ const ProfileBottomDrawer = ({
                   flexShrink: 0,
                   flexGrow: 0,
                 }}>
-                  <Text style={{ color: 'white', fontWeight: '600', fontSize: 8, textAlign: 'center' }}>FEATURED</Text>
+                  <Text style={{ color: 'white', fontWeight: '600', fontSize: 8, textAlign: 'center' }}>{t('profile.featured')}</Text>
                 </View>
               )}
               <Text style={{ fontSize: 10, color: isDarkMode ? '#9ca3af' : '#6b7280' }}>
@@ -1370,7 +1369,7 @@ const ProfileBottomDrawer = ({
                   flexGrow: 0,
                 }}>
                   <Text style={{ color: 'white', fontWeight: '600', fontSize: 8, textAlign: 'center' }}>
-                    {trade.status === 'w' ? 'Win' : trade.status === 'f' ? 'Fair' : 'Lose'}
+                    {trade.status === 'w' ? t('trade_log.rating_win') : trade.status === 'f' ? t('trade_log.rating_fair') : t('trade_log.rating_loss')}
                   </Text>
                 </View>
               )}
@@ -1480,7 +1479,7 @@ const ProfileBottomDrawer = ({
                 flexShrink: 0,
                 flexGrow: 0,
               }}>
-                <Text style={{ color: 'white', fontWeight: '600', fontSize: 8, textAlign: 'center' }}>Give offer</Text>
+                <Text style={{ color: 'white', fontWeight: '600', fontSize: 8, textAlign: 'center' }}>{t('settings.give_offer')}</Text>
               </View>
             </View>
           )}
@@ -1547,7 +1546,7 @@ const ProfileBottomDrawer = ({
                 flexShrink: 0,
                 flexGrow: 0,
               }}>
-                <Text style={{ color: 'white', fontWeight: '600', fontSize: 8, textAlign: 'center' }}>Give offer</Text>
+                <Text style={{ color: 'white', fontWeight: '600', fontSize: 8, textAlign: 'center' }}>{t('settings.give_offer')}</Text>
               </View>
             </View>
           )}
@@ -1568,7 +1567,7 @@ const ProfileBottomDrawer = ({
               borderRadius: 6,
               backgroundColor: config.colors.hasBlockGreen
             }}>
-              ME: {formatTradeValue(typeof trade.hasTotal === 'number' ? trade.hasTotal : trade.hasTotal?.value || 0)}
+              {t('profile.trade_me_total', { value: formatTradeValue(typeof trade.hasTotal === 'number' ? trade.hasTotal : trade.hasTotal?.value || 0) })}
             </Text>
           )}
           <View style={{ justifyContent: 'center', alignItems: 'center', marginHorizontal: 8 }}>
@@ -1615,7 +1614,7 @@ const ProfileBottomDrawer = ({
               borderRadius: 6,
               backgroundColor: config.colors.wantBlockRed
             }}>
-              YOU: {formatTradeValue(typeof trade.wantsTotal === 'number' ? trade.wantsTotal : trade.wantsTotal?.value || 0)}
+              {t('profile.trade_you_total', { value: formatTradeValue(typeof trade.wantsTotal === 'number' ? trade.wantsTotal : trade.wantsTotal?.value || 0) })}
             </Text>
           )}
         </View>
@@ -1639,7 +1638,7 @@ const ProfileBottomDrawer = ({
 
   // ✅ Render Post Item
   const renderPostItem = useCallback((post) => {
-    const timeLabel = post.createdAt ? dayjs(post.createdAt.toDate ? post.createdAt.toDate() : post.createdAt).fromNow() : 'Just now';
+    const timeLabel = post.createdAt ? dayjs(post.createdAt.toDate ? post.createdAt.toDate() : post.createdAt).fromNow() : t('time.just_now');
     const images = Array.isArray(post.imageUrl) ? post.imageUrl : (post.imageUrl ? [post.imageUrl] : []);
     const likeCount = post.likes ? Object.keys(post.likes).length : 0;
     const tags = Array.isArray(post.selectedTags) ? post.selectedTags : [];
@@ -1689,7 +1688,7 @@ const ProfileBottomDrawer = ({
                   paddingHorizontal: 7, paddingVertical: 2,
                   borderRadius: 999, backgroundColor: getTagColor(tag),
                 }}>
-                  <Text style={{ fontSize: 9, color: '#fff', fontWeight: '700' }}>{tag}</Text>
+                  <Text style={{ fontSize: 9, color: '#fff', fontWeight: '700' }}>{postTagLabel(tag, t)}</Text>
                 </View>
               ))}
             </View>
@@ -1726,7 +1725,7 @@ const ProfileBottomDrawer = ({
         </View>
       </TouchableOpacity>
     );
-  }, [isDarkMode]);
+  }, [isDarkMode, t]);
 
   // ── Post Viewer Modal ──
   const screenWidth = Dimensions.get('window').width;
@@ -1737,7 +1736,7 @@ const ProfileBottomDrawer = ({
     const post = selectedPost;
     const timeLabel = post.createdAt
       ? dayjs(post.createdAt.toDate ? post.createdAt.toDate() : post.createdAt).fromNow()
-      : 'Just now';
+      : t('time.just_now');
     const images = Array.isArray(post.imageUrl) ? post.imageUrl : (post.imageUrl ? [post.imageUrl] : []);
     const likeCount = post.likes ? Object.keys(post.likes).length : 0;
     const tags = Array.isArray(post.selectedTags) ? post.selectedTags : [];
@@ -1788,7 +1787,7 @@ const ProfileBottomDrawer = ({
                 />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: isDarkMode ? '#f3f4f6' : '#111827' }} numberOfLines={1}>
-                    {post.displayName || userName || 'Anonymous'}
+                    {post.displayName || userName || t('group_chat.anonymous')}
                   </Text>
                   <Text style={{ fontSize: 11, color: isDarkMode ? '#94a3b8' : '#6b7280' }}>{timeLabel}</Text>
                 </View>
@@ -1818,7 +1817,7 @@ const ProfileBottomDrawer = ({
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12, marginBottom: 4 }}>
                   {tags.map((tag, idx) => (
                     <View key={idx} style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: getTagColor(tag) }}>
-                      <Text style={{ fontSize: 11, color: '#fff', fontWeight: '600' }}>{tag}</Text>
+                      <Text style={{ fontSize: 11, color: '#fff', fontWeight: '600' }}>{postTagLabel(tag, t)}</Text>
                     </View>
                   ))}
                 </View>
@@ -1838,7 +1837,7 @@ const ProfileBottomDrawer = ({
               }}>
                 <Icon name="heart" size={16} color="#EF4444" />
                 <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#e2e8f0' : '#111827', marginLeft: 6 }}>
-                  {likeCount} {likeCount === 1 ? 'Like' : 'Likes'}
+                  {t('profile.like_count', { count: likeCount })}
                 </Text>
               </View>
             </ScrollView>
@@ -1846,7 +1845,7 @@ const ProfileBottomDrawer = ({
         </Pressable>
       </Modal>
     );
-  }, [selectedPost, isDarkMode, avatar, userName, screenWidth, insets.bottom]);
+  }, [selectedPost, isDarkMode, avatar, userName, screenWidth, insets.bottom, t]);
 
   // ── Default gradient — neutral gray ──
   const DEFAULT_BANNER = ['#64748b', '#94a3b8', '#cbd5e1'];
@@ -2017,7 +2016,7 @@ const ProfileBottomDrawer = ({
                       paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
                     }}>
                       <Icon name="checkmark-circle" size={10} color={isDarkMode ? '#38bdf8' : '#0ea5e9'} />
-                      <Text style={{ fontSize: 9, fontWeight: '700', color: isDarkMode ? '#38bdf8' : '#0ea5e9' }}>Verified</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: isDarkMode ? '#38bdf8' : '#0ea5e9' }}>{t('settings.verified')}</Text>
                     </View>
                   )}
                   {mergedUser?.robloxUsername && !mergedUser?.robloxUsernameVerified && (
@@ -2028,7 +2027,7 @@ const ProfileBottomDrawer = ({
                       paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
                     }}>
                       <Icon name="alert-circle-outline" size={10} color={isDarkMode ? '#fbbf24' : '#d97706'} />
-                      <Text style={{ fontSize: 9, fontWeight: '700', color: isDarkMode ? '#fbbf24' : '#d97706' }}>Unverified</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: isDarkMode ? '#fbbf24' : '#d97706' }}>{t('settings.unverified')}</Text>
                     </View>
                   )}
                 </View>
@@ -2075,7 +2074,7 @@ const ProfileBottomDrawer = ({
                   {/* Rating */}
                   {ratingSummary && (
                     <View style={{ flex: 1, alignItems: 'center' }}>
-                      <Text style={{ fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, color: c.textMuted }}>Rating</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, color: c.textMuted }}>{t('profile.rating')}</Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 }}>
                         <Text style={{ fontSize: 12, color: '#fbbf24' }}>★</Text>
                         <Text style={{ fontSize: 13, fontWeight: '800', color: c.text }}>
@@ -2091,7 +2090,7 @@ const ProfileBottomDrawer = ({
                     borderLeftWidth: ratingSummary ? 1 : 0,
                     borderColor: c.border,
                   }}>
-                    <Text style={{ fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, color: c.textMuted }}>Followers</Text>
+                    <Text style={{ fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, color: c.textMuted }}>{t('profile.followers')}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 }}>
                       <Icon name="people" size={12} color="#8b5cf6" />
                       <Text style={{ fontSize: 13, fontWeight: '800', color: c.text }}>
@@ -2120,7 +2119,7 @@ const ProfileBottomDrawer = ({
                       flex: 1, alignItems: 'center',
                       borderLeftWidth: 1, borderColor: c.border,
                     }}>
-                      <Text style={{ fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, color: c.textMuted }}>Wins</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, color: c.textMuted }}>{t('mystuff.wins')}</Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 }}>
                         <Text style={{ fontSize: 12 }}>🏆</Text>
                         <Text style={{ fontSize: 13, fontWeight: '800', color: c.text }}>
@@ -2138,7 +2137,7 @@ const ProfileBottomDrawer = ({
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Icon name="calendar-outline" size={11} color={c.textMuted} />
                     <Text style={{ fontSize: 10, color: c.textMuted, fontWeight: '500' }}>
-                      Joined {createdAtText}
+                      {t('profile.joined_ago', { time: createdAtText })}
                     </Text>
                   </View>
                 </View>
@@ -2167,14 +2166,14 @@ const ProfileBottomDrawer = ({
                       <Icon name="person" size={12} color="#60a5fa" />
                     </View>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: c.text }}>
-                      Bio
+                      {t('settings.bio')}
                     </Text>
                   </View>
                   <Text style={{
                     fontSize: 13, lineHeight: 19,
                     color: c.text,
                   }}>
-                    {userBio || 'Hi there, I am new here'}
+                    {userBio || t('profile.default_bio')}
                   </Text>
                 </View>
               )}
@@ -2320,7 +2319,7 @@ const ProfileBottomDrawer = ({
                             fontSize: 13, fontWeight: '700',
                             color: isFollowing ? (c.textSecondary) : '#fff',
                           }}>
-                            {isFollowing ? 'Unfollow' : 'Follow'}
+                            {isFollowing ? t('profile.unfollow') : t('profile.follow')}
                           </Text>
                         </>
                       )}
@@ -2374,7 +2373,7 @@ const ProfileBottomDrawer = ({
                       <Text style={{
                         fontSize: 12, fontWeight: '700',
                         color: isDarkMode ? '#e2e8f0' : '#475569',
-                      }}>View Detail Profile</Text>
+                      }}>{t('profile.view_full_profile')}</Text>
                     </TouchableOpacity>
                   )}
                 </View>

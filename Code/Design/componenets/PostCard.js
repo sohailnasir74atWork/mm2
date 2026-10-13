@@ -23,6 +23,8 @@ import { getUserEmail } from '../../Helper/privateProfile';
 import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
 import ChatPillButton from '../../Helper/ChatPillButton';
 import { logModAction, resolveActorRole } from '../../Helper/modLog';
+import { useTranslation } from 'react-i18next';
+import { feedTagLabel } from './PostsHeader';
 
 const REACTION_EMOJIS = ['❤️', '🔥', '😍', '💀', '🎯'];
 
@@ -38,6 +40,7 @@ const TAG_CONFIG = {
 
 const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, onDelete, onDeleteAll }) => {
   const navigation = useNavigation();
+  const { t } = useTranslation();
 
   // Support both old onLike and new onReaction
   const handleReaction = onReaction || onLike;
@@ -153,7 +156,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
 
   const openProfileDrawer = async () => {
     if (!userId) {
-      showMessage({ message: 'Please sign in to message', type: 'warning' });
+      showMessage({ message: t('feed.sign_in_to_message'), type: 'warning' });
       return;
     }
     setIsOnline(false);
@@ -179,7 +182,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
   const handleChatNavigation = useCallback(() => {
     const callback = () => {
       if (!userId) {
-        showMessage({ message: 'Please sign in to message', type: 'warning' });
+        showMessage({ message: t('feed.sign_in_to_message'), type: 'warning' });
         return;
       }
       // Close drawer first (iOS doesn't auto-dismiss modals on navigation)
@@ -193,7 +196,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
     } else {
       callback();
     }
-  }, [userId, item, navigation, localState?.isPro]);
+  }, [userId, item, navigation, localState?.isPro, t]);
 
   const handleEmojiTap = useCallback((emoji) => {
     setShowEmojiPicker(false);
@@ -221,7 +224,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
   }, [myReaction, item, handleReaction]);
 
   const s = useMemo(() => getStyles(isDark), [isDark]);
-  const formattedTime = item.createdAt ? dayjs(item.createdAt.toDate()).fromNow() : 'Anonymous';
+  const formattedTime = item.createdAt ? dayjs(item.createdAt.toDate()).fromNow() : t('group_chat.anonymous');
   const hasNoImages = !Array.isArray(item.imageUrl) || item.imageUrl.length === 0;
 
   // Posts arrive with padding blank lines that turned a two-line post into a
@@ -303,7 +306,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
               return (
                 <View key={tag} style={[s.tagChip, { backgroundColor: `${cfg.color}${isDark ? '2E' : '1A'}`, borderColor: `${cfg.color}${isDark ? '55' : '33'}` }]}>
                   <FontAwesome6 name={cfg.icon} size={8} color={cfg.color} solid />
-                  <Text style={[s.tagChipText, { color: cfg.color }]} numberOfLines={1}>{tag}</Text>
+                  <Text style={[s.tagChipText, { color: cfg.color }]} numberOfLines={1}>{feedTagLabel(tag, t)}</Text>
                 </View>
               );
             })}
@@ -321,13 +324,13 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
             <MenuOption onSelect={() => { setReportMounted(true); setShowReportModal(true); }}>
               <View style={s.menuItem}>
                 <FontAwesome6 name="flag" size={12} color="#F59E0B" solid />
-                <Text style={[s.menuItemText, { color: '#F59E0B' }]}>Report</Text>
+                <Text style={[s.menuItemText, { color: '#F59E0B' }]}>{t('chat.report')}</Text>
               </View>
             </MenuOption>
             {(isOwnPost || isAdmin || isMod) && (
-              <MenuOption onSelect={() => Alert.alert('Delete Post', 'Are you sure you want to delete this post?', [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Delete', onPress: () => {
+              <MenuOption onSelect={() => Alert.alert(t('feed.delete_post_title'), t('feed.delete_post_confirm'), [
+                { text: t('feed.cancel'), style: 'cancel' },
+                { text: t('trade.delete'), onPress: () => {
                   onDelete(item.id);
                   // Removing someone ELSE's post is a moderation action: record
                   // it in the Mod Log (Admin dashboard) like review/status removals.
@@ -348,7 +351,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
               ])}>
                 <View style={[s.menuItem, { borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#f1f5f9' }]}>
                   <FontAwesome6 name="trash" size={12} color="#EF4444" solid />
-                  <Text style={[s.menuItemText, { color: '#EF4444' }]}>Delete</Text>
+                  <Text style={[s.menuItemText, { color: '#EF4444' }]}>{t('trade.delete')}</Text>
                 </View>
               </MenuOption>
             )}
@@ -397,7 +400,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
           </Text>
           {isLongDesc && (
             <Text style={s.showMore} onPress={() => setExpanded(v => !v)} suppressHighlighting>
-              {expanded ? 'Show less' : 'Show more'}
+              {expanded ? t('feed.show_less') : t('feed.show_more')}
             </Text>
           )}
         </View>
@@ -459,12 +462,12 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
           </View>
           <Text style={s.totalReactionsText}>
             {myReaction && totalReactions > 1
-              ? `You and ${totalReactions - 1} ${totalReactions - 1 === 1 ? 'other' : 'others'}`
-              : myReaction ? 'You reacted' : `${totalReactions} ${totalReactions === 1 ? 'reaction' : 'reactions'}`}
+              ? t('feed.you_and_others', { count: totalReactions - 1 })
+              : myReaction ? t('feed.you_reacted') : t('feed.reactions_count', { count: totalReactions })}
           </Text>
           {!!item.commentCount && (
             <Text style={[s.totalReactionsText, { marginLeft: 'auto' }]}>
-              {item.commentCount} {item.commentCount === 1 ? 'comment' : 'comments'}
+              {t('feed.comments_count', { count: item.commentCount })}
             </Text>
           )}
         </View>
@@ -483,7 +486,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
               ? <Text style={{ fontSize: 15 }}>{myReaction}</Text>
               : <Icon name="heart-o" size={15} color={isDark ? '#94a3b8' : '#64748b'} />}
             <Text style={[s.actionBtnLabel, myReaction && { color: config.colors.primary }]}>
-              {myReaction ? 'Reacted' : 'React'}
+              {myReaction ? t('feed.reacted') : t('feed.react')}
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -496,7 +499,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
         >
           <Icon name="comment-o" size={15} color={isDark ? '#94a3b8' : '#64748b'} />
           <Text style={s.actionBtnLabel}>
-            {item.commentCount ? `Comment · ${item.commentCount}` : 'Comment'}
+            {item.commentCount ? t('feed.comment_with_count', { count: item.commentCount }) : t('feed.comment')}
           </Text>
         </TouchableOpacity>
 

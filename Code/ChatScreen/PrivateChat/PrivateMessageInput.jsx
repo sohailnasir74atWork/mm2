@@ -17,10 +17,11 @@ import InterstitialAdManager from '../../Ads/IntAd';
 import { CHAT_MESSAGES_PER_AD } from '../../Ads/adPolicy';
 import { useLocalState } from '../../LocalGlobelStats';
 import { validateContent } from '../../Helper/ContentModeration';
+import { useModalWindowInsets } from '../../Helper/useNavBarInset';
 
 import { pickImages } from '../../Helper/imagePicker';
 import { uploadImage, UPLOAD_KIND } from '../../Helper/imageUpload';
-import RNFS from 'react-native-fs';
+import { prepareChatImages, CHAT_IMAGE_PICKER_OPTIONS } from '../../Helper/chatImages';
 
 const PrivateMessageInput = ({
   onSend,
@@ -43,6 +44,8 @@ const PrivateMessageInput = ({
   const { theme } = useGlobalState();
   const isDark = theme === 'dark';
   const { t } = useTranslation();
+  // Quick-messages sheet (a Modal): clears the nav bar / home indicator.
+  const modalInsets = useModalWindowInsets();
   // ✅ Memoize styles
   const styles = useMemo(() => getStyles(isDark), [isDark]);
 
@@ -62,7 +65,8 @@ const PrivateMessageInput = ({
 
     pickImages(
       {
-        mediaType: 'photo',
+        // Resized by the picker, then compressed below (Helper/chatImages.js).
+        ...CHAT_IMAGE_PICKER_OPTIONS,
         selectionLimit: remainingSlots, // Allow selecting up to remaining slots
       },
       async (response) => {
@@ -83,37 +87,15 @@ const PrivateMessageInput = ({
 
         const assets = response.assets || [];
         if (assets.length > 0) {
-          const MAX_SIZE_BYTES = 1024 * 1024; // 1 MB
-          const validUris = [];
-          const rejectedCount = [];
-
-          // Check file size for each image
-          for (const asset of assets) {
-            if (!asset?.uri || typeof asset.uri !== 'string') continue;
-
-            try {
-              const filePath = asset.uri.replace('file://', '');
-              const fileInfo = await RNFS.stat(filePath);
-              const fileSize = fileInfo.size || 0;
-
-              if (fileSize > MAX_SIZE_BYTES) {
-                rejectedCount.push(asset.fileName || 'image');
-                continue;
-              }
-
-              validUris.push(asset.uri);
-            } catch (error) {
-              console.warn('Error checking file size:', error);
-              // If we can't check size, allow it (better UX than blocking)
-              validUris.push(asset.uri);
-            }
-          }
+          // Compress to about 1024px first; the 1 MB limit then applies to
+          // the compressed file, so ordinary camera photos are accepted.
+          const { uris: validUris, rejected: rejectedCount } = await prepareChatImages(assets);
 
           // Show alert if any images were rejected
-          if (rejectedCount.length > 0) {
+          if (rejectedCount > 0) {
             Alert.alert(
               t('private_chat.image_too_large_title'),
-              t('private_chat.image_too_large_msg', { count: rejectedCount.length })
+              t('private_chat.image_too_large_msg', { count: rejectedCount })
             );
           }
 
@@ -456,7 +438,7 @@ const PrivateMessageInput = ({
               borderTopLeftRadius: 20,
               borderTopRightRadius: 20,
               maxHeight: '60%',
-              paddingBottom: 20,
+              paddingBottom: 20 + modalInsets.bottom,
             }}
           >
             {/* Header */}

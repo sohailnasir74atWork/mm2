@@ -15,7 +15,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, Modal, TouchableOpacity, StyleSheet, TextInput,
-  ScrollView, ActivityIndicator, Alert, Platform,
+  ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
 import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 import { doc, getDoc, setDoc, serverTimestamp } from '@react-native-firebase/firestore';
@@ -25,6 +25,7 @@ import { useLocalState } from '../LocalGlobelStats';
 import { addJournalEntry, slimItem } from './journalUtils';
 import { addXP, XP_ACTIONS } from './xpUtils';
 import { ModalKeyboardView } from '../Helper/keyboardAvoidingContainer';
+import useNavBarInset from '../Helper/useNavBarInset';
 
 const TRADE_RATINGS = [
   { key: 'win',  label: 'Win',  emoji: '🏆', color: '#10B981', desc: 'I got more value' },
@@ -51,6 +52,9 @@ const TradeCompletion = ({
 }) => {
   const C = useThemeColors();
   const { updateLocalState } = useLocalState();
+  // Clears the Android nav bar / iOS home indicator (was a fixed 34 : 18,
+  // which left the Save button half under a 48dp 3-button bar).
+  const navBarInset = useNavBarInset();
 
   const [selectedRating, setSelectedRating] = useState(normalizeResult(tradeResult));
   const [notes, setNotes] = useState('');
@@ -199,7 +203,7 @@ const TradeCompletion = ({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <ModalKeyboardView style={$.overlay}>
-        <View style={[$.sheet, { backgroundColor: C.bg }]}>
+        <View style={[$.sheet, { backgroundColor: C.bg, paddingBottom: 18 + navBarInset }]}>
           <View style={$.grabber} />
 
           {saved ? (
@@ -330,7 +334,6 @@ const $ = StyleSheet.create({
     borderTopRightRadius: 22,
     paddingHorizontal: 18,
     paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 18,
     maxHeight: '88%',
   },
   grabber: {

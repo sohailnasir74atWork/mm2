@@ -14,7 +14,7 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, Animated,
-  StyleSheet, Platform,
+  StyleSheet, Platform, Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import dayjs from 'dayjs';
@@ -22,12 +22,17 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import { doc, updateDoc } from '@react-native-firebase/firestore';
 import { getThemeColors } from '../Helper/themeColors';
 import { SCREEN_GUTTER } from '../Helper/layout';
+import { useTranslation } from 'react-i18next';
+import { useGlobalState } from '../GlobelStats';
 
 dayjs.extend(relativeTime);
 
 const OPTION_COLORS = ['#4A7FB5', '#3D9B7A', '#C49530', '#7E6CB5', '#B06048', '#5A94AA'];
 
 const PollCard = ({ poll, user, firestoreDB, isDarkMode, onRequireSignIn }) => {
+  const { t } = useTranslation();
+  // Email ban OR device ban (server-time validated): no voting, as in Adopt Me.
+  const { isUserBlocked } = useGlobalState();
   const [voted, setVoted] = useState(false);
   const [selectedOption, setSelectedOption] = useState(null);
   const [options, setOptions] = useState(poll?.options || []);
@@ -77,6 +82,10 @@ const PollCard = ({ poll, user, firestoreDB, isDarkMode, onRequireSignIn }) => {
     }
     if (!poll?.id) return;
     if (voted && selectedOption === index) return;
+    if (isUserBlocked) {
+      Alert.alert(t('chat.access_denied'), t('chat.banned_message'));
+      return;
+    }
 
     setVoting(true);
     try {
@@ -120,7 +129,7 @@ const PollCard = ({ poll, user, firestoreDB, isDarkMode, onRequireSignIn }) => {
     } finally {
       setVoting(false);
     }
-  }, [voting, user, poll, firestoreDB, options, totalVotes, voted, selectedOption, animateBars]);
+  }, [voting, user, poll, firestoreDB, options, totalVotes, voted, selectedOption, animateBars, isUserBlocked, t]);
 
   const timeAgo = poll?.createdAt?.toDate ? dayjs(poll.createdAt.toDate()).fromNow() : '';
 
@@ -132,11 +141,11 @@ const PollCard = ({ poll, user, firestoreDB, isDarkMode, onRequireSignIn }) => {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text style={{ fontSize: 16 }}>📊</Text>
             <Text style={[styles.question, { color: c.text }]} numberOfLines={expanded ? 0 : 2}>
-              {poll?.question || 'Poll'}
+              {poll?.question || t('feed.poll')}
             </Text>
           </View>
           <Text style={[styles.meta, { color: c.textMuted }]}>
-            {totalVotes} vote{totalVotes !== 1 ? 's' : ''} · {timeAgo}
+            {t('feed.poll_meta', { count: totalVotes, time: timeAgo })}
           </Text>
         </View>
         <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={c.textMuted} />

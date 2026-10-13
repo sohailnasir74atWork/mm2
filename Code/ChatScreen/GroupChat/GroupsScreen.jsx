@@ -13,14 +13,15 @@ import {
   Modal,
   ScrollView,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useGlobalState } from '../../GlobelStats';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import config from '../../Helper/Environment';
 import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 import { useTranslation } from 'react-i18next';
-import { leaveGroup, acceptGroupInvite, declineGroupInvite, updateGroupAvatar, approveJoinRequest, rejectJoinRequest, getAllGroups, sendJoinRequest, deleteGroup } from '../utils/groupUtils';
+import i18n from 'i18next';
+import { leaveGroup, acceptGroupInvite, declineGroupInvite, updateGroupAvatar, approveJoinRequest, rejectJoinRequest, getAllGroups, sendJoinRequest, deleteGroup, MAX_GROUPS_PER_USER, setGroupPickerTarget } from '../utils/groupUtils';
 import { showSuccessMessage, showErrorMessage } from '../../Helper/MessageHelper';
 import { collection, query, where, onSnapshot, doc, getDoc } from '@react-native-firebase/firestore';
 import { ref, get, set } from '@react-native-firebase/database';
@@ -35,7 +36,7 @@ import { uploadImage, UPLOAD_KIND } from '../../Helper/imageUpload';
 
 // Helper function to truncate group names
 const truncateGroupName = (name, maxLength = 25) => {
-  if (!name || typeof name !== 'string') return 'Group';
+  if (!name || typeof name !== 'string') return i18n.t('groups_screen.group');
   if (name.length <= maxLength) return name;
   return name.substring(0, maxLength).trim() + '...';
 };
@@ -54,14 +55,58 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
   const [onlineUsersListVisible, setOnlineUsersListVisible] = useState(false);
   const [activeTab, setActiveTab] = useState('joined'); // 'joined' or 'all'
 
-  // Does this user already own a group? One group per creator is the model
-  // (getUserAdminGroup returns a single group), so the FAB becomes "Add
-  // Members" rather than offering to create a second. Read off the groups the
-  // screen already has -- group_meta_data carries createdBy -- so no query.
-  const ownsAGroup = useMemo(
-    () => !!user?.id && groups.some((g) => g?.createdBy === user.id),
+  // Groups this user owns, read off the groups the screen already has --
+  // group_meta_data carries createdBy -- so no query. A player may own up to
+  // MAX_GROUPS_PER_USER (2, ported from Adopt Me); at the limit the FAB only
+  // adds members.
+  const ownedGroups = useMemo(
+    () => (user?.id ? groups.filter((g) => g?.createdBy === user.id) : []),
     [groups, user?.id],
   );
+  const atGroupLimit = ownedGroups.length >= MAX_GROUPS_PER_USER;
+
+  // The member picker (OnlineUsersList) adds the picked players to an owned
+  // group, or creates a group when there is none. With two groups allowed the
+  // player says which first; the choice reaches the picker through
+  // setGroupPickerTarget (groupUtils). MAX_GROUPS_PER_USER is 2, so the
+  // sheet has at most three buttons -- Android's Alert limit.
+  const openMemberPicker = useCallback((target) => {
+    setGroupPickerTarget(target);
+    setOnlineUsersListVisible(true);
+  }, []);
+
+  const handlePickerClose = useCallback(() => {
+    setOnlineUsersListVisible(false);
+    setGroupPickerTarget(null);
+  }, []);
+
+  const handleFabPress = useCallback(() => {
+    // None owned: the picker's own check decides, as before.
+    if (ownedGroups.length === 0) {
+      openMemberPicker(null);
+      return;
+    }
+    const addButtons = ownedGroups.slice(0, MAX_GROUPS_PER_USER).map((g) => ({
+      text: t('groups_screen.add_to_group', { group: truncateGroupName(g.groupName) }),
+      onPress: () => openMemberPicker({
+        mode: 'add',
+        groupId: g.groupId,
+        groupData: { createdBy: user?.id, name: g.groupName || '' },
+      }),
+    }));
+    const buttons = atGroupLimit
+      ? addButtons
+      : [{ text: t('groups_screen.create_new_group'), onPress: () => openMemberPicker({ mode: 'create' }) }, ...addButtons];
+    buttons.push({ text: t('group_chat.btn_cancel'), style: 'cancel' });
+    Alert.alert(
+      t('groups_screen.fab_choice_title'),
+      atGroupLimit
+        ? t('groups_screen.group_limit_reached', { max: MAX_GROUPS_PER_USER })
+        : t('groups_screen.fab_choice_msg', { max: MAX_GROUPS_PER_USER }),
+      buttons,
+      { cancelable: true },
+    );
+  }, [ownedGroups, atGroupLimit, openMemberPicker, user?.id, t]);
   const [allGroups, setAllGroups] = useState([]);
   const [allGroupsLoading, setAllGroupsLoading] = useState(false);
   const [allGroupsLoadingMore, setAllGroupsLoadingMore] = useState(false);
@@ -71,6 +116,19 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
   const [allGroupsLastDoc, setAllGroupsLastDoc] = useState(null);
   const [joinRequestsExpanded, setJoinRequestsExpanded] = useState(false);
   const [invitationsExpanded, setInvitationsExpanded] = useState(false);
+
+  // A tapped group push (groupNotifications.js) opens this screen with
+  // { openSection: 'invitations' | 'joinRequests', pushAt }. Both sections
+  // live on the Joined tab; pushAt re-runs this when the screen is already open.
+  const route = useRoute();
+  const openSection = route?.params?.openSection;
+  const pushAt = route?.params?.pushAt;
+  useEffect(() => {
+    if (openSection !== 'invitations' && openSection !== 'joinRequests') return;
+    setActiveTab('joined');
+    if (openSection === 'invitations') setInvitationsExpanded(true);
+    else setJoinRequestsExpanded(true);
+  }, [openSection, pushAt]);
   const [editGroupModalVisible, setEditGroupModalVisible] = useState(false);
   const [editingGroup, setEditingGroup] = useState(null);
   const [mutedGroups, setMutedGroups] = useState({}); // { groupId: boolean } - Track muted status
@@ -651,7 +709,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
       return null;
     }
 
-    const groupName = item.groupName || 'Group';
+    const groupName = item.groupName || t('groups_screen.group');
     const truncatedName = truncateGroupName(groupName, 25);
     const groupAvatar = item.groupAvatar || null;
     const lastMessage = item.lastMessage || t('groups_screen.no_msgs');
@@ -762,7 +820,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         </Menu>
       </View>
     );
-  }, [styles, handleOpenGroup, handleLeaveGroup, handleUpdateGroupIcon, handleEditGroup, handleDeleteGroup, handleToggleMute, handleShowGroupInfo, user?.id, isDarkMode, isAdmin]);
+  }, [styles, handleOpenGroup, handleLeaveGroup, handleUpdateGroupIcon, handleEditGroup, handleDeleteGroup, handleToggleMute, handleShowGroupInfo, user?.id, isDarkMode, isAdmin, t]);
 
   const filteredGroups = useMemo(() => {
     if (!Array.isArray(groups)) return [];
@@ -799,11 +857,11 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                 const { ref, get } = await import('@react-native-firebase/database');
                 const displayNameSnap = await get(ref(appdatabase, `users/${creatorId}/displayName`)).catch(() => null);
                 if (displayNameSnap?.exists()) {
-                  return { [creatorId]: displayNameSnap.val() || 'Creator' };
+                  return { [creatorId]: displayNameSnap.val() || null };
                 }
-                return { [creatorId]: 'Creator' };
+                return { [creatorId]: null };
               } catch (error) {
-                return { [creatorId]: 'Creator' };
+                return { [creatorId]: null };
               }
             });
 
@@ -852,11 +910,11 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
             const { ref, get } = await import('@react-native-firebase/database');
             const displayNameSnap = await get(ref(appdatabase, `users/${creatorId}/displayName`)).catch(() => null);
             if (displayNameSnap?.exists()) {
-              return { [creatorId]: displayNameSnap.val() || 'Creator' };
+              return { [creatorId]: displayNameSnap.val() || null };
             }
-            return { [creatorId]: 'Creator' };
+            return { [creatorId]: null };
           } catch (error) {
-            return { [creatorId]: 'Creator' };
+            return { [creatorId]: null };
           }
         });
 
@@ -891,7 +949,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
 
   // Render invitation item
   const renderInvitationItem = useCallback(({ item }) => {
-    const inviteGroupName = item.groupName || 'Group';
+    const inviteGroupName = item.groupName || t('groups_screen.group');
     const truncatedInviteName = truncateGroupName(inviteGroupName, 20);
     
     return (
@@ -978,11 +1036,11 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         </View>
       </View>
     );
-  }, [styles, isDarkMode, handleAcceptInvitation, handleDeclineInvitation]);
+  }, [styles, isDarkMode, handleAcceptInvitation, handleDeclineInvitation, t]);
 
   // Render join request item (for groups where user is creator)
   const renderJoinRequestItem = useCallback(({ item }) => {
-    const requestGroupName = item.groupName || 'Group';
+    const requestGroupName = item.groupName || t('groups_screen.group');
     const truncatedGroupName = truncateGroupName(requestGroupName, 20);
     
     return (
@@ -1099,12 +1157,12 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         </View>
       </View>
     );
-  }, [styles, isDarkMode, firestoreDB, appdatabase, user?.id]);
+  }, [styles, isDarkMode, firestoreDB, appdatabase, user?.id, t]);
 
   // ✅ Extracted: memoized renderItem for All Groups FlatList
   const renderAllGroupItem = useCallback(({ item }) => {
     const groupId = item.id || item.groupId;
-    const groupName = item.groupName || item.name || 'Group';
+    const groupName = item.groupName || item.name || t('groups_screen.group');
     const groupAvatar = item.groupAvatar || item.avatar || null;
     const memberCount = item.memberCount || (item.members ? Object.keys(item.members).length : 0) || 0;
     const createdBy = item.createdBy || null;
@@ -1193,7 +1251,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                   fontFamily: 'Lato-Bold',
                   letterSpacing: 0.2,
                 }}>
-                  Joined
+                  {t('groups_screen.status_joined')}
                 </Text>
               </View>
             ) : hasPendingRequest ? (
@@ -1211,7 +1269,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                   fontFamily: 'Lato-Bold',
                   letterSpacing: 0.2,
                 }}>
-                  Pending
+                  {t('groups_screen.status_pending')}
                 </Text>
               </View>
             ) : (
@@ -1317,7 +1375,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         </View>
       </View>
     );
-  }, [isDarkMode, creatorNames, myPendingJoinRequests, firestoreDB, appdatabase, user?.id, isAdmin]);
+  }, [isDarkMode, creatorNames, myPendingJoinRequests, firestoreDB, appdatabase, user?.id, isAdmin, t]);
 
   return (
     <View style={styles.container}>
@@ -1622,14 +1680,13 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
 
       {/* FAB. Only on the Joined tab: on All Groups you are browsing other
           people's groups, where "create" is unrelated to what is on screen.
-          Label follows whether you already own one -- the model is one group
-          per creator, and the picker this opens now detects the owned group
-          and adds to it rather than creating a second, so the button has to
-          say so. `groups` already carries createdBy from group_meta_data, so
+          Label follows the group limit: below MAX_GROUPS_PER_USER owned
+          groups it creates (handleFabPress then asks "new group or add to
+          yours"); at the limit it only adds members. `groups` already carries createdBy from group_meta_data, so
           this costs no extra read. */}
       {activeTab === 'joined' && (
       <TouchableOpacity
-        onPress={() => setOnlineUsersListVisible(true)}
+        onPress={handleFabPress}
         style={{
           position: 'absolute',
           // ABOVE_TAB_BAR, not ABOVE_BANNER: this screen renders no banner ad,
@@ -1660,12 +1717,12 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         activeOpacity={0.8}
       >
         <Icon 
-          name="add" 
+          name={atGroupLimit ? 'person-add' : 'add'}
           size={22} 
           color="#fff" 
         />
         <Text style={{ color: '#fff', fontSize: 14, fontFamily: 'Lato-Bold' }}>
-          {ownsAGroup
+          {atGroupLimit
             ? (t('groups_screen.add_members', { defaultValue: 'Add Members' }))
             : (t('groups_screen.create_group') || 'Create')}
         </Text>
@@ -1675,7 +1732,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
       {/* Online Users List for Group Creation/Adding Members */}
       <OnlineUsersList
         visible={onlineUsersListVisible}
-        onClose={() => setOnlineUsersListVisible(false)}
+        onClose={handlePickerClose}
         mode="select"
       />
 
@@ -1802,7 +1859,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                       color: isDarkMode ? '#E5E7EB' : config.colors.surfaceElevatedDark,
                       lineHeight: 22,
                     }}>
-                      {selectedGroupInfo.description || 'No description'}
+                      {selectedGroupInfo.description || t('groups_screen.no_desc')}
                     </Text>
                   </View>
 

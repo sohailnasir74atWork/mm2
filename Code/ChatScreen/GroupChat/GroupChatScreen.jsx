@@ -17,11 +17,11 @@ import GroupMessageList from './GroupMessageList';
 import { useGlobalState } from '../../GlobelStats';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { setActiveChat, clearActiveChat, setActiveGroupChat, clearActiveGroupChat } from '../utils';
-import { get, ref, update, query as dbQuery, orderByKey, limitToLast, orderByValue, equalTo } from '@react-native-firebase/database';
+import { get, ref, update, query as dbQuery, orderByKey, limitToLast, orderByValue, equalTo, onChildChanged } from '@react-native-firebase/database';
 import { useTranslation } from 'react-i18next';
 import ConditionalKeyboardWrapper from '../../Helper/keyboardAvoidingContainer';
-import { sendGroupMessage, removeMemberFromGroup, hasGroupPermission, getPendingInviteForGroup, acceptGroupInvite, declineGroupInvite, leaveGroup, makeMemberCreator } from '../utils/groupUtils';
-import { doc, getDoc, onSnapshot, collection, query, where, getDocs } from '@react-native-firebase/firestore';
+import { sendGroupMessage, removeMemberFromGroup, hasGroupPermission, getPendingInviteForGroup, acceptGroupInvite, declineGroupInvite, leaveGroup, makeMemberCreator, setGroupReaction, loadGroupMessagesBetween } from '../utils/groupUtils';
+import { doc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc } from '@react-native-firebase/firestore';
 import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { showSuccessMessage, showErrorMessage } from '../../Helper/MessageHelper';
@@ -31,17 +31,30 @@ import { useLocalState } from '../../LocalGlobelStats';
 import PetModal from '../PrivateChat/PetsModel';
 import config from '../../Helper/Environment';
 import { seedCurrentUser } from '../../Helper/profileCache';
+import { getThemeColors } from '../../Helper/themeColors';
+import { getUserRoles } from '../../Helper/roleRoster';
+import GroupPinnedBar, { MAX_GROUP_PINS } from './GroupPinnedBar';
+import { useGroupMessageTranslation } from './useGroupMessageTranslation';
+import { setViewingGroup, clearViewingGroup } from '../../Helper/groupNotifications';
+import { useModalWindowInsets } from '../../Helper/useNavBarInset';
 
 const INITIAL_PAGE_SIZE = 10; // ✅ Initial load: 10 messages
 const PAGE_SIZE = 10; // ✅ Pagination: load 10 messages per batch
 const MEMBER_STATUS_BATCH_SIZE = 5; // ✅ Load 5 member statuses at a time
+// Jumping to an older pin loads the whole gap in one read, up to this many
+// messages (Adopt Me's cap). Past it the jump gives up with "pinned_gone".
+const PIN_JUMP_MAX_MESSAGES = 300;
+// Reactions other people add arrive live on the newest this-many messages
+// (one child_changed listener). Older rows update on refresh; your own
+// reactions always show at once.
+const REACTION_SYNC_WINDOW = 25;
 
 const GroupChatScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { groupId } = route.params || {};
 
-  const { user, theme, appdatabase, firestoreDB } = useGlobalState();
+  const { user, theme, appdatabase, firestoreDB, isAdmin, isUserBlocked } = useGlobalState();
 
   // Seed MY OWN profile into the shared cache.
   // Chat message payloads are slim — they carry no frame/text-colour — so the
@@ -81,9 +94,16 @@ const GroupChatScreen = () => {
   const newestMessageIdRef = useRef(null); // Newest message ID (for real-time listener)
   const previousGroupIdRef = useRef(null);
   const { t } = useTranslation();
+  // Members sheet (a Modal): its list ends above the nav bar / home indicator.
+  const modalInsets = useModalWindowInsets();
 
   const isDarkMode = theme === 'dark';
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
+  const themeColors = useMemo(() => getThemeColors(isDarkMode), [isDarkMode]);
+
+  // Translate in the long-press sheet: same handler and same daily allowance
+  // as community chat (see useGroupMessageTranslation).
+  const { handleTranslate } = useGroupMessageTranslation();
 
   const messagesRef = useMemo(
     () => (groupId ? ref(appdatabase, `group_messages/${groupId}/messages`) : null),
@@ -99,7 +119,7 @@ const GroupChatScreen = () => {
     const unsubscribe = onSnapshot(
       groupRef,
       async (snapshot) => {
-        if (snapshot.exists) {
+        if (snapshot.exists()) {
           const data = snapshot.data();
           setGroupData(data);
 
@@ -497,6 +517,37 @@ const GroupChatScreen = () => {
     };
   }, [messagesRef, isMember]); // Re-run when messagesRef or isMember changes
 
+  // Live reactions (and any other edit) on the newest REACTION_SYNC_WINDOW
+  // messages. The child_added listener above only watches the newest message,
+  // so without this a reaction someone else adds would never appear until a
+  // refresh. Only rows already on screen are merged; nothing is added.
+  useEffect(() => {
+    if (!messagesRef || !isMember) return undefined;
+    const windowQuery = dbQuery(messagesRef, limitToLast(REACTION_SYNC_WINDOW));
+    const unsubscribe = onChildChanged(windowQuery, (snapshot) => {
+      const key = snapshot?.key;
+      const data = snapshot?.val();
+      if (!key || !data || typeof data !== 'object') return;
+      setMessages((prev) => {
+        if (!Array.isArray(prev)) return prev;
+        const i = prev.findIndex((m) => String(m?.id) === String(key));
+        if (i === -1) return prev;
+        const next = prev.slice();
+        next[i] = { ...prev[i], ...data, id: prev[i].id };
+        // A cleared reaction disappears from the snapshot entirely.
+        if (!data.reactions) delete next[i].reactions;
+        return next;
+      });
+    });
+    return () => unsubscribe();
+  }, [messagesRef, isMember]);
+
+  // Latest messages for callbacks that must not re-create on every message.
+  const loadedMessagesRef = useRef([]);
+  useEffect(() => {
+    loadedMessagesRef.current = Array.isArray(messages) ? messages : [];
+  }, [messages]);
+
   // Set active chat and reset unread count
   useFocusEffect(
     useCallback(() => {
@@ -505,6 +556,8 @@ const GroupChatScreen = () => {
       // Set active chat (both for private chat pattern and group batch checking)
       setActiveChat(user.id, groupId);
       setActiveGroupChat(user.id, groupId);
+      // Foreground group pushes for this group are not shown while it is open.
+      setViewingGroup(groupId);
 
       // Reset unreadCount when entering chat
       const groupMetaRef = ref(appdatabase, `group_meta_data/${user.id}/${groupId}`);
@@ -515,6 +568,7 @@ const GroupChatScreen = () => {
       return () => {
         clearActiveChat(user.id);
         clearActiveGroupChat(user.id, groupId);
+        clearViewingGroup(groupId);
       };
     }, [user?.id, groupId, appdatabase])
   );
@@ -574,6 +628,138 @@ const GroupChatScreen = () => {
     [messages],
   );
 
+  // ── Pinned messages (ported from Adopt Me) ───────────────────────────
+  // Stored on the group doc (pinnedMessages, newest first, at most
+  // MAX_GROUP_PINS), which the onSnapshot above already streams to every
+  // member. A new field on an existing doc: old builds never read it, and no
+  // group write anywhere replaces the whole doc, so it survives their edits.
+  // The group's creator and staff pin and unpin; everyone can jump to a pin.
+  const pins = useMemo(
+    () => (Array.isArray(groupData?.pinnedMessages) ? groupData.pinnedMessages.filter((p) => p && p.id) : []),
+    [groupData?.pinnedMessages],
+  );
+  const pinnedIds = useMemo(() => new Set(pins.map((p) => String(p.id))), [pins]);
+  const canManagePins = !!user?.id && (
+    groupData?.createdBy === user.id
+    || !!isAdmin
+    || !!user?.isModerator
+    || !!getUserRoles(user.id).isModerator
+  );
+
+  const writePins = useCallback(async (next) => {
+    await updateDoc(doc(firestoreDB, 'groups', groupId), { pinnedMessages: next });
+  }, [firestoreDB, groupId]);
+
+  const handleTogglePin = useCallback(async (message) => {
+    if (!message?.id || !canManagePins) return;
+    const id = String(message.id);
+    const wasPinned = pinnedIds.has(id);
+    try {
+      if (wasPinned) {
+        await writePins(pins.filter((p) => String(p.id) !== id));
+        return;
+      }
+      if (pins.length >= MAX_GROUP_PINS) {
+        showErrorMessage(t('home.alert.error'), t('group_chat.pin_limit', { max: MAX_GROUP_PINS }));
+        return;
+      }
+      const pin = {
+        id,
+        text: String(message.text || '').slice(0, 200),
+        senderId: message.senderId || null,
+        senderName: String(message.sender || '').slice(0, 40) || null,
+        hasImage: !!(message.imageUrl || (Array.isArray(message.imageUrls) && message.imageUrls.length)),
+        itemCount: Array.isArray(message.fruits) ? message.fruits.length : 0,
+        timestamp: Number(message.timestamp) || Number(id) || Date.now(),
+        pinnedBy: user.id,
+        pinnedAt: Date.now(),
+      };
+      await writePins([pin, ...pins]);
+    } catch (e) {
+      console.warn('[GroupChat] pin failed:', e?.message);
+      showErrorMessage(t('home.alert.error'), t(wasPinned ? 'group_chat.unpin_error' : 'group_chat.pin_error'));
+    }
+  }, [canManagePins, pinnedIds, pins, writePins, user?.id, t]);
+
+  const handleUnpin = useCallback((pin) => {
+    if (!canManagePins || !pin?.id) return;
+    writePins(pins.filter((p) => String(p.id) !== String(pin.id)))
+      .catch(() => showErrorMessage(t('home.alert.error'), t('group_chat.unpin_error')));
+  }, [canManagePins, pins, writePins, t]);
+
+  // Jump to a pinned message. Older than everything loaded? Fetch the whole
+  // gap in one read (up to PIN_JUMP_MAX_MESSAGES), merge it, then scroll once
+  // the list has it.
+  const pendingJumpRef = useRef(null);
+  const jumpToPin = useCallback(async (pin) => {
+    if (!pin?.id) return;
+    const id = String(pin.id);
+    const loaded = loadedMessagesRef.current;
+    if (loaded.some((m) => String(m?.id) === id)) {
+      scrollToMessage(id);
+      return;
+    }
+    try {
+      const oldestKey = lastLoadedKeyRef.current || loaded[loaded.length - 1]?.id || null;
+      const rows = await loadGroupMessagesBetween(appdatabase, groupId, id, oldestKey, PIN_JUMP_MAX_MESSAGES);
+      if (!rows.some((m) => String(m.id) === id)) {
+        showErrorMessage(t('home.alert.error'), t('group_chat.pinned_gone'));
+        return;
+      }
+      pendingJumpRef.current = id;
+      // The pin is now the oldest row on screen; older pages continue from it.
+      lastLoadedKeyRef.current = id;
+      setMessages((prev) => {
+        const base = Array.isArray(prev) ? prev : [];
+        const ids = new Set(base.map((m) => String(m?.id)));
+        return [...base, ...rows.filter((m) => !ids.has(String(m?.id)))]
+          .sort((a, b) => (b?.timestamp || 0) - (a?.timestamp || 0));
+      });
+    } catch (e) {
+      console.warn('[GroupChat] jump to pin failed:', e?.message);
+      showErrorMessage(t('home.alert.error'), t('group_chat.pinned_gone'));
+    }
+  }, [appdatabase, groupId, scrollToMessage, t]);
+
+  // Second half of a jump that had to load history first.
+  useEffect(() => {
+    const id = pendingJumpRef.current;
+    if (!id || !messages.some((m) => String(m?.id) === id)) return undefined;
+    pendingJumpRef.current = null;
+    const timer = setTimeout(() => scrollToMessage(id), 250);
+    return () => clearTimeout(timer);
+  }, [messages, scrollToMessage]);
+
+  // ── Reactions (ported from Adopt Me) ─────────────────────────────────
+  // One per player on group_messages/{g}/messages/{m}/reactions/{uid}. Tap
+  // the same emoji again to remove it. Optimistic; reverted if the write is
+  // refused.
+  const handleReaction = useCallback(async (messageId, emoji) => {
+    if (!messageId || !emoji || !user?.id || !groupId || !isMember) return;
+    const key = String(messageId);
+    const target = loadedMessagesRef.current.find((m) => String(m?.id) === key);
+    if (!target) return;
+    const previous = target.reactions?.[user.id] || null;
+    const next = previous === emoji ? null : emoji;
+
+    const apply = (value) => setMessages((prev) => (Array.isArray(prev) ? prev.map((m) => {
+      if (String(m?.id) !== key) return m;
+      const reactions = { ...(m.reactions || {}) };
+      if (value) reactions[user.id] = value;
+      else delete reactions[user.id];
+      return { ...m, reactions };
+    }) : prev));
+
+    apply(next);
+    try {
+      await setGroupReaction(appdatabase, groupId, key, user.id, next);
+    } catch (error) {
+      console.warn('[GroupChat] reaction failed:', error?.message);
+      apply(previous);
+      showErrorMessage(t('home.alert.error'), t('group_chat.reaction_failed'));
+    }
+  }, [user?.id, groupId, isMember, appdatabase, t]);
+
   // Handle reply to message
   const handleReply = useCallback((message) => {
     setReplyTo({
@@ -608,6 +794,14 @@ const GroupChatScreen = () => {
       // Block only if there's no text, no image AND no fruits
       if (!trimmedText && !hasImage && !hasFruits) {
         showErrorMessage(t('home.alert.error'), t('chat.cannot_empty'));
+        return;
+      }
+
+      // Email ban OR device ban (GlobelStats, server-time validated). Same
+      // gate and message as the community chat (Trader.jsx) and Adopt Me's
+      // group chat. Client-side only.
+      if (isUserBlocked) {
+        showErrorMessage(t('chat.access_denied'), t('chat.banned_message'));
         return;
       }
 
@@ -707,7 +901,7 @@ const GroupChatScreen = () => {
         Alert.alert(t('home.alert.error'), t('group_chat.could_not_send'));
       }
     },
-    [user, groupId, appdatabase, firestoreDB, groupData, t, localState?.isPro]
+    [user, groupId, appdatabase, firestoreDB, groupData, t, localState?.isPro, isUserBlocked]
   );
 
   // Handle remove member (admin action)
@@ -931,7 +1125,7 @@ const GroupChatScreen = () => {
     const isCreator = groupData?.createdBy === user?.id;
 
     // Truncate group name for header (max 30 characters)
-    const groupName = groupData.name || 'Group Chat';
+    const groupName = groupData.name || t('group_chat.default_name');
     const truncatedGroupName = groupName.length > 30 ? groupName.substring(0, 30).trim() + '...' : groupName;
 
     navigation.setOptions({
@@ -963,7 +1157,7 @@ const GroupChatScreen = () => {
         </TouchableOpacity>
       ),
     });
-  }, [groupData, memberCount, isDarkMode, navigation, isMember, handleLeaveGroup, user?.id]);
+  }, [groupData, memberCount, isDarkMode, navigation, isMember, handleLeaveGroup, user?.id, t]);
 
   if (!groupId) {
     return (
@@ -1060,6 +1254,13 @@ const GroupChatScreen = () => {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ConditionalKeyboardWrapper style={{ flex: 1 }} privatechatscreen={true}>
         <View style={[styles.container, { position: 'relative' }]}>
+          <GroupPinnedBar
+            pins={pins}
+            c={themeColors}
+            canManage={canManagePins}
+            onJump={jumpToPin}
+            onUnpin={handleUnpin}
+          />
           {messages.length === 0 && !loading ? (
             // No messages yet - show empty state but keep input visible
             <View style={styles.emptyContainer}>
@@ -1081,12 +1282,18 @@ const GroupChatScreen = () => {
               scrollToMessage={scrollToMessage}
               highlightedMessageId={highlightedMessageId}
               flatListRef={flatListRef}
+              onReaction={handleReaction}
+              onTranslate={handleTranslate}
+              onPinMessage={canManagePins ? handleTogglePin : null}
+              canPin={canManagePins}
+              pinnedIds={pinnedIds}
             />
           )}
 
           <GroupMessageInput
             onSend={(text, image, fruits) => sendMessage(text, image, fruits, replyTo)}
-            isBanned={false}
+            // Email or device ban locks the composer, as in Adopt Me.
+            isBanned={isUserBlocked}
             petModalVisible={petModalVisible}
             setPetModalVisible={setPetModalVisible}
             selectedFruits={selectedFruits}
@@ -1115,7 +1322,7 @@ const GroupChatScreen = () => {
         onRequestClose={() => setShowMembersModal(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' }}>
+          <View style={{ backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%', paddingBottom: modalInsets.bottom }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB' }}>
               <Text style={{ fontSize: 20, fontFamily: 'Lato-Bold', color: isDarkMode ? '#fff' : '#000' }}>
                 {t('group_chat.members_title', { count: memberCount })}
@@ -1169,7 +1376,7 @@ const GroupChatScreen = () => {
                       />
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 16, fontFamily: 'Lato-SemiBold', color: isDarkMode ? '#fff' : '#000' }}>
-                          {inviteData.displayName || 'Anonymous'}
+                          {inviteData.displayName || t('group_chat.anonymous')}
                         </Text>
                         <Text style={{ fontSize: 12, fontFamily: 'Lato-Regular', color: isDarkMode ? '#9CA3AF' : '#6B7280', marginTop: 2 }}>
                           {t('group_chat.pending_join')}
@@ -1197,7 +1404,7 @@ const GroupChatScreen = () => {
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Text style={{ fontSize: 16, fontFamily: 'Lato-SemiBold', color: isDarkMode ? '#fff' : '#000' }}>
-                          {member.displayName || 'Anonymous'}
+                          {member.displayName || t('group_chat.anonymous')}
                         </Text>
                         {isOnline && (
                           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginLeft: 8 }} />

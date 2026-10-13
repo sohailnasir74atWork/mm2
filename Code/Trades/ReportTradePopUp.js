@@ -13,6 +13,14 @@ import { useGlobalState } from "../GlobelStats";
 import config from "../Helper/Environment";
 import { ref, push } from "@react-native-firebase/database";
 import { ModalKeyboardView } from '../Helper/keyboardAvoidingContainer';
+import { useTranslation } from 'react-i18next';
+
+// `value` is what gets saved in tradeReports (kept in English for the mods);
+// only the label is translated.
+const TRADE_REPORT_REASONS = [
+  { value: "Inappropriate", labelKey: "report_popup.reason_inappropriate" },
+  { value: "Fraud", labelKey: "report_popup.reason_fraud" },
+];
 
 const ReportTradePopup = ({ visible, trade, onClose }) => {
   const [selectedReason, setSelectedReason] = useState("Inappropriate");
@@ -21,15 +29,16 @@ const ReportTradePopup = ({ visible, trade, onClose }) => {
   const [loading, setLoading] = useState(false);
   const { theme, user, appdatabase } = useGlobalState();
   const isDarkMode = theme === "dark";
+  const { t } = useTranslation();
 
   const handleSubmit = () => {
     if (showCustomInput && !customReason.trim()) {
-      Alert.alert("Error", "Please enter a reason for reporting.");
+      Alert.alert(t("home.alert.error"), t("report_popup.enter_reason"));
       return;
     }
 
     if (!trade?.id) {
-      Alert.alert("Error", "Invalid trade. Unable to report.");
+      Alert.alert(t("home.alert.error"), t("report_popup.invalid_trade"));
       return;
     }
 
@@ -47,17 +56,20 @@ const ReportTradePopup = ({ visible, trade, onClose }) => {
     push(reportsRef, reportData)
       .then(() => {
         setLoading(false); // Stop loader
+        const reasonKey = TRADE_REPORT_REASONS.find((r) => r.value === selectedReason)?.labelKey;
         Alert.alert(
-          "Report Submitted",
-          `Trade ID: ${trade.id}\nReason: ${showCustomInput ? customReason : selectedReason
-          }\nThank you for reporting this trade.`
+          t("chat.report_submitted"),
+          t("report_popup.trade_report_submitted_msg", {
+            id: trade.id,
+            reason: showCustomInput ? customReason : (reasonKey ? t(reasonKey) : selectedReason),
+          })
         );
         onClose(true); // Indicate success
       })
       .catch((error) => {
         console.error("Error reporting trade:", error);
         setLoading(false); // Stop loader
-        Alert.alert("Error", "Failed to submit the report. Please try again.");
+        Alert.alert(t("home.alert.error"), t("report_popup.submit_failed"));
       });
   };
 
@@ -67,12 +79,12 @@ const ReportTradePopup = ({ visible, trade, onClose }) => {
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <ModalKeyboardView style={styles.overlay}>
         <View style={styles.popup}>
-          <Text style={styles.title}>Report Trade</Text>
-          <Text style={styles.messageText}>{`Trade ID: ${trade?.id || "Anonymous"}`}</Text>
-          <Text style={styles.messageText}>{`Trader: ${trade?.traderName || "Anonymous"}`}</Text>
+          <Text style={styles.title}>{t("report_popup.report_trade")}</Text>
+          <Text style={styles.messageText}>{t("report_popup.trade_id", { id: trade?.id || t("group_chat.anonymous") })}</Text>
+          <Text style={styles.messageText}>{t("report_popup.trader_name", { name: trade?.traderName || t("group_chat.anonymous") })}</Text>
 
           <View style={styles.optionsContainer}>
-            {["Inappropriate", "Fraud"].map((reason) => (
+            {TRADE_REPORT_REASONS.map(({ value: reason, labelKey }) => (
               <TouchableOpacity
                 key={reason}
                 style={[
@@ -90,7 +102,7 @@ const ReportTradePopup = ({ visible, trade, onClose }) => {
                     selectedReason === reason && styles.selectedOptionText,
                   ]}
                 >
-                  {reason}
+                  {t(labelKey)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -108,7 +120,7 @@ const ReportTradePopup = ({ visible, trade, onClose }) => {
                   showCustomInput && styles.selectedOptionText,
                 ]}
               >
-                Other
+                {t("report_popup.reason_other")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -116,7 +128,7 @@ const ReportTradePopup = ({ visible, trade, onClose }) => {
           {showCustomInput && (
             <TextInput
               style={styles.input}
-              placeholder="Enter custom reason"
+              placeholder={t("report_popup.custom_reason_placeholder")}
               placeholderTextColor={isDarkMode ? '#999' : '#888'}
               value={customReason}
               onChangeText={setCustomReason}
@@ -125,7 +137,7 @@ const ReportTradePopup = ({ visible, trade, onClose }) => {
 
           <View style={styles.actions}>
             <TouchableOpacity style={styles.button} onPress={onClose}>
-              <Text style={styles.buttonText}>Cancel</Text>
+              <Text style={styles.buttonText}>{t("trade.cancel")}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -138,7 +150,7 @@ const ReportTradePopup = ({ visible, trade, onClose }) => {
               {loading ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.buttonText}>Submit</Text>
+                <Text style={styles.buttonText}>{t("chat.submit")}</Text>
               )}
             </TouchableOpacity>
           </View>

@@ -3,6 +3,7 @@ import config from "../Helper/Environment";
 import Share from 'react-native-share';
 import DeviceInfo from 'react-native-device-info';
 import Purchases from 'react-native-purchases';
+import i18n from 'i18next';
 
 export const getAppDownloadLink = () => {
     return Platform.OS === 'ios'
@@ -14,8 +15,8 @@ export const getAppDownloadLink = () => {
     try {
       const appLink = getAppDownloadLink();
       const shareOptions = {
-        message: `Explore MM2 Values, compare trades, and check Murder Mystery 2 item values. Download now: ${appLink}`,
-        title: 'Share App',
+        message: i18n.t('settings.share_app_message', { link: appLink }),
+        title: i18n.t('settings.share_app'),
       };
       await Share.open(shareOptions);
     } catch (error) {
@@ -59,11 +60,11 @@ I would like to share the following suggestions:
 
     // ✅ Open email client
     Linking.openURL(mailtoUrl).catch(() =>
-      Alert.alert('Error', 'Unable to open the email client. Please try again later.')
+      Alert.alert(i18n.t('home.alert.error'), i18n.t('settings.err_open_email'))
     );
   } catch (error) {
     console.error('❌ Error opening feedback email:', error);
-    Alert.alert('Error', 'Could not prepare the email. Please try again.');
+    Alert.alert(i18n.t('home.alert.error'), i18n.t('settings.err_prepare_email'));
   }
 };
 export const handleReport = async (user) => {
@@ -99,18 +100,18 @@ I would like to report ...
 
     // ✅ Open email client
     Linking.openURL(mailtoUrl).catch(() =>
-      Alert.alert('Error', 'Unable to open the email client. Please try again later.')
+      Alert.alert(i18n.t('home.alert.error'), i18n.t('settings.err_open_email'))
     );
   } catch (error) {
     console.error('❌ Error opening feedback email:', error);
-    Alert.alert('Error', 'Could not prepare the email. Please try again.');
+    Alert.alert(i18n.t('home.alert.error'), i18n.t('settings.err_prepare_email'));
   }
 };
 
 export const handleBloxFruit = () => {
   const websiteUrl = config.otherapplink2;
   Linking.openURL(websiteUrl).catch(() =>
-    Alert.alert('Error', 'Unable to open the website. Please try again later.')
+    Alert.alert(i18n.t('home.alert.error'), i18n.t('settings.err_open_website'))
   );
 };
 
@@ -120,48 +121,48 @@ export const handleBloxFruit = () => {
         ? config.IOsShareLink
         : config.andriodShareLink;
     Linking.openURL(storeLink).catch(() =>
-      Alert.alert('Error', 'Unable to open the app store. Please try again later.')
+      Alert.alert(i18n.t('home.alert.error'), i18n.t('settings.err_open_store'))
     );
   };
   export const handleadoptme  = () => {
     const websiteUrl = config.otherapplink;
     Linking.openURL(websiteUrl).catch(() =>
-      Alert.alert('Error', 'Unable to open the website. Please try again later.')
+      Alert.alert(i18n.t('home.alert.error'), i18n.t('settings.err_open_website'))
     );
   };
 
   export const handleOpenFacebook = () => {
     const facebookUrl = 'https://www.facebook.com/share/g/15V1JErjbY/';
     Linking.openURL(facebookUrl).catch(() =>
-      Alert.alert('Error', 'Unable to open Facebook. Please try again later.')
+      Alert.alert(i18n.t('home.alert.error'), i18n.t('settings.err_open_facebook'))
     );
   };
 
   export const handleOpenWebsite = () => {
     const websiteUrl = config.webSite;
     Linking.openURL(websiteUrl).catch(() =>
-      Alert.alert('Error', 'Unable to open the website. Please try again later.')
+      Alert.alert(i18n.t('home.alert.error'), i18n.t('settings.err_open_website'))
     );
   };
 
   export const handleOpenPrivacy = () => {
     const websiteUrl = 'https://mm2values.app/privacy';
     Linking.openURL(websiteUrl).catch(() =>
-      Alert.alert('Error', 'Unable to open the website. Please try again later.')
+      Alert.alert(i18n.t('home.alert.error'), i18n.t('settings.err_open_website'))
     );
   };
 
   export const handleOpenTerms = () => {
     const websiteUrl = 'https://mm2values.app/terms';
     Linking.openURL(websiteUrl).catch(() =>
-      Alert.alert('Error', 'Unable to open the website. Please try again later.')
+      Alert.alert(i18n.t('home.alert.error'), i18n.t('settings.err_open_website'))
     );
   };
 
   export const handleOpenChild = () => {
     const websiteUrl = 'https://mm2values.app/child-safety-standards-policy';
     Linking.openURL(websiteUrl).catch(() =>
-      Alert.alert('Error', 'Unable to open the website. Please try again later.')
+      Alert.alert(i18n.t('home.alert.error'), i18n.t('settings.err_open_website'))
     );
   };
 

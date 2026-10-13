@@ -10,6 +10,7 @@
  */
 import messaging from '@react-native-firebase/messaging';
 import notifee, { AndroidImportance } from '@notifee/react-native';
+import i18n from 'i18next';
 import { isValueUpdatesEnabled } from './valueUpdateNotifications';
 
 let mmkv = null;
@@ -55,7 +56,8 @@ export function initValueAlertForegroundHandler() {
       if (!title && !body) return;
       await notifee.createChannel({
         id: 'value_alerts',
-        name: 'Value Alerts',
+        // Shown in Android's notification settings, in the app language.
+        name: i18n.t('settings.channel_value_alerts', { defaultValue: 'Value Alerts' }),
         importance: AndroidImportance.HIGH,
       });
       await notifee.displayNotification({

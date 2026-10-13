@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import i18n from 'i18next';
 import SpInAppUpdates, { IAUUpdateKind } from 'sp-react-native-in-app-updates';
 
 const inAppUpdates = new SpInAppUpdates(false); // set true for debug logs
@@ -15,11 +16,10 @@ export const checkForUpdate = async () => {
           updateType: IAUUpdateKind.IMMEDIATE,
         },
         ios: {
-          title: 'Update Available',
-          message:
-            'A new version of the app is available. Please update for the best experience.',
-          buttonUpgradeText: 'Update',
-          buttonCancelText: 'Later',
+          title: i18n.t('app_update.title'),
+          message: i18n.t('app_update.message'),
+          buttonUpgradeText: i18n.t('app_update.update'),
+          buttonCancelText: i18n.t('app_update.later'),
           forceUpgrade: false,
         },
       });

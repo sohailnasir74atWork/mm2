@@ -37,6 +37,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import { validateContent } from '../../Helper/ContentModeration';
 import ConditionalKeyboardWrapper from '../../Helper/keyboardAvoidingContainer';
 import SwipeableBottomDrawer from '../../Helper/SwipeableBottomDrawer';
+import useNavBarInset from '../../Helper/useNavBarInset';
 import { useTranslation } from 'react-i18next';
 import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 
@@ -45,6 +46,8 @@ dayjs.extend(relativeTime);
 const PAGE_SIZE = 15;
 
 const CommentModal = ({ visible, onClose, postId }) => {
+  // Bottom sheet: the input row clears the Android nav bar (keyboard down).
+  const navBarInset = useNavBarInset();
   const [commentText, setCommentText] = useState('');
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -403,7 +406,7 @@ const CommentModal = ({ visible, onClose, postId }) => {
             onClose={onClose}
             isDarkMode={isDarkMode}
             showPill={false}
-            style={[styles.modalContent, isDarkMode && styles.darkContent]}
+            style={[styles.modalContent, isDarkMode && styles.darkContent, { paddingBottom: 14 + navBarInset }]}
           >
             <View style={styles.sheetHandle} />
 

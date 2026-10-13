@@ -46,6 +46,8 @@ import {
 import { daysUntilBirthday, formatMonthDay } from './birthdayDate';
 import { BirthdayAvatar, BirthdayGradient, wishLine, BIRTHDAY_PINK } from './BirthdayBits';
 import EditBirthdaySheet from './EditBirthdaySheet';
+import { flipInRTL } from '../Helper/rtl';
+import ScreenBottomBanner from '../Ads/ScreenBottomBanner';
 
 // A wish from a row uses the plain "Happy birthday!" message; "Wish
 // everyone" sends "Have an awesome day!" so the two read differently.
@@ -418,7 +420,7 @@ export default function BirthdaysScreen() {
       return (
         <TouchableOpacity onPress={openAll} style={styles.seeAll} activeOpacity={0.7}>
           <Text style={[styles.seeAllText, { color: BIRTHDAY_PINK }]}>{t('birthdays.see_all', { count: top.total })}</Text>
-          <Icon name="chevron-forward" size={16} color={BIRTHDAY_PINK} />
+          <Icon name="chevron-forward" size={16} color={BIRTHDAY_PINK} style={flipInRTL} />
         </TouchableOpacity>
       );
     }
@@ -444,8 +446,8 @@ export default function BirthdaysScreen() {
 
   const header = (
     <View style={[styles.header, { borderBottomColor: c.border }]}>
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel="Back">
-        <Icon name="arrow-back" size={22} color={c.text} />
+      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel={t('birthdays.back')}>
+        <Icon name="arrow-back" size={22} color={c.text} style={flipInRTL} />
       </TouchableOpacity>
       <View style={{ flex: 1 }}>
         <Text style={[styles.headerTitle, { color: c.text }]}>{t('birthdays.title')}</Text>
@@ -646,7 +648,7 @@ export default function BirthdaysScreen() {
         ListHeaderComponent={topSection}
         ListEmptyComponent={waiting || null}
         ListFooterComponent={footer}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[styles.listContent, styles.listEnd]}
         initialNumToRender={12}
         maxToRenderPerBatch={10}
         windowSize={7}
@@ -654,6 +656,8 @@ export default function BirthdaysScreen() {
         removeClippedSubviews={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BIRTHDAY_PINK} colors={[BIRTHDAY_PINK]} />}
       />
+      {/* Clears the Android nav bar; rows no longer scroll behind it. */}
+      <ScreenBottomBanner background={c.bg} ad={false} />
 
       <EditBirthdaySheet
         visible={editing}
@@ -682,6 +686,7 @@ const styles = StyleSheet.create({
   headerSub: { fontSize: 12, marginTop: 1 },
   iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   listContent: { paddingHorizontal: 16, paddingTop: 4 },
+  listEnd: { paddingBottom: 24 },
   center: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 24, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: '800', textAlign: 'center' },
   hero: { borderRadius: 20, paddingVertical: 22, paddingHorizontal: 18, alignItems: 'center', overflow: 'hidden', marginTop: 12 },

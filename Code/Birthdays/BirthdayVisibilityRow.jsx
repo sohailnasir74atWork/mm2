@@ -21,6 +21,7 @@ import {
   setBirthdayUser, getOwnBirthday, peekOwnBirthday, peekMyBirthday, setBirthdayVisibility, onBirthdaysChange,
 } from './birthdayApi';
 import EditBirthdaySheet from './EditBirthdaySheet';
+import { flipInRTL } from '../Helper/rtl';
 
 const BirthdayVisibilityRow = ({ uid, styles, onHaptic }) => {
   const { t } = useTranslation();
@@ -94,7 +95,7 @@ const BirthdayVisibilityRow = ({ uid, styles, onHaptic }) => {
               <Icon name="calendar-outline" size={18} color={'white'} style={{ backgroundColor: '#DB2777', padding: 5, borderRadius: 5 }} />
               <Text style={styles.optionText}>{t('birthdays.edit_row')}</Text>
             </View>
-            <Icon name="chevron-forward" size={18} color={c.textMuted} />
+            <Icon name="chevron-forward" size={18} color={c.textMuted} style={flipInRTL} />
           </TouchableOpacity>
         </View>
       ) : null}

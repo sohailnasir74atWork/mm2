@@ -9,6 +9,7 @@ import {
 import ValueScreen from '../../ValuesScreen/ValueScreen';
 import { useGlobalState } from '../../GlobelStats';
 import config from '../../Helper/Environment';
+import { useModalWindowInsets } from '../../Helper/useNavBarInset';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -26,6 +27,8 @@ const PetModal = ({
   owned 
 }) => {
   const { theme } = useGlobalState();
+  // Bottom sheet: the list ends above the Android nav bar (edge-to-edge).
+  const insets = useModalWindowInsets();
   // ✅ Use strict equality and memoize
   const isDark = useMemo(() => theme === 'dark', [theme]);
   
@@ -52,7 +55,7 @@ const PetModal = ({
         <Pressable style={styles.backdrop} onPress={handleClose} />
 
         {/* Bottom drawer */}
-        <View style={[styles.drawer, { backgroundColor: drawerBackgroundColor }]}>
+        <View style={[styles.drawer, { backgroundColor: drawerBackgroundColor, height: 500 + insets.bottom, paddingBottom: 16 + insets.bottom }]}>
           <ValueScreen 
             fromChat={fromChat} 
             selectedFruits={selectedFruits} 

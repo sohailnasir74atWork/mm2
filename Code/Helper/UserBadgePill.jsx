@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { View, Text, Animated } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { useTranslation } from 'react-i18next';
 import { getShimmerValue } from './shimmerDriver';
 
 // Single source of truth for role/badge pill styling across chat lists,
@@ -14,14 +15,17 @@ import { getShimmerValue } from './shimmerDriver';
 // thread (see shimmerDriver.js) — adding glow to any number of pills costs
 // the same as adding it to one. JS thread is idle during animation.
 // Default: ON for the new 'helper' badge, OFF for everything else.
+//
+// `labelKey` is the i18n key for the pill text; the type id (admin, mod …)
+// stays the stable value used in logic.
 
 const TYPES = {
-  admin:    { tier: 'authority', icon: 'shield',             label: 'Admin',   color: '#EF4444' },
-  mod:      { tier: 'authority', icon: 'shield-checkmark',   label: 'Mod',     color: '#8B5CF6' },
-  jmd:      { tier: 'authority', icon: 'shield-half',        label: 'JMD',     color: '#F59E0B' },
-  trusted:  { tier: 'community', icon: 'checkmark-circle',   label: 'Trusted', color: '#10B981' },
-  cmsr:     { tier: 'community', icon: 'briefcase',          label: 'CMSR',    color: '#F97316' },
-  helper:   { tier: 'community', icon: 'hand-left',          label: 'Helper',  color: '#14B8A6' },
+  admin:    { tier: 'authority', icon: 'shield',             labelKey: 'chat.admin',          color: '#EF4444' },
+  mod:      { tier: 'authority', icon: 'shield-checkmark',   labelKey: 'chat.mod',            color: '#8B5CF6' },
+  jmd:      { tier: 'authority', icon: 'shield-half',        labelKey: 'badges.role_jmd',     color: '#F59E0B' },
+  trusted:  { tier: 'community', icon: 'checkmark-circle',   labelKey: 'badges.role_trusted', color: '#10B981' },
+  cmsr:     { tier: 'community', icon: 'briefcase',          labelKey: 'badges.role_cmsr',    color: '#F97316' },
+  helper:   { tier: 'community', icon: 'hand-left',          labelKey: 'badges.role_helper',  color: '#14B8A6' },
 };
 
 const SIZES = {
@@ -74,10 +78,11 @@ const ShimmerOverlay = React.memo(({ isDarkMode }) => {
 });
 
 const UserBadgePill = ({ type, size = 'md', isDarkMode = false, labelOverride, style, glow }) => {
+  const { t } = useTranslation();
   const def = TYPES[type];
   if (!def) return null;
   const s = SIZES[size] || SIZES.md;
-  const label = labelOverride || def.label;
+  const label = labelOverride || t(def.labelKey);
   // Glow is opt-in per pill. Call sites pass glow={firstBadge === '<type>'}
   // so only the first/highest-priority badge a user owns flashes; the rest
   // stay static. This avoids visual noise when a user wears multiple pills.

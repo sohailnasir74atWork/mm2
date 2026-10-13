@@ -8,11 +8,11 @@ import {
   Dimensions,
   StatusBar,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import dayjs from 'dayjs';
 
-const MONTHS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
+// Short month names in the app language (dayjs's locale follows i18n).
+const monthNames = () => Array.from({ length: 12 }, (_, i) => dayjs().month(i).date(1).format('MMM'));
 
 const MONTH_EMOJIS = [
   '⛄', '💝', '🌷', '🌸', '🌻', '☀️',
@@ -103,6 +103,7 @@ const gridStyles = StyleSheet.create({
 // `subtitle` / `onCancel` are optional: the mandatory DOB gate uses neither;
 // the email opt-in flow passes both so the user can back out.
 const DateOfBirthModal = ({ visible, onSubmit, isDarkMode, subtitle, onCancel }) => {
+  const { t } = useTranslation();
   const [month, setMonth] = useState(null);
   const [day, setDay] = useState(null);
   const [year, setYear] = useState(null);
@@ -124,9 +125,9 @@ const DateOfBirthModal = ({ visible, onSubmit, isDarkMode, subtitle, onCancel })
     return arr;
   }, []);
 
-  const monthItems = useMemo(() =>
-    MONTHS.map((m, i) => ({ label: m, value: i + 1, emoji: MONTH_EMOJIS[i] }))
-  , []);
+  // Twelve cheap formats per render, so a language switch is always picked up.
+  const MONTHS = monthNames();
+  const monthItems = MONTHS.map((m, i) => ({ label: m, value: i + 1, emoji: MONTH_EMOJIS[i] }));
 
   const dayItems = useMemo(() => {
     const arr = [];
@@ -156,7 +157,7 @@ const DateOfBirthModal = ({ visible, onSubmit, isDarkMode, subtitle, onCancel })
     setError('');
 
     if (!year || !month || !day) {
-      setError('Pick your full birthday first!');
+      setError(t('settings.dob_pick_full'));
       return;
     }
 
@@ -164,7 +165,7 @@ const DateOfBirthModal = ({ visible, onSubmit, isDarkMode, subtitle, onCancel })
     const now = new Date();
 
     if (dobDate > now) {
-      setError("That date hasn't happened yet!");
+      setError(t('settings.dob_future'));
       return;
     }
 
@@ -172,7 +173,7 @@ const DateOfBirthModal = ({ visible, onSubmit, isDarkMode, subtitle, onCancel })
     const ageYears = ageMs / (1000 * 60 * 60 * 24 * 365.25);
 
     if (ageYears < 4) {
-      setError('Please enter a valid date of birth.');
+      setError(t('settings.dob_invalid'));
       return;
     }
 
@@ -181,9 +182,9 @@ const DateOfBirthModal = ({ visible, onSubmit, isDarkMode, subtitle, onCancel })
   };
 
   const stepTitles = [
-    'What year were you born?',
-    'What month?',
-    'And what day?',
+    t('settings.dob_step_year'),
+    t('settings.dob_step_month'),
+    t('settings.dob_step_day'),
   ];
 
   if (!visible) return null;
@@ -193,9 +194,9 @@ const DateOfBirthModal = ({ visible, onSubmit, isDarkMode, subtitle, onCancel })
         <View style={[styles.card, { backgroundColor: bgColor }]}>
 
           <Text style={styles.icon}>🎂</Text>
-          <Text style={[styles.title, { color: textColor }]}>When's your birthday?</Text>
+          <Text style={[styles.title, { color: textColor }]}>{t('settings.dob_title')}</Text>
           <Text style={[styles.subtitle, { color: subColor }]}>
-            {subtitle || 'We need this to keep everyone safe. You only do this once!'}
+            {subtitle || t('settings.dob_subtitle')}
           </Text>
 
           <StepDots current={step} total={3} />
@@ -257,18 +258,18 @@ const DateOfBirthModal = ({ visible, onSubmit, isDarkMode, subtitle, onCancel })
           {/* Submit */}
           {year && month && day && (
             <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} activeOpacity={0.8}>
-              <Text style={styles.submitText}>Let's Go! 🚀</Text>
+              <Text style={styles.submitText}>{t('settings.dob_submit')}</Text>
             </TouchableOpacity>
           )}
 
           {!!onCancel && (
             <TouchableOpacity style={styles.cancelBtn} onPress={onCancel} activeOpacity={0.6}>
-              <Text style={[styles.cancelText, { color: subColor }]}>Not now</Text>
+              <Text style={[styles.cancelText, { color: subColor }]}>{t('settings.dob_not_now')}</Text>
             </TouchableOpacity>
           )}
 
           <Text style={[styles.disclaimer, { color: subColor }]}>
-            🔒 Your birthday is stored safely and securely.
+            {t('settings.dob_disclaimer')}
           </Text>
         </View>
       </View>

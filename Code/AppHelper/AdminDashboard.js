@@ -54,7 +54,7 @@ import {
   unbanUserWithEmail, banUserwithEmail, setUserStrike, muteUser, canStaffBanMute,
   makeModerator, removeModerator, makeBabyMod, removeBabyMod,
   makeTrusted, removeTrusted, makeCMSR, removeCMSR, makeHelper, removeHelper,
-  encodeEmailForBan,
+  encodeEmailForBan, getDeviceBanForUser, liftDeviceBan, applyBanToDevice,
 } from '../ChatScreen/utils';
 import { getOrFetchFullProfile, getOrFetchProfile, invalidateFullProfile } from '../Helper/profileCache';
 import { getUserEmail, getUserEmails, findUidsByEmail } from '../Helper/privateProfile';
@@ -62,6 +62,7 @@ import {
   logModAction, fetchUserModHistory, fetchUserModCounts, fetchModLeaderboard, fetchRecentModActions,
 } from '../Helper/modLog';
 import UserBadgePill from '../Helper/UserBadgePill';
+import AdminNewsTab from './AdminNewsTab';
 
 const DEFAULT_AVATAR = 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
 const BAN_PAGE = 40;
@@ -162,6 +163,8 @@ const TABS = [
   { key: 'chats', label: 'Chats', adminOnly: true },
   { key: 'userChats', label: 'User Chats', adminOnly: true },
   { key: 'polls', label: 'Polls' },
+  // More ▸ News posts (AdminNewsTab, ported from Adopt Me 2026-10-13).
+  { key: 'news', label: 'News', adminOnly: true },
   { key: 'statuses', label: 'Statuses' },
   { key: 'access', label: 'Access', adminOnly: true },
 ];
@@ -195,6 +198,10 @@ const AdminDashboard = () => {
   }), [user?.id, user?.displayName, user?.avatar, isAdmin, isModerator, isBabyMod]);
 
   const visibleTabs = useMemo(() => TABS.filter((t) => !t.adminOnly || isAdmin), [isAdmin]);
+  // AdminNewsTab takes Adopt Me's dashboard palette names.
+  const newsColors = useMemo(() => ({
+    surface: c.cardBg, fieldBg: c.bg, text: c.text, border: c.border, textMuted: c.textSecondary, textFaint: c.textMuted,
+  }), [c]);
   const [tab, setTab] = useState('banned');
 
   // ── Restrictions ─────────────────────────────────────────────────────
@@ -463,6 +470,10 @@ const AdminDashboard = () => {
   const [ratingSummary, setRatingSummary] = useState(null);
 
   const [sanction, setSanction] = useState(null);
+  // Device ban state for the open user: { deviceId, ban } (see utils.js
+  // device bans). null while loading or when there is no user id.
+  const [deviceState, setDeviceState] = useState(null);
+  const [deviceBusy, setDeviceBusy] = useState(false);
   const [modCounts, setModCounts] = useState(null);
   const [modHistory, setModHistory] = useState([]);
   const [modHistoryLoading, setModHistoryLoading] = useState(false);
@@ -537,6 +548,11 @@ const AdminDashboard = () => {
     } catch { setSanction(null); }
   }, [db]);
 
+  const fetchDeviceState = useCallback(async (uid) => {
+    if (!uid) { setDeviceState(null); return; }
+    try { setDeviceState(await getDeviceBanForUser(uid)); } catch { setDeviceState(null); }
+  }, []);
+
   const fetchModRecord = useCallback(async (email, uid, reset) => {
     if (!email && !uid) return;
     setModHistoryLoading(true);
@@ -560,7 +576,7 @@ const AdminDashboard = () => {
     setSelected(u);
     setDetail(null);
     setReviews([]); setReviewsHasMore(false); reviewCursorRef.current = null;
-    setRatingSummary(null); setSanction(null); setModCounts(null);
+    setRatingSummary(null); setSanction(null); setModCounts(null); setDeviceState(null);
     setModHistory([]); setModHistoryHasMore(false); setModHistoryError(null); historyCursorRef.current = null;
     if (!u.id && !u.email) return;
     setDetailLoading(true);
@@ -578,13 +594,14 @@ const AdminDashboard = () => {
         fetchReviews(u.id, true),
         fetchRatingSummary(u.id),
         fetchModRecord(email, u.id, true),
+        fetchDeviceState(u.id),
       ]);
     } catch {
       setDetail({ record: null });
     } finally {
       setDetailLoading(false);
     }
-  }, [db, fetchSanction, fetchReviews, fetchRatingSummary, fetchModRecord]);
+  }, [db, fetchSanction, fetchReviews, fetchRatingSummary, fetchModRecord, fetchDeviceState]);
 
   const merged = useMemo(() => {
     if (!selected) return null;
@@ -617,7 +634,50 @@ const AdminDashboard = () => {
       readLiveRestriction(t.email).then((d) => setLiveRestriction(t.email, d));
     }
     if (t?.email || t?.id) fetchModRecord(t.email, t.id, true);
-  }, [merged, refreshBans, fetchSanction, readLiveRestriction, setLiveRestriction, fetchModRecord]);
+    // A ban, strike or unban also writes or clears the device row; read it
+    // after a beat, since the device write is not awaited by the ban.
+    if (t?.id) setTimeout(() => fetchDeviceState(t.id), 1500);
+  }, [merged, refreshBans, fetchSanction, readLiveRestriction, setLiveRestriction, fetchModRecord, fetchDeviceState]);
+
+  // Device-only actions. Lifting is for a shared or family phone where a
+  // different account earned the ban; applying is for an account banned
+  // before it ever ran a build that records its device.
+  const liftDevice = useCallback(async () => {
+    const id = deviceState?.deviceId;
+    if (!id || deviceBusy) return;
+    const owner = deviceState?.ban?.email ? decodeEmail(deviceState.ban.email) : 'another account';
+    if (!(await confirm('Lift device ban', `This device was banned along with ${owner}. Lift the device ban only? Any account ban stays in place.`, 'Lift', false))) return;
+    setDeviceBusy(true);
+    try {
+      const ok = await liftDeviceBan(id, actorInfo, merged, null, 'admin_dashboard');
+      if (!ok) Alert.alert('Not allowed', 'Could not lift the device ban. Moderators cannot change a staff member\'s device.');
+      await fetchDeviceState(merged?.id);
+      if (merged?.email || merged?.id) fetchModRecord(merged.email, merged.id, true);
+    } finally {
+      setDeviceBusy(false);
+    }
+  }, [deviceState, deviceBusy, actorInfo, merged, fetchDeviceState, fetchModRecord]);
+
+  const applyDevice = useCallback(async () => {
+    if (!merged?.id || !merged?.email || deviceBusy) return;
+    if (!(await confirm('Ban device too', `Apply ${merged.displayName}'s current ban to the device they last signed in on? Every account on that device will be held until the ban ends.`, 'Ban device', true))) return;
+    setDeviceBusy(true);
+    try {
+      const res = await applyBanToDevice(merged.email, merged.id, actorInfo);
+      if (!res.ok) {
+        const why = {
+          no_ban: 'This account has no live ban or strike to apply.',
+          no_device: 'No device on record. It is recorded when the user signs in on the latest build.',
+          refused: 'The database refused the write. Moderators cannot ban a staff member\'s device.',
+        }[res.why] || 'Could not ban the device.';
+        Alert.alert('Not applied', why);
+      }
+      await fetchDeviceState(merged.id);
+      fetchModRecord(merged.email, merged.id, true);
+    } finally {
+      setDeviceBusy(false);
+    }
+  }, [merged, deviceBusy, actorInfo, fetchDeviceState, fetchModRecord]);
 
   // ── Reason prompt + punitive actions ─────────────────────────────────
   const [pendingAction, setPendingAction] = useState(null); // { type, value, target }
@@ -1510,6 +1570,11 @@ const AdminDashboard = () => {
         </ScrollView>
       )}
 
+      {/* ── NEWS ── */}
+      {tab === 'news' && isAdmin && (
+        <AdminNewsTab db={db} uid={user?.id} C={newsColors} accent={HUE.accent} danger={HUE.danger} bottomInset={insets.bottom} />
+      )}
+
       {/* ── STATUSES ── */}
       {tab === 'statuses' && (
         <FlatList removeClippedSubviews={false}
@@ -1852,6 +1917,44 @@ const AdminDashboard = () => {
                       </View>
                       <Text style={{ color: c.text, marginTop: 6, fontSize: 13, lineHeight: 18 }}>{sanction.reason || 'No reason recorded'}</Text>
                       <Text style={[s.sub, { marginTop: 3 }]}>{`${sanction.appliedBy ? `By ${sanction.appliedBy}` : 'Applied by unknown'}${sanction.appliedAt ? ` · ${timeAgo(sanction.appliedAt)}` : ''}`}</Text>
+                    </View>
+                  );
+                })()}
+
+                {/* device ban — lives on banned_devices/{fingerprint} */}
+                {merged?.id && deviceState && (() => {
+                  const ban = deviceState.ban;
+                  const live = !!ban && isActiveUntil(ban.bannedUntil);
+                  const own = live && ((ban.userId && ban.userId === merged.id) || (ban.email && merged.email && decodeEmail(ban.email).toLowerCase() === String(merged.email).toLowerCase()));
+                  const hue = live ? HUE.danger : c.textMuted;
+                  const canApply = (isAdmin || isModerator) && canBanMute && !live && !!deviceState.deviceId
+                    && sanction?.isActive && sanction?.kind === 'strike';
+                  return (
+                    <View style={[s.sanctionBox, live ? { backgroundColor: tint(HUE.danger, '12'), borderColor: tint(HUE.danger, '33') } : { borderColor: c.border }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Icon name="phone-portrait-outline" size={15} color={hue} />
+                        <Text style={[s.name, { fontSize: 12, marginLeft: 6, flex: 1 }]} numberOfLines={2}>
+                          {!deviceState.deviceId
+                            ? 'Device: none recorded (not signed in on a build with device bans yet)'
+                            : !live
+                              ? 'Device: not banned'
+                              : `Device banned · ${banRemaining(ban.bannedUntil)}`}
+                        </Text>
+                      </View>
+                      {live && (
+                        <Text style={[s.sub, { marginTop: 4 }]}>
+                          {own ? 'Locked by this account\'s own ban.' : `Locked by the ban on ${ban.email ? decodeEmail(ban.email) : 'another account'}${ban.reason ? ` · ${ban.reason}` : ''}`}
+                        </Text>
+                      )}
+                      {(live || canApply) && (
+                        <TouchableOpacity
+                          onPress={live ? liftDevice : applyDevice}
+                          disabled={deviceBusy}
+                          style={{ marginTop: 8, alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, backgroundColor: live ? HUE.success : HUE.danger, opacity: deviceBusy ? 0.6 : 1 }}
+                        >
+                          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>{live ? 'Lift device ban only' : 'Ban device too'}</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   );
                 })()}

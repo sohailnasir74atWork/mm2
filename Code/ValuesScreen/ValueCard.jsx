@@ -8,6 +8,7 @@
  */
 import React, { memo } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import config from '../Helper/Environment';
 import { SCREEN_GUTTER } from '../Helper/layout';
 import { VALUE_SOURCE } from '../Helper/valueSources';
@@ -24,6 +25,7 @@ const ValueCard = ({
   item, imageUrl, primary, secondary, source, otherSource,
   stabilityColor, isDarkMode, onPress, disabled,
 }) => {
+  const { t } = useTranslation();
   const c = isDarkMode
     ? { card: config.colors.surfaceDark, well: '#0d2137', text: '#e8ecf1', sub: '#8a95a5', line: 'rgba(255,255,255,0.07)' }
     : { card: '#ffffff', well: '#f1f3f8', text: '#1c1e21', sub: '#65707e', line: 'rgba(0,0,0,0.07)' };
@@ -61,7 +63,7 @@ const ValueCard = ({
         <View style={s.chips}>
           {hasDemand && (
             <View style={[s.chip, { backgroundColor: c.well }]}>
-              <Text style={[s.chipText, { color: c.sub }]}>Demand {item.demand}</Text>
+              <Text style={[s.chipText, { color: c.sub }]}>{t('value.demand_chip', { value: item.demand })}</Text>
             </View>
           )}
           {hasStability && (
@@ -72,7 +74,7 @@ const ValueCard = ({
           )}
         </View>
       )}
-      {hasRange && <Text style={[s.range, { color: c.sub }]} numberOfLines={1}>Range {item.range}</Text>}
+      {hasRange && <Text style={[s.range, { color: c.sub }]} numberOfLines={1}>{t('value.range_chip', { value: item.range })}</Text>}
     </TouchableOpacity>
   );
 };

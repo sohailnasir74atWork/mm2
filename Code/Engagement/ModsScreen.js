@@ -33,6 +33,8 @@ import { getThemeColors } from '../Helper/themeColors';
 import { getConfigNodes, clearConfigCache } from '../Helper/configCache';
 import UserBadgePill from '../Helper/UserBadgePill';
 import ProfileBottomDrawer from '../ChatScreen/GroupChat/BottomDrawer';
+import { flipInRTL } from '../Helper/rtl';
+import ScreenBottomBanner from '../Ads/ScreenBottomBanner';
 
 const DEFAULT_AVATAR = 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
 const ROSTER_NODES = ['mods', 'trusted', 'cmsr', 'helper'];
@@ -66,7 +68,7 @@ const MemberRow = React.memo(({ member, onPress, isDarkMode, c }) => (
       size="sm"
       isDarkMode={isDarkMode}
     />
-    <Icon name="chevron-forward" size={16} color={c.textMuted} style={{ marginLeft: 6 }} />
+    <Icon name="chevron-forward" size={16} color={c.textMuted} style={[{ marginLeft: 6 }, flipInRTL]} />
   </TouchableOpacity>
 ));
 
@@ -169,7 +171,7 @@ const ModsScreen = () => {
     <View style={[styles.container, { backgroundColor: c.bg, paddingTop: insets.top }]}>
       <View style={[styles.header, { borderBottomColor: c.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Icon name="arrow-back" size={22} color={c.text} />
+          <Icon name="arrow-back" size={22} color={c.text} style={flipInRTL} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: c.text }]}>
           {t('mods.title', { defaultValue: 'Our Team' })}
@@ -205,6 +207,7 @@ const ModsScreen = () => {
           }
         />
       )}
+      <ScreenBottomBanner background={c.bg} ad={false} />
 
       <ProfileBottomDrawer
         isVisible={isDrawerVisible}

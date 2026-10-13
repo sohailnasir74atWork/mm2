@@ -21,6 +21,7 @@ import { useGlobalState } from '../GlobelStats';
 import { getStyles } from './settingstyle';
 import { handleGetSuggestions, handleOpenFacebook, handleOpenWebsite, handleRateApp, handleadoptme, handleShareApp, imageOptions, handleBloxFruit, handleRefresh, handleReport, handleOpenPrivacy, handleOpenChild} from './settinghelper';
 import EmailUpdatesRow from './EmailUpdatesRow';
+import GroupNotificationRows from './GroupNotificationRows';
 import BirthdayVisibilityRow from '../Birthdays/BirthdayVisibilityRow';
 import { logoutUser } from '../Firebase/UserLogics';
 import SignInDrawer from '../Firebase/SigninDrawer';
@@ -40,7 +41,7 @@ import { useTranslation } from 'react-i18next';
 import { getFlag } from '../Helper/CountryCheck';
 import { showSuccessMessage, showErrorMessage } from '../Helper/MessageHelper';
 import { setAppLanguage } from '../../i18n';
-import { Image as CompressorImage } from 'react-native-compressor';
+import { safeCompressImage } from '../Helper/safeCompressImage';
 import RNFS from 'react-native-fs';
 
 
@@ -69,9 +70,12 @@ dayjs.extend(relativeTime);
 import PetModal from '../ChatScreen/PrivateChat/PetsModel';
 import { pickImages } from '../Helper/imagePicker';
 import { uploadImage, UPLOAD_KIND } from '../Helper/imageUpload';
+import { timeAgo } from '../Helper/timeAgo';
 import FramedAvatar from '../ChatScreen/GroupChat/FramedAvatar';
 import { getMyCosmetics, syncMyCosmetics } from '../Helper/cosmeticsCache';
 import { usePrivacyOptionsRequired, showPrivacyOptionsForm } from '../Ads/consentOptions';
+import ScreenBottomBanner from '../Ads/ScreenBottomBanner';
+import useNavBarInset, { useModalWindowInsets } from '../Helper/useNavBarInset';
 
 // ~500 KB max for avatar (small, DP-friendly)
 const MAX_AVATAR_SIZE_BYTES = 500 * 1024;
@@ -171,6 +175,9 @@ const EditProfileDrawerContent = ({
   const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
+  // Bottom sheet: clear the Android nav bar (edge-to-edge draws under it)
+  // while the keyboard is down.
+  const navBarInset = useNavBarInset();
 
   // ✅ Calculate cooldown status - only checks existing cooldown from last save, not unsaved changes
   const cooldownStatus = useMemo(() => {
@@ -229,7 +236,7 @@ const EditProfileDrawerContent = ({
         styles.drawer,
         {
           padding: 14,
-          paddingBottom: 18,
+          paddingBottom: 18 + navBarInset,
           transform: [{ translateY: slideAnim }],
           opacity: fadeAnim,
         },
@@ -262,7 +269,7 @@ const EditProfileDrawerContent = ({
             color: isDarkMode ? config.colors.textDark : config.colors.textLight,
             borderWidth: 0,
           }}
-          placeholder="Enter name"
+          placeholder={t('settings.enter_name')}
           placeholderTextColor={isDarkMode ? config.colors.placeholderDark : config.colors.placeholderLight}
           value={newDisplayName}
           onChangeText={setNewDisplayName}
@@ -458,6 +465,9 @@ const EditProfileDrawerContent = ({
 };
 
 export default function SettingsScreen({ selectedTheme }) {
+  // Bottom sheets below clear the nav bar / home indicator.
+  const modalInsets = useModalWindowInsets();
+  const navBarInset = useNavBarInset();
   const [isDrawerVisible, setDrawerVisible] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
@@ -504,7 +514,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [isSavingBio, setIsSavingBio] = useState(false);
   const [ratingSummary, setRatingSummary] = useState(null);
   const [loadingRating, setLoadingRating] = useState(false);
-  const [createdAtText, setCreatedAtText] = useState(null);
+  const [createdAtMs, setCreatedAtMs] = useState(null);
   const [showMyTradesModal, setShowMyTradesModal] = useState(false);
   const [modalMyTrades, setModalMyTrades] = useState([]);
   const [modalLastTradeDoc, setModalLastTradeDoc] = useState(null);
@@ -598,19 +608,21 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
       setUploadingAvatar(true);
 
       // 🔹 Compress to small DP-friendly size
-      const compressedUri = await CompressorImage.compress(asset.uri, {
+      // safeCompressImage never throws; when it cannot compress it returns the
+      // original, which the size check below still refuses if it is too big.
+      const { uri: compressedUri } = await safeCompressImage(asset.uri, {
         maxWidth: 300,
         quality: 0.7,
       });
 
-      const filePath = compressedUri.replace('file://', '');
+      const filePath = String(compressedUri || '').replace('file://', '');
       const stat = await RNFS.stat(filePath);
 
       // 🔹 Reject heavy images
       if (stat.size > MAX_AVATAR_SIZE_BYTES) {
         Alert.alert(
-          'Image too large',
-          'Please choose a smaller image (max ~500 KB) or crop it before uploading.'
+          t('feed.image_too_large'),
+          t('settings.avatar_too_large')
         );
         setUploadingAvatar(false);
         return;
@@ -621,7 +633,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
         publicUrl = await uploadImage(filePath, UPLOAD_KIND.avatar);
       } catch (err) {
         console.warn('[Avatar upload ERROR]', err?.code || err?.message);
-        Alert.alert('Upload failed', 'Could not upload image. Please try again.');
+        Alert.alert(t('feed.upload_failed'), t('settings.avatar_upload_failed'));
         setUploadingAvatar(false);
         return;
       }
@@ -630,11 +642,11 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
       setSelectedImage(publicUrl);
     } catch (e) {
       console.warn('[Avatar upload]', e?.message || e);
-      Alert.alert('Upload failed', 'Something went wrong. Please try again.');
+      Alert.alert(t('feed.upload_failed'), t('birthdays.err.generic'));
     } finally {
       setUploadingAvatar(false);
     }
-  }, []);
+  }, [t]);
 
 
 
@@ -651,12 +663,12 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
     // ✅ Check if user is pro - if not, show upgrade alert
     if (!localState.isPro) {
       Alert.alert(
-        "Pro Feature",
+        t('settings.pro_feature'),
         t('settings.buy_plan_unlock'),
         [
           { text: t("home.cancel"), style: 'cancel' },
           {
-            text: "Upgrade",
+            text: t('trade.upgrade'),
             style: 'default',
             onPress: () => setShowofferWall(true),
           },
@@ -694,12 +706,12 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
     // ✅ Check if user is pro - if not, show upgrade alert
     if (!localState.isPro) {
       Alert.alert(
-        "Pro Feature",
+        t('settings.pro_feature'),
         t('settings.buy_plan_unlock'),
         [
           { text: t("home.cancel"), style: 'cancel' },
           {
-            text: "Upgrade",
+            text: t('trade.upgrade'),
             style: 'default',
             onPress: () => setShowofferWall(true),
           },
@@ -756,12 +768,12 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
       
       // ✅ Check if data exists and has results
       if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
-        return { valid: false, error: 'Username not found on Roblox. Please check spelling.' };
+        return { valid: false, error: t('settings.roblox_not_found') };
       }
 
       const robloxUser = data.data[0];
       if (!robloxUser || !robloxUser.id) {
-        return { valid: false, error: 'Invalid user data received from Roblox' };
+        return { valid: false, error: t('settings.roblox_bad_data') };
       }
 
       return {
@@ -771,7 +783,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
       };
     } catch (error) {
       console.error('Error verifying Roblox username:', error);
-      return { valid: false, error: `Failed to verify username: ${error.message || 'Please try again.'}` };
+      return { valid: false, error: t('settings.roblox_check_failed') };
     }
   };
 
@@ -795,24 +807,24 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
       if (description.includes(code)) {
         return { verified: true, userId: verifyResult.userId };
       } else {
-        return { verified: false, error: 'Verification code not found in your Roblox profile description' };
+        return { verified: false, error: t('settings.roblox_code_not_found') };
       }
     } catch (error) {
       console.error('Error checking verification code:', error);
-      return { verified: false, error: 'Failed to verify. Please try again.' };
+      return { verified: false, error: t('settings.roblox_verify_failed') };
     }
   };
 
   // ✅ Handle Roblox username update with verification
   const handleUpdateRobloxUsername = async () => {
     if (!user?.id) {
-      showErrorMessage('Error', 'Please login first');
+      showErrorMessage(t('home.alert.error'), t('settings.login_first'));
       return;
     }
 
     const trimmedUsername = robloxUsername.trim();
     if (!trimmedUsername) {
-      showErrorMessage('Error', 'Please enter a Roblox username');
+      showErrorMessage(t('home.alert.error'), t('settings.roblox_enter_username'));
       return;
     }
 
@@ -822,7 +834,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
     
     if (!verifyResult.valid) {
       setIsVerifyingRoblox(false);
-      showErrorMessage('Invalid Username', verifyResult.error);
+      showErrorMessage(t('settings.roblox_invalid_username'), verifyResult.error);
       return;
     }
 
@@ -832,12 +844,12 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
     // Show instructions
     Alert.alert(
-      'Verify Your Roblox Username',
-      `To verify ownership, please:\n\n1. Go to your Roblox profile\n2. Edit your profile description\n3. Add this code: ${code}\n4. Save your profile\n5. Then click "I Added It" below`,
+      t('settings.roblox_verify_title'),
+      t('settings.roblox_verify_steps', { code }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('home.cancel'), style: 'cancel' },
         {
-          text: 'I Added It',
+          text: t('settings.roblox_i_added_it'),
           onPress: async () => {
             setIsVerifyingRoblox(true);
             const result = await checkVerificationCode(trimmedUsername, code);
@@ -866,9 +878,9 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
             }));
             
             if (isVerified) {
-              showSuccessMessage('Success', 'Roblox username verified and saved!');
+              showSuccessMessage(t('home.alert.success'), t('settings.roblox_verified_saved'));
             } else {
-              showSuccessMessage('Username Saved', 'Username saved but not verified. You can verify it later by clicking "Re-verify".');
+              showSuccessMessage(t('settings.roblox_saved_title'), t('settings.roblox_saved_unverified'));
             }
             setIsVerifyingRoblox(false);
           },
@@ -930,7 +942,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
     if (!user?.id || !appdatabase || !firestoreDB) {
       setBio('Hi there, I am new here');
       setRatingSummary(null);
-      setCreatedAtText(null);
+      setCreatedAtMs(null);
       setLoadingRating(false);
       return;
     }
@@ -1073,39 +1085,21 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
             const now = Date.now();
             const diffMs = now - ts;
             if (diffMs >= 0) {
-              const minutes = Math.floor(diffMs / 60000);
-              if (minutes < 1) setCreatedAtText('Just now');
-              else if (minutes < 60) setCreatedAtText(`${minutes} min${minutes === 1 ? '' : 's'} ago`);
-              else {
-                const hours = Math.floor(minutes / 60);
-                if (hours < 24) setCreatedAtText(`${hours} hour${hours === 1 ? '' : 's'} ago`);
-                else {
-                  const days = Math.floor(hours / 24);
-                  if (days < 30) setCreatedAtText(`${days} day${days === 1 ? '' : 's'} ago`);
-                  else {
-                    const months = Math.floor(days / 30);
-                    if (months < 12) setCreatedAtText(`${months} month${months === 1 ? '' : 's'} ago`);
-                    else {
-                      const years = Math.floor(months / 12);
-                      setCreatedAtText(`${years} year${years === 1 ? '' : 's'} ago`);
-                    }
-                  }
-                }
-              }
+              setCreatedAtMs(ts);
             } else {
-              setCreatedAtText(null);
+              setCreatedAtMs(null);
             }
           } else {
-            setCreatedAtText(null);
+            setCreatedAtMs(null);
           }
         } else {
-          setCreatedAtText(null);
+          setCreatedAtMs(null);
         }
       } catch (error) {
         console.error('Error loading bio and rating:', error);
         setBio('Hi there, I am new here');
         setRatingSummary(null);
-        setCreatedAtText(null);
+        setCreatedAtMs(null);
       } finally {
         setLoadingRating(false);
       }
@@ -1212,7 +1206,6 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
             t('settings.edit_cooldown_message', {
               days: PROFILE_EDIT_COOLDOWN_DAYS,
               daysRemaining,
-              defaultValue: `You can change your name once every ${PROFILE_EDIT_COOLDOWN_DAYS} days. Try again in ${daysRemaining} day(s).`,
             })
           );
           return;
@@ -1276,7 +1269,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
       console.error('Error updating profile:', error);
       showErrorMessage(
         t("home.alert.error"),
-        "Failed to save profile changes. Please try again."
+        t('settings.profile_save_failed')
       );
     }
   };
@@ -1392,7 +1385,7 @@ useEffect(() => {
               id: doc.id,
               ...data,
               type: 'gave',
-              reviewedUserName: userData?.displayName || 'Unknown User',
+              reviewedUserName: userData?.displayName || null,
               reviewedUserAvatar: userData?.avatar || null,
             };
           } catch (error) {
@@ -1400,7 +1393,7 @@ useEffect(() => {
               id: doc.id,
               ...data,
               type: 'gave',
-              reviewedUserName: 'Unknown User',
+              reviewedUserName: null,
               reviewedUserAvatar: null,
             };
           }
@@ -1452,7 +1445,7 @@ useEffect(() => {
               id: doc.id,
               ...data,
               type: 'received',
-              reviewerName: userData?.displayName || 'Unknown User',
+              reviewerName: userData?.displayName || null,
               reviewerAvatar: userData?.avatar || null,
             };
           } catch (error) {
@@ -1460,7 +1453,7 @@ useEffect(() => {
               id: doc.id,
               ...data,
               type: 'received',
-              reviewerName: 'Unknown User',
+              reviewerName: null,
               reviewerAvatar: null,
             };
           }
@@ -1607,12 +1600,12 @@ const handleDeleteAllTrades = useCallback(async () => {
   if (!user?.id || !firestoreDB || modalMyTrades.length === 0) return;
 
   Alert.alert(
-    "Delete All Trades",
-    `Are you sure you want to delete all ${modalMyTrades.length} trades? This action cannot be undone.`,
+    t('settings.delete_all_trades_title'),
+    t('settings.delete_all_trades_confirm', { count: modalMyTrades.length }),
     [
       { text: t("trade.cancel") || "Cancel", style: "cancel" },
       {
-        text: "Delete All",
+        text: t('settings.delete_all'),
         style: "destructive",
         onPress: async () => {
           try {
@@ -1650,10 +1643,10 @@ const handleDeleteAllTrades = useCallback(async () => {
             setModalMyTrades([]);
             setModalLastTradeDoc(null);
             setModalHasMoreTrades(false);
-            showSuccessMessage("Success", "All trades deleted successfully");
+            showSuccessMessage(t('home.alert.success'), t('settings.delete_all_trades_done'));
           } catch (error) {
             console.error("Error deleting all trades:", error);
-            showErrorMessage("Error", "Failed to delete all trades");
+            showErrorMessage(t('home.alert.error'), t('settings.delete_all_trades_failed'));
           } finally {
             setIsDeletingAll(false);
           }
@@ -1669,7 +1662,7 @@ const renderTradeItem = useCallback((trade) => {
   const tradePercentage = Math.abs(((tradeRatio - 1) * 100).toFixed(0));
   const isProfit = tradeRatio > 1;
   const neutral = tradeRatio === 1;
-  const formattedTime = trade.timestamp ? dayjs(trade.timestamp.toDate()).fromNow() : "Unknown";
+  const formattedTime = trade.timestamp ? dayjs(trade.timestamp.toDate()).fromNow() : t('mystuff.unknown');
   const isGG = trade.isSharkMode === 'GG';
 
   const groupedHasItems = groupTradeItems(trade.hasItems || []);
@@ -1734,7 +1727,7 @@ const renderTradeItem = useCallback((trade) => {
                 flexShrink: 0,
                 flexGrow: 0,
               }}>
-                <Text style={{ color: 'white', fontWeight: '600', fontSize: 8, textAlign: 'center' }}>FEATURED</Text>
+                <Text style={{ color: 'white', fontWeight: '600', fontSize: 8, textAlign: 'center' }}>{t('settings.featured_badge')}</Text>
               </View>
             )}
             <Text style={{ fontSize: 10, color: isDarkMode ? '#9ca3af' : '#6b7280' }}>
@@ -1766,7 +1759,7 @@ const renderTradeItem = useCallback((trade) => {
                   flexGrow: 0,
                 }}>
                   <Text style={{ color: 'white', fontWeight: '600', fontSize: 8, textAlign: 'center' }}>
-                    {trade.status === 'w' ? 'Win' : trade.status === 'f' ? 'Fair' : 'Lose'}
+                    {trade.status === 'w' ? t('home.win') : trade.status === 'f' ? t('home.fair') : t('home.lose')}
                   </Text>
                 </View>
               )}
@@ -1979,7 +1972,7 @@ const renderTradeItem = useCallback((trade) => {
             borderRadius: 6,
             backgroundColor: config.colors.hasBlockGreen
           }}>
-            ME: {formatTradeValue(typeof trade.hasTotal === 'number' ? trade.hasTotal : trade.hasTotal?.value || 0)}
+            {t('settings.trade_me_value', { value: formatTradeValue(typeof trade.hasTotal === 'number' ? trade.hasTotal : trade.hasTotal?.value || 0) })}
           </Text>
         )}
         <View style={{ justifyContent: 'center', alignItems: 'center', marginHorizontal: 8 }}>
@@ -2026,7 +2019,7 @@ const renderTradeItem = useCallback((trade) => {
             borderRadius: 6,
             backgroundColor: config.colors.wantBlockRed
           }}>
-            YOU: {formatTradeValue(typeof trade.wantsTotal === 'number' ? trade.wantsTotal : trade.wantsTotal?.value || 0)}
+            {t('settings.trade_you_value', { value: formatTradeValue(typeof trade.wantsTotal === 'number' ? trade.wantsTotal : trade.wantsTotal?.value || 0) })}
           </Text>
         )}
       </View>
@@ -2082,7 +2075,7 @@ const loadMoreGaveModalReviews = useCallback(async () => {
                 id: doc.id,
                 ...data,
                 type: 'gave',
-                reviewedUserName: userData?.displayName || 'Unknown User',
+                reviewedUserName: userData?.displayName || null,
                 reviewedUserAvatar: userData?.avatar || null,
               };
             } catch (error) {
@@ -2090,7 +2083,7 @@ const loadMoreGaveModalReviews = useCallback(async () => {
                 id: doc.id,
                 ...data,
                 type: 'gave',
-                reviewedUserName: 'Unknown User',
+                reviewedUserName: null,
                 reviewedUserAvatar: null,
               };
             }
@@ -2152,7 +2145,7 @@ const loadMoreReceivedModalReviews = useCallback(async () => {
                 id: doc.id,
                 ...data,
                 type: 'received',
-                reviewerName: userData?.displayName || 'Unknown User',
+                reviewerName: userData?.displayName || null,
                 reviewerAvatar: userData?.avatar || null,
               };
             } catch (error) {
@@ -2160,7 +2153,7 @@ const loadMoreReceivedModalReviews = useCallback(async () => {
                 id: doc.id,
                 ...data,
                 type: 'received',
-                reviewerName: 'Unknown User',
+                reviewerName: null,
                 reviewerAvatar: null,
               };
             }
@@ -2201,7 +2194,7 @@ const loadMoreReceivedModalReviews = useCallback(async () => {
 
       const trimmedReview = (editReviewText || '').trim();
       if (!trimmedReview) {
-        showErrorMessage('Error', 'Review text cannot be empty');
+        showErrorMessage(t('home.alert.error'), t('settings.review_empty'));
         return;
       }
 
@@ -2270,13 +2263,13 @@ const loadMoreReceivedModalReviews = useCallback(async () => {
           )
         );
 
-        showSuccessMessage('Success', 'Review updated successfully!');
+        showSuccessMessage(t('home.alert.success'), t('settings.review_updated'));
         setEditingReview(null);
         setEditReviewText('');
         setEditReviewRating(0);
       } catch (error) {
         console.error('Error updating review:', error);
-        showErrorMessage('Error', 'Failed to update review');
+        showErrorMessage(t('home.alert.error'), t('settings.review_update_failed'));
       }
     };
 
@@ -2441,11 +2434,11 @@ const handleSelect = (lang) => {
 const formatPlanName = (plan) => {
   // console.log(plan, 'plan');
 
-  if (plan === 'MONTHLY' || plan === 'Blox_values_199_1m') return '1 MONTH';
-  if (plan === 'QUARTERLY' || plan === 'Blox_values_499_3m') return '3 MONTHS';
-  if (plan === 'YEARLY' || plan === 'Blox_values_999_1y') return '1 YEAR';
+  if (plan === 'MONTHLY' || plan === 'Blox_values_199_1m') return t('paywall.plan_monthly').toUpperCase();
+  if (plan === 'QUARTERLY' || plan === 'Blox_values_499_3m') return t('paywall.plan_three_month').toUpperCase();
+  if (plan === 'YEARLY' || plan === 'Blox_values_999_1y') return t('paywall.plan_annual').toUpperCase();
 
-  return 'Anonymous Plan';
+  return t('paywall.plan_default');
 };
 
 
@@ -2544,7 +2537,7 @@ const formatPlanName = (plan) => {
                     borderRadius: 4 
                   }}>
                     <Text style={{ color: '#fff', fontSize: 9, fontWeight: '600' }}>
-                      {user?.robloxUsernameVerified ? '✓ Verified' : '⚠ Unverified'}
+                      {user?.robloxUsernameVerified ? `✓ ${t('settings.verified')}` : `⚠ ${t('settings.unverified')}`}
               </Text>
                   </View>
                 )}
@@ -2601,9 +2594,7 @@ const formatPlanName = (plan) => {
                     color: isDarkMode ? '#e5e7eb' : '#4b5563',
                   }}
                 >
-                  {ratingSummary.value.toFixed(1)} / 5 ·{' '}
-                  {ratingSummary.count} rating
-                  {ratingSummary.count === 1 ? '' : 's'}
+                  {t('settings.rating_summary', { avg: ratingSummary.value.toFixed(1), count: ratingSummary.count })}
                 </Text>
               </>
             ) : (
@@ -2617,7 +2608,7 @@ const formatPlanName = (plan) => {
               </Text>
             )}
 
-            {!loadingRating && createdAtText && (
+            {!loadingRating && createdAtMs && (
               <Text
                 style={{
                   fontSize: 10,
@@ -2629,7 +2620,7 @@ const formatPlanName = (plan) => {
                   marginLeft: 5,
                 }}
               >
-                {t('settings.joined')} {createdAtText}
+                {t('settings.joined_ago', { time: timeAgo(createdAtMs, t) })}
               </Text>
             )}
           </View>
@@ -2662,7 +2653,8 @@ const formatPlanName = (plan) => {
                 lineHeight: 18,
               }}
             >
-              {bio || 'Hi there, I am new here'}
+              {/* The stored default bio is English data; show it in the app language. */}
+              {!bio || bio === 'Hi there, I am new here' ? t('settings.default_bio') : bio}
             </Text>
           </View>
         )}
@@ -2728,7 +2720,7 @@ const formatPlanName = (plan) => {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
             <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Icon name="chatbubble-ellipses-outline" size={18} color={'white'} style={{backgroundColor:'#8B5CF6', padding:5, borderRadius:5}} />
-              <Text style={styles.optionText}>{user?.chatOffGeneral ? 'General Chat Off' : 'General Chat On'}</Text>
+              <Text style={styles.optionText}>{user?.chatOffGeneral ? t('settings.general_chat_off') : t('settings.general_chat_on')}</Text>
             </TouchableOpacity>
             <Switch
               value={!user?.chatOffGeneral}
@@ -2741,7 +2733,7 @@ const formatPlanName = (plan) => {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
             <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Icon name="swap-horizontal-outline" size={18} color={'white'} style={{backgroundColor:'#F59E0B', padding:5, borderRadius:5}} />
-              <Text style={styles.optionText}>{user?.chatOffTrade ? 'Trade Chat Off' : 'Trade Chat On'}</Text>
+              <Text style={styles.optionText}>{user?.chatOffTrade ? t('settings.trade_chat_off') : t('settings.trade_chat_on')}</Text>
             </TouchableOpacity>
             <Switch
               value={!user?.chatOffTrade}
@@ -2819,7 +2811,7 @@ const formatPlanName = (plan) => {
                     fontSize: 14,
                     height: 30,
                   }}
-                  placeholder="Enter your Roblox username"
+                  placeholder={t('settings.enter_roblox_username')}
                   placeholderTextColor={isDarkMode ? '#888' : '#999'}
                   value={robloxUsername}
                   onChangeText={setRobloxUsername}
@@ -2850,7 +2842,7 @@ const formatPlanName = (plan) => {
                     }}
                   >
                     <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>
-                      {robloxUsernameVerified ? 'Re-verify' : 'Verify'}
+                      {robloxUsernameVerified ? t('settings.re_verify') : t('settings.verify')}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -3013,6 +3005,18 @@ const formatPlanName = (plan) => {
               />
             </View>
           </View>
+
+          {/* Group pushes: opt-outs under users/{uid}/notificationSettings,
+              read by notifyGroupMessage / notifyGroupInvitation /
+              notifyGroupJoinRequest. Default ON. */}
+          {user?.id && (
+            <GroupNotificationRows
+              uid={user.id}
+              appdatabase={appdatabase}
+              styles={styles}
+              onHaptic={() => triggerHapticFeedback('impactLight')}
+            />
+          )}
 
           <View style={styles.optionLast} onPress={() => {
             handleShareApp(); triggerHapticFeedback('impactLight');
@@ -3276,6 +3280,8 @@ const formatPlanName = (plan) => {
 
 
       </ScrollView>}
+      {/* Clears the Android nav bar under the scrolling page. */}
+      <ScreenBottomBanner ad={false} />
 
       {/* Bottom Drawer */}
          {/* Bottom Drawer */}
@@ -3319,7 +3325,7 @@ const formatPlanName = (plan) => {
         visible={openSingnin}
         onClose={() => setOpenSignin(false)}
         selectedTheme={selectedTheme}
-        message='Signin to access all features'
+        message={t('settings.signin_all_features')}
          screen='Setting'
       />
             <PetModal fromSetting={true} ownedPets={ownedPets} setOwnedPets={setOwnedPets} wishlistPets={wishlistPets} setWishlistPets={setWishlistPets} onClose={async ()=>{{ setPetModalVisible(false); await savePetsToReviews(ownedPets, wishlistPets)}}}       visible={petModalVisible} owned={owned}
@@ -3351,9 +3357,9 @@ const formatPlanName = (plan) => {
           justifyContent: 'flex-end',
           backgroundColor: 'rgba(0,0,0,0.5)' 
         }}>
-          <View style={[styles.drawer, { maxHeight: '90%' }]}>
+          <View style={[styles.drawer, { maxHeight: '90%', paddingBottom: 16 + modalInsets.bottom }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={styles.drawerSubtitle}>Reviews I Gave</Text>
+              <Text style={styles.drawerSubtitle}>{t('settings.reviews_i_gave')}</Text>
               <TouchableOpacity onPress={() => {
                 setShowGaveReviewsModal(false);
                 setModalGaveReviews([]);
@@ -3369,7 +3375,7 @@ const formatPlanName = (plan) => {
                 <ActivityIndicator size="small" color={config.colors.primary} style={{ marginVertical: 20 }} />
               ) : modalGaveReviews.length === 0 ? (
                 <Text style={{ textAlign: 'center', color: isDarkMode ? '#9ca3af' : '#6b7280', marginVertical: 20 }}>
-                  No reviews found
+                  {t('settings.no_reviews_found')}
                 </Text>
               ) : (
                 <>
@@ -3388,7 +3394,7 @@ const formatPlanName = (plan) => {
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontSize: 14, fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#111827', marginBottom: 4 }}>
-                            {review.reviewedUserName || 'Unknown User'}
+                            {review.reviewedUserName || t('settings.unknown_user')}
                           </Text>
                           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             {[1, 2, 3, 4, 5].map((star) => (
@@ -3402,7 +3408,7 @@ const formatPlanName = (plan) => {
                             ))}
                             {review.edited && (
                               <Text style={{ fontSize: 10, color: isDarkMode ? '#9ca3af' : '#6b7280', marginLeft: 6 }}>
-                                (Edited)
+                                {t('settings.edited_paren')}
                               </Text>
                             )}
                           </View>
@@ -3450,7 +3456,7 @@ const formatPlanName = (plan) => {
                         <ActivityIndicator size="small" color="#FFFFFF" />
                       ) : (
                         <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>
-                          Load More
+                          {t('birthdays.load_more')}
                         </Text>
                       )}
                     </TouchableOpacity>
@@ -3488,9 +3494,9 @@ const formatPlanName = (plan) => {
           justifyContent: 'flex-end',
           backgroundColor: 'rgba(0,0,0,0.5)' 
         }}>
-          <View style={[styles.drawer, { maxHeight: '90%' }]}>
+          <View style={[styles.drawer, { maxHeight: '90%', paddingBottom: 16 + modalInsets.bottom }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={styles.drawerSubtitle}>Reviews I Received</Text>
+              <Text style={styles.drawerSubtitle}>{t('settings.reviews_i_received')}</Text>
               <TouchableOpacity onPress={() => {
                 setShowReceivedReviewsModal(false);
                 setModalReceivedReviews([]);
@@ -3506,7 +3512,7 @@ const formatPlanName = (plan) => {
                 <ActivityIndicator size="small" color={config.colors.primary} style={{ marginVertical: 20 }} />
               ) : modalReceivedReviews.length === 0 ? (
                 <Text style={{ textAlign: 'center', color: isDarkMode ? '#9ca3af' : '#6b7280', marginVertical: 20 }}>
-                  No reviews found
+                  {t('settings.no_reviews_found')}
                 </Text>
               ) : (
                 <>
@@ -3525,7 +3531,7 @@ const formatPlanName = (plan) => {
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontSize: 14, fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#111827', marginBottom: 4 }}>
-                            {review.reviewerName || 'Unknown User'}
+                            {review.reviewerName || t('settings.unknown_user')}
                           </Text>
                           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             {[1, 2, 3, 4, 5].map((star) => (
@@ -3539,7 +3545,7 @@ const formatPlanName = (plan) => {
                             ))}
                             {review.edited && (
                               <Text style={{ fontSize: 10, color: isDarkMode ? '#9ca3af' : '#6b7280', marginLeft: 6 }}>
-                                (Edited)
+                                {t('settings.edited_paren')}
                               </Text>
                             )}
                           </View>
@@ -3576,7 +3582,7 @@ const formatPlanName = (plan) => {
                         <ActivityIndicator size="small" color="#FFFFFF" />
                       ) : (
                         <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>
-                          Load More
+                          {t('birthdays.load_more')}
                         </Text>
                       )}
                     </TouchableOpacity>
@@ -3609,9 +3615,9 @@ const formatPlanName = (plan) => {
         />
         <ConditionalKeyboardWrapper>
           <View style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-            <View style={styles.drawer}>
+            <View style={[styles.drawer, { paddingBottom: 16 + navBarInset }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Text style={styles.drawerSubtitle}>Edit Review</Text>
+                <Text style={styles.drawerSubtitle}>{t('settings.edit_review')}</Text>
                 <TouchableOpacity
                   onPress={() => {
                     setEditingReview(null);
@@ -3623,7 +3629,7 @@ const formatPlanName = (plan) => {
                 </TouchableOpacity>
               </View>
 
-              <Text style={[styles.drawerSubtitle, { marginBottom: 8 }]}>Rating</Text>
+              <Text style={[styles.drawerSubtitle, { marginBottom: 8 }]}>{t('settings.rating_label')}</Text>
               <View style={{ flexDirection: 'row', marginBottom: 16 }}>
                 {[1, 2, 3, 4, 5].map((star) => (
                   <TouchableOpacity
@@ -3640,10 +3646,10 @@ const formatPlanName = (plan) => {
                 ))}
               </View>
 
-              <Text style={[styles.drawerSubtitle, { marginBottom: 8 }]}>Review</Text>
+              <Text style={[styles.drawerSubtitle, { marginBottom: 8 }]}>{t('settings.review_label')}</Text>
               <TextInput
                 style={[styles.input, { minHeight: 100, textAlignVertical: 'top' }]}
-                placeholder="Write your review..."
+                placeholder={t('settings.review_placeholder')}
                 placeholderTextColor={isDarkMode ? '#999' : '#888'}
                 value={editReviewText}
                 onChangeText={setEditReviewText}
@@ -3655,7 +3661,7 @@ const formatPlanName = (plan) => {
                 style={[styles.saveButton, { marginTop: 16 }]}
                 onPress={handleSaveEditedReview}
               >
-                <Text style={styles.saveButtonText}>Save Changes</Text>
+                <Text style={styles.saveButtonText}>{t('settings.save_changes')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -3688,9 +3694,9 @@ const formatPlanName = (plan) => {
           justifyContent: 'flex-end',
           backgroundColor: 'rgba(0,0,0,0.5)' 
         }}>
-          <View style={[styles.drawer, { maxHeight: '90%' }]}>
+          <View style={[styles.drawer, { maxHeight: '90%', paddingBottom: 16 + modalInsets.bottom }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={styles.drawerSubtitle}>My Trades</Text>
+              <Text style={styles.drawerSubtitle}>{t('settings.my_trades')}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 {modalMyTrades.length > 0 && (
                   <TouchableOpacity
@@ -3708,7 +3714,7 @@ const formatPlanName = (plan) => {
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
                       <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>
-                        Delete All
+                        {t('settings.delete_all')}
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -3729,7 +3735,7 @@ const formatPlanName = (plan) => {
                 <ActivityIndicator size="small" color={config.colors.primary} style={{ marginVertical: 20 }} />
               ) : modalMyTrades.length === 0 ? (
                 <Text style={{ textAlign: 'center', color: isDarkMode ? '#9ca3af' : '#6b7280', marginVertical: 20 }}>
-                  No trades found
+                  {t('settings.no_trades_found')}
                 </Text>
               ) : (
                 <>
@@ -3757,7 +3763,7 @@ const formatPlanName = (plan) => {
                         <ActivityIndicator size="small" color="#FFFFFF" />
                       ) : (
                         <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>
-                          Load More
+                          {t('birthdays.load_more')}
                         </Text>
                       )}
                     </TouchableOpacity>

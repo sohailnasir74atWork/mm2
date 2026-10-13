@@ -1,7 +1,7 @@
 // NotifierDrawer.js
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, FlatList, Image, StyleSheet, ScrollView, Modal, ToastAndroid, Platform, Alert } from 'react-native';
-import { ref, onValue, remove, set, update, get } from '@react-native-firebase/database';
+import { ref, remove, set, update, get, onChildAdded, onChildChanged, onChildRemoved } from '@react-native-firebase/database';
 import { useGlobalState } from '../GlobelStats';
 import { useLocalState } from '../LocalGlobelStats';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -9,8 +9,15 @@ import InterstitialAdManager from '../Ads/IntAd';
 import { requestPermission } from '../Helper/PermissionCheck';
 import { showMessage } from 'react-native-flash-message';
 import config from '../Helper/Environment';
+import { useTranslation } from 'react-i18next';
+import { useModalWindowInsets } from '../Helper/useNavBarInset';
 
 const NotifierDrawer = () => {
+  const { t } = useTranslation();
+  // The item picker is a full-screen modal: on Android it is edge-to-edge, so
+  // it clears the status bar and the nav bar itself (iOS: notch and home
+  // indicator, since the modal sits outside the root SafeAreaView).
+  const insets = useModalWindowInsets();
   const { user, appdatabase, theme } = useGlobalState();
   const { localState } = useLocalState();
   const isDarkMode = theme === 'dark';
@@ -23,7 +30,7 @@ const NotifierDrawer = () => {
   const openDrawerToSelect = ()=> {
     if (!user?.id) {
       showMessage({
-        message: 'Please log in to select an item',
+        message: t('notifier.login_required'),
         type: 'warning',
         duration: 2500,
       });
@@ -78,125 +85,115 @@ const NotifierDrawer = () => {
   //   else Alert.alert('Info', msg);
   // };
 
+  // ✅ OPTIMIZED: read once, then listen to children. This used onValue on
+  // both nodes, so every add/remove re-downloaded the whole list AND re-ran
+  // one get(/notifier_index/...) per saved item for the migration below.
+  // Now the old-format migration + index check runs once per mount from a
+  // single get(), and child listeners deliver only the item that changed.
+  // Same technique as Adopt Me's Notifier; same paths and writes as before.
   useEffect(() => {
-    if (!user?.id) return;
-    const buyRef = ref(appdatabase, `/notifier/buy/${user.id}`);
-    const saleRef = ref(appdatabase, `/notifier/sale/${user.id}`);
+    if (!user?.id || !appdatabase) return;
+    const uid = user.id;
+    let cancelled = false;
 
-    const buyListener = onValue(buyRef, async (snap) => {
-      const buyData = snap.val() || {};
-      setSavedItems(prev => ({ ...prev, buy: buyData }));
-      
-      // ✅ OPTIMIZED: Migrate old format items to new string format + create indexes
-      // This reduces storage and download costs significantly
-      if (Object.keys(buyData).length > 0) {
-        const indexUpdates = {};
-        const migrationUpdates = {};
-        let hasIndexUpdates = false;
-        let hasMigrationUpdates = false;
-        
-        // Batch check and migrate old format items + create missing indexes
-        const checkPromises = Object.entries(buyData).map(async ([itemKey, itemValue]) => {
-          const itemName = typeof itemValue === 'string' ? itemValue : (itemValue?.name || itemValue?.Name || '');
-          if (!itemName) return;
-          
-          // ✅ MIGRATION: Convert old object format to new string format
-          if (typeof itemValue !== 'string') {
-            migrationUpdates[`notifier/buy/${user.id}/${itemKey}`] = itemName;
-            hasMigrationUpdates = true;
+    // A different account starts from an empty list; child_added refills it.
+    setSavedItems({ buy: {}, sale: {} });
+    const lists = { buy: {}, sale: {} };
+    const publish = (kind) => {
+      if (cancelled) return;
+      const next = { ...lists[kind] };
+      setSavedItems(prev => ({ ...prev, [kind]: next }));
+    };
+
+    // Migrate old format items to the string format + create missing reverse
+    // indexes. Unchanged from the onValue version, but run once per mount.
+    const migrateNotifierItems = async (kind, data) => {
+      if (!data || typeof data !== 'object' || Object.keys(data).length === 0) return;
+      const indexUpdates = {};
+      const migrationUpdates = {};
+      let hasIndexUpdates = false;
+      let hasMigrationUpdates = false;
+
+      const checkPromises = Object.entries(data).map(async ([itemKey, itemValue]) => {
+        const itemName = typeof itemValue === 'string' ? itemValue : (itemValue?.name || itemValue?.Name || '');
+        if (!itemName) return;
+
+        // ✅ MIGRATION: Convert old object format to new string format
+        if (typeof itemValue !== 'string') {
+          migrationUpdates[`notifier/${kind}/${uid}/${itemKey}`] = itemName;
+          hasMigrationUpdates = true;
+        }
+
+        // Create reverse index
+        const indexRef = ref(appdatabase, `/notifier_index/${kind}/${itemKey}/${uid}`);
+        try {
+          const indexSnap = await get(indexRef);
+          if (!indexSnap.exists()) {
+            indexUpdates[`notifier_index/${kind}/${itemKey}/${uid}`] = true;
+            hasIndexUpdates = true;
           }
-          
-          // Create reverse index
-          const indexRef = ref(appdatabase, `/notifier_index/buy/${itemKey}/${user.id}`);
-          try {
-            const indexSnap = await get(indexRef);
-            if (!indexSnap.exists()) {
-              indexUpdates[`notifier_index/buy/${itemKey}/${user.id}`] = true;
-              hasIndexUpdates = true;
-            }
-          } catch (error) {
-            // Silently fail - index creation is not critical
-          }
+        } catch (error) {
+          // Silently fail - index creation is not critical
+        }
+      });
+
+      await Promise.all(checkPromises);
+
+      // Batch migrate old format items
+      if (hasMigrationUpdates && Object.keys(migrationUpdates).length > 0) {
+        update(ref(appdatabase), migrationUpdates).catch((error) => {
+          console.warn('Error migrating notifier items:', error);
         });
-        
-        await Promise.all(checkPromises);
-        
-        // Batch migrate old format items
-        if (hasMigrationUpdates && Object.keys(migrationUpdates).length > 0) {
-          update(ref(appdatabase), migrationUpdates).catch((error) => {
-            console.warn('Error migrating notifier items:', error);
-          });
-        }
-        
-        // Batch create all missing indexes at once
-        if (hasIndexUpdates && Object.keys(indexUpdates).length > 0) {
-          update(ref(appdatabase), indexUpdates).catch((error) => {
-            // Silently fail - index creation is not critical for app functionality
-          });
-        }
       }
-    });
-    
-    const saleListener = onValue(saleRef, async (snap) => {
-      const saleData = snap.val() || {};
-      setSavedItems(prev => ({ ...prev, sale: saleData }));
-      
-      // ✅ OPTIMIZED: Migrate old format items to new string format + create indexes
-      if (Object.keys(saleData).length > 0) {
-        const indexUpdates = {};
-        const migrationUpdates = {};
-        let hasIndexUpdates = false;
-        let hasMigrationUpdates = false;
-        
-        const checkPromises = Object.entries(saleData).map(async ([itemKey, itemValue]) => {
-          const itemName = typeof itemValue === 'string' ? itemValue : (itemValue?.name || itemValue?.Name || '');
-          if (!itemName) return;
-          
-          // ✅ MIGRATION: Convert old object format to new string format
-          if (typeof itemValue !== 'string') {
-            migrationUpdates[`notifier/sale/${user.id}/${itemKey}`] = itemName;
-            hasMigrationUpdates = true;
-          }
-          
-          const indexRef = ref(appdatabase, `/notifier_index/sale/${itemKey}/${user.id}`);
-          try {
-            const indexSnap = await get(indexRef);
-            if (!indexSnap.exists()) {
-              indexUpdates[`notifier_index/sale/${itemKey}/${user.id}`] = true;
-              hasIndexUpdates = true;
-            }
-          } catch (error) {
-            // Silently fail
-          }
+
+      // Batch create all missing indexes at once
+      if (hasIndexUpdates && Object.keys(indexUpdates).length > 0) {
+        update(ref(appdatabase), indexUpdates).catch(() => {
+          // Silently fail - index creation is not critical for app functionality
         });
-        
-        await Promise.all(checkPromises);
-        
-        // Batch migrate old format items
-        if (hasMigrationUpdates && Object.keys(migrationUpdates).length > 0) {
-          update(ref(appdatabase), migrationUpdates).catch((error) => {
-            console.warn('Error migrating notifier items:', error);
-          });
-        }
-        
-        if (hasIndexUpdates && Object.keys(indexUpdates).length > 0) {
-          update(ref(appdatabase), indexUpdates).catch((error) => {
-            // Silently fail
-          });
-        }
       }
+    };
+
+    const unsubscribers = [];
+    ['buy', 'sale'].forEach((kind) => {
+      const listRef = ref(appdatabase, `/notifier/${kind}/${uid}`);
+
+      // Read once for the migration.
+      get(listRef)
+        .then((snap) => migrateNotifierItems(kind, snap.val() || {}))
+        .catch(() => { /* migration is best-effort */ });
+
+      // Child listeners: child_added replays the existing items on attach,
+      // then each event carries only the item that changed.
+      const upsert = (snap) => {
+        if (!snap || !snap.key) return;
+        const value = snap.val();
+        if (value === null || value === undefined) return;
+        lists[kind][snap.key] = value;
+        publish(kind);
+      };
+      const removeChild = (snap) => {
+        if (!snap || !snap.key) return;
+        delete lists[kind][snap.key];
+        publish(kind);
+      };
+      unsubscribers.push(
+        onChildAdded(listRef, upsert),
+        onChildChanged(listRef, upsert),
+        onChildRemoved(listRef, removeChild),
+      );
     });
 
     return () => {
-      buyListener();
-      saleListener();
+      cancelled = true;
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
     };
   }, [user?.id, appdatabase]);
 
   const subtitleText =
   mode === 'buy'
-    ? "Select items you want to buy. You'll be notified when someone is offering them."
-    : "Select items you want to sell. You'll be notified when someone is looking for them.";
+    ? t('notifier.subtitle_buy')
+    : t('notifier.subtitle_sale');
     const buttonText =
     mode === 'buy'
       ? "Notify me when offered"
@@ -222,7 +219,9 @@ const NotifierDrawer = () => {
     });
     
     showMessage({
-      message: `${itemName} added to ${mode.toUpperCase()}`,
+      message: mode === 'buy'
+        ? t('notifier.added_buy', { item: itemName })
+        : t('notifier.added_sale', { item: itemName }),
       type: 'success',
       duration: 2500,
     });
@@ -242,7 +241,7 @@ const NotifierDrawer = () => {
       });
       
       showMessage({
-        message: 'Item removed',
+        message: t('notifier.item_removed'),
         type: 'info',
         duration: 2000,
       });
@@ -300,12 +299,12 @@ const NotifierDrawer = () => {
         <TouchableOpacity
           style={[styles.toggleButton, mode === 'buy' && styles.active]}
           onPress={() => setMode('buy')}>
-          <Text style={{ fontFamily: 'Lato-Bold', color: '#fff', fontSize:13 }}>Notify Me When Offered</Text>
+          <Text style={{ fontFamily: 'Lato-Bold', color: '#fff', fontSize:13 }}>{t('notifier.when_offered')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toggleButton, mode === 'sale' && styles.active]}
           onPress={() => setMode('sale')}>
-          <Text style={{ fontFamily: 'Lato-Bold', color: '#fff' , fontSize:13 }}>Notify Me When Wanted</Text>
+          <Text style={{ fontFamily: 'Lato-Bold', color: '#fff' , fontSize:13 }}>{t('notifier.when_wanted')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -315,14 +314,14 @@ const NotifierDrawer = () => {
   {Object.keys(savedItems[mode] || {}).length > 0
     ? Object.entries(savedItems[mode]).map(renderSavedItem)
     : <Text style={[styles.placeholderText, { fontFamily: 'Lato-Regular', color: isDarkMode ? '#aaa' : '#888' }]}>
-        No items selected.
+        {t('notifier.no_items')}
       </Text>}
 </View>
 
 
       <Modal visible={isDrawerVisible} animationType="slide">
-        <View style={[styles.drawerContainer, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff' }]}>
-          <Text style={[styles.sectionTitle, { fontFamily: 'Lato-Bold', color: isDarkMode ? '#fff' : '#000' }]}>Select Items to Notify</Text>
+        <View style={[styles.drawerContainer, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#fff', paddingTop: 12 + insets.top, paddingBottom: 12 + insets.bottom }]}>
+          <Text style={[styles.sectionTitle, { fontFamily: 'Lato-Bold', color: isDarkMode ? '#fff' : '#000' }]}>{t('notifier.select_items')}</Text>
 
           <FlatList removeClippedSubviews={false}
             data={parsedValuesData}
@@ -333,7 +332,7 @@ const NotifierDrawer = () => {
           />
 
           <TouchableOpacity onPress={() => setIsDrawerVisible(false)} style={styles.closeButton}>
-            <Text style={{ fontFamily: 'Lato-Bold', color: '#fff' }}>Close</Text>
+            <Text style={{ fontFamily: 'Lato-Bold', color: '#fff' }}>{t('reward_center.close')}</Text>
           </TouchableOpacity>
         </View>
       </Modal>

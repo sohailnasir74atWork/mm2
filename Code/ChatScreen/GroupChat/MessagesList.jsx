@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import React, { memo, useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import {
   FlatList,
   View,
@@ -37,6 +37,422 @@ import { getUserEmail } from '../../Helper/privateProfile';
 import { sourceLabelForItems } from '../../Helper/valueSources';
 import { getUserRoles, useRoleRosterVersion } from '../../Helper/roleRoster';
 
+// Reply preview text for a quoted message. Module-level so the memoised row
+// can call it with its own `t`.
+const getReplyPreview = (replyTo, t) => {
+  if (!replyTo || typeof replyTo !== 'object') return t('chat.reply_deleted');
+
+  if (replyTo.text && typeof replyTo.text === 'string' && replyTo.text.trim().length > 0) {
+    return replyTo.text;
+  }
+
+  if (replyTo.gif) {
+    return t('chat.reply_emoji');
+  }
+
+  if (replyTo.hasFruits || (Array.isArray(replyTo.fruits) && replyTo.fruits.length > 0)) {
+    const count = replyTo.fruitsCount || (Array.isArray(replyTo.fruits) ? replyTo.fruits.length : 0);
+    return count > 0
+      ? t('chat.reply_items', { count })
+      : t('chat.reply_items_message');
+  }
+
+  return t('chat.reply_deleted');
+};
+
+// One public-chat message. Memoised, so a new message re-renders only the
+// rows whose props changed (the new one, and the row whose date header
+// moved) instead of every row on screen. All props are primitives or
+// stable objects: `actions` never changes identity (it calls through a ref),
+// and styles / fruitColors / t change only with theme or language.
+// profileCacheVersion and roleRosterVersion are not read here; they are
+// props so the memo lets a row repaint when the profile cache (frames, text
+// colour) or the role rosters (badges) land, since both are module caches.
+const MessageRow = memo(function MessageRow(props) {
+  const {
+    item, showDateHeader, isHighlighted, userId, isAdmin, isDarkMode,
+    styles, fruitColors, t, language, actions,
+  } = props;
+
+  // Cosmetics (frame, chat text colour) for this message's sender. Messages
+  // are slim, so this comes from the profile cache — warmed by MessagesList
+  // for other users, and seeded for the signed-in user by Trader.jsx.
+  const msgProfile = resolveProfile(item) || {};
+
+  const fruits = Array.isArray(item.fruits) ? item.fruits : [];
+  const hasFruits = fruits.length > 0;
+  const totalFruitValue = hasFruits
+    ? fruits.reduce((sum, f) => sum + (Number(f?.value) || 0), 0)
+    : 0;
+
+  // Winner badge info comes directly from message payload, similar to isPro / robloxUsernameVerified
+  const hasRecentWin =
+    !!item?.hasRecentGameWin ||
+    (typeof item?.lastGameWinAt === 'number' &&
+      Date.now() - item.lastGameWinAt <= 24 * 60 * 60 * 1000);
+
+  return (
+    <View>
+      {/* Display the date header if it's a new day */}
+      {showDateHeader && (
+        <View>
+          {/* currentDate (toDateString) stays the comparison key; the label
+              is formatted in the app language. */}
+          <Text style={styles.dateSeparator}>
+            {new Date(item.timestamp).toLocaleDateString(language, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+          </Text>
+        </View>
+      )}
+
+      {/* Render the message */}
+      {!item.isReportedByUser && (
+        <View
+        style={[
+          item.senderId === userId ? styles.mymessageBubble : styles.othermessageBubble,
+          item.senderId === userId ? styles.myMessage : styles.otherMessage, item.isReportedByUser && styles.reportedMessage,
+          isHighlighted && styles.highlightedMessage, // 👈 NEW
+          { width: '100%' } // Force full width so the right-aligned dots reach the screen edge
+        ]}
+      >
+        <View
+          style={[
+            styles.senderName,
+          ]}
+        >
+
+          <TouchableOpacity onPress={() => actions.profileClick(item)}>
+            <FramedAvatar
+              avatarUri={item.avatar || msgProfile.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png'}
+              frame={msgProfile.profileFrame || null}
+              isDarkMode={isDarkMode}
+              avatarSize={28}
+              forceDetail
+            />
+          </TouchableOpacity>
+
+        </View>
+
+        <View style={styles.messageTextBox}>
+          {/* Render reply context if present */}
+          {item.replyTo && (
+<TouchableOpacity
+  style={styles.replyContainer}
+  activeOpacity={0.7}
+  onPress={() => actions.scrollToMessage(item.replyTo.id)}
+>
+  <Text style={styles.replyText} numberOfLines={2}>
+    {t('chat.replying_to_preview', { text: getReplyPreview(item.replyTo, t) })}
+  </Text>
+</TouchableOpacity>
+)}
+
+
+          {/* Render main message */}
+
+          <Menu>
+            <MenuTrigger
+              onLongPress={() => actions.longPress(item)}
+              customStyles={{ triggerTouchable: { activeOpacity: 1 } }}
+            >
+              
+              <View style={[
+                item.senderId === userId ? styles.myBubbleContent : styles.otherBubbleContent,
+                item.isReportedByUser && styles.reportedMessage,
+                isAdmin && item.strikeCount === 1 ? { backgroundColor: 'rgba(255, 192, 203, 0.8)' } : null,
+                isAdmin && item.strikeCount >= 2 ? { backgroundColor: 'rgba(255, 0, 0, 0.8)' } : null,
+              ]}>
+
+                <View style={styles.bubbleInner}>
+                 <View style={styles.nameRow}>
+          <Text style={item.senderId === userId ? styles.userNameTextMy : styles.userNameText}>{item.sender}</Text>
+
+{item?.isPro && (
+  <Image resizeMethod="resize"
+    source={require('../../../assets/pro.png')}
+    style={styles.icon}
+  />
+)}
+
+{/* Role pills from the roster (Code/Helper/roleRoster.js), not from
+    flags on the message: chat_new is open to any write, so a stamped
+    isAdmin / isModerator could be faked by anyone. */}
+{(() => {
+  const roles = getUserRoles(item.senderId);
+  const firstBadge = getFirstBadgeType(roles);
+  return (
+    <>
+      {roles.isAdmin && (
+        <UserBadgePill type="admin" size="sm" isDarkMode={isDarkMode} labelOverride={t('chat.admin')} glow={firstBadge === 'admin'} />
+      )}
+      {!roles.isAdmin && roles.isModerator && (
+        <UserBadgePill type="mod" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'mod'} />
+      )}
+      {!roles.isAdmin && !roles.isModerator && roles.isBabyMod && (
+        <UserBadgePill type="jmd" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'jmd'} />
+      )}
+      {roles.isTrusted && (
+        <UserBadgePill type="trusted" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
+      )}
+      {roles.isCMSR && (
+        <UserBadgePill type="cmsr" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
+      )}
+      {roles.isHelper && (
+        <UserBadgePill type="helper" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
+      )}
+    </>
+  );
+})()}
+
+{item?.robloxUsernameVerified && (
+  <Image resizeMethod="resize"
+    source={require('../../../assets/verification.png')}
+    style={styles.icon}
+  />
+)}
+
+{hasRecentWin && (
+  <Image resizeMethod="resize"
+    source={require('../../../assets/trophy.webp')}
+    style={{  width: 10,
+      height: 10,
+      marginLeft: 4,}}
+  />
+)}
+
+{isAdmin && item.OS && (
+  <View
+    style={[
+      styles.platformBadge,
+    ]}
+  >
+    <Icon
+      name={item.OS === 'ios' ? 'logo-apple' : 'logo-android'}
+      size={14}
+      color={item.OS === 'ios' ? '#007AFF' : '#34C759' }
+    />
+  </View>
+)}
+</View>
+
+
+                
+                    {item.gif && (
+                      <View>
+                        <Image resizeMethod="resize" 
+                          source={{ uri: item.gif }} 
+                          style={{ height: 50, width: 50, resizeMode: 'contain' }} 
+                        />
+                      </View>
+                    )}
+                  {item?.text && (
+                    isMultiColorText(msgProfile.chatTextColor)
+                      ? <RainbowText
+                          colors={getMultiColorPalette(msgProfile.chatTextColor)}
+                          style={[item.senderId === userId ? styles.myMessageTextOnly : styles.otherMessageTextOnly]}
+                        >{item.text}</RainbowText>
+                      : <Text style={[
+                          item.senderId === userId ? styles.myMessageTextOnly : styles.otherMessageTextOnly,
+                          msgProfile.chatTextColor ? { color: getSafeTextColor(msgProfile.chatTextColor, null) } : null,
+                        ]}>
+                          {parseMessageText(item.text)}
+                        </Text>
+                  )}
+
+                {/* Timestamp inside bubble — WhatsApp style */}
+                <Text style={{
+                  fontSize: 9,
+                  color: item.senderId === userId
+                    ? (isDarkMode ? '#ffffffaa' : '#00000066')
+                    : (isDarkMode ? '#ffffff77' : '#00000055'),
+                  alignSelf: 'flex-end',
+                  marginTop: 2,
+                }}>
+                  {new Date(item.timestamp).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </Text>
+                </View>
+              </View>
+              {hasFruits && (
+<View
+  style={[
+    fruitStyles.fruitsWrapper,
+    { backgroundColor: fruitColors.wrapperBg },
+  ]}
+>
+  {fruits.map((fruit, index) => {
+    return (
+      <View
+        key={`${fruit.id || fruit.name}-${index}`}
+        style={fruitStyles.fruitCard}
+      >
+        <Image resizeMethod="resize"
+          source={{ uri: fruit.imageUrl }}
+          style={fruitStyles.fruitImage}
+        />
+
+        <View style={fruitStyles.fruitInfo}>
+          <Text
+            style={[fruitStyles.fruitName, { color: fruitColors.name }]}
+            numberOfLines={1}
+          >
+            {`${fruit.name || fruit.Name}  `}
+          </Text>
+
+          <Text
+            style={[fruitStyles.fruitValue, { color: fruitColors.value }]}
+          >
+            {t('chat.item_value', { value: Number(fruit.value || 0).toLocaleString() })}
+            {/* {fruit.category
+              ? `  ·  ${String(fruit.category).toUpperCase()}  `
+              : ''} */}{' '}
+          </Text>
+
+          <View style={fruitStyles.badgeRow}>
+            {/* D / N / M badge */}
+            {/* Fly badge */}
+            {fruit.isFly && (
+              <View style={[fruitStyles.badge, fruitStyles.badgeFly]}>
+                <Text style={fruitStyles.badgeText}>F</Text>
+              </View>
+            )}
+
+            {/* Ride badge */}
+            {fruit.isRide && (
+              <View style={[fruitStyles.badge, fruitStyles.badgeRide]}>
+                <Text style={fruitStyles.badgeText}>R</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  })}
+
+  {/* ✅ Total row – only if more than one fruit */}
+  {fruits.length > 1 && (
+    <View
+      style={[
+        fruitStyles.totalRow,
+        { borderTopColor: fruitColors.divider },
+      ]}
+    >
+      <Text
+        style={[fruitStyles.totalLabel, { color: fruitColors.totalLabel }]}
+      >
+        {t('private_chat.total_value')}
+      </Text>
+      <Text
+        style={[fruitStyles.totalValue, { color: fruitColors.totalValue }]}
+      >
+        {totalFruitValue.toLocaleString()}
+      </Text>
+    </View>
+  )}
+
+  {/* Which catalogue priced this list. Replaces a 'D' badge that
+      was an Adopt Me leftover (Default/Neon/Mega) — MM2 has no such
+      variants, so it rendered 'D' on every item and meant nothing.
+      The two catalogues disagree on 70% of the items they share, so
+      a reader needs to know which one these numbers came from. */}
+  <Text style={fruitStyles.sourceNote}>
+    {t('chat.based_on_values', { source: sourceLabelForItems(fruits) })}
+  </Text>
+</View>
+)}
+            </MenuTrigger>
+          <MenuOptions customStyles={{
+              optionsContainer: styles.menuoptions,
+              optionWrapper: styles.menuOption,
+              optionText: styles.menuOptionText,
+            }}>
+              <MenuOption onSelect={() => actions.copy(item)}>
+                <Text style={styles.menuOptionText}>{t('private_chat.copy')}</Text>
+              </MenuOption>
+              {userId && (
+                <MenuOption onSelect={() => actions.reply(item)}>
+                  <Text style={styles.menuOptionText}>{t("chat.reply")}</Text>
+                </MenuOption>
+              )}
+              <MenuOption onSelect={() => actions.translate(item)}>
+                <Text style={styles.menuOptionText}>{t('private_chat.translate')}</Text>
+              </MenuOption>
+              <MenuOption onSelect={() => actions.report(item)}>
+                <Text style={styles.menuOptionText}>{t("chat.report")}</Text>
+              </MenuOption>
+            </MenuOptions>
+          </Menu>
+
+          {/* {(item.reportCount > 0 || item.isReportedByUser) && (
+            <Text style={styles.reportIcon}>Reported</Text>
+          )} */}
+
+
+        </View>
+
+
+        {/* Admin Actions or Timestamp */}
+        <View style={{ flex: 1, alignItems: item.senderId === userId ? 'flex-start' : 'flex-end', justifyContent: 'center', paddingHorizontal: 4 }}>
+          {(!isAdmin && item.senderId === userId) && (
+            <Menu>
+              <MenuTrigger>
+                <Icon
+                  name="ellipsis-vertical-outline"
+                  size={18}
+                  color={isDarkMode ? '#9ca3af' : '#6b7280'}
+                />
+              </MenuTrigger>
+              <MenuOptions customStyles={{
+                optionsContainer: styles.menuoptions,
+                optionWrapper: styles.menuOption,
+                optionText: styles.menuOptionText,
+              }}>
+                <MenuOption onSelect={() => actions.deleteMessage(item.id)}>
+                  <Text style={styles.menuOptionTextDanger}>{t('chat.delete')}</Text>
+                </MenuOption>
+              </MenuOptions>
+            </Menu>
+          )}
+          {(isAdmin) && (
+            <Menu>
+              <MenuTrigger>
+                <Icon
+                  name="ellipsis-vertical-outline"
+                  size={18}
+                  color={isDarkMode ? '#9ca3af' : '#6b7280'}
+                />
+              </MenuTrigger>
+              <MenuOptions customStyles={{
+                optionsContainer: styles.menuoptions,
+                optionWrapper: styles.menuOption,
+                optionText: styles.menuOptionText,
+              }}>
+                <MenuOption onSelect={() => actions.deleteMessage(item.id)}>
+                  <Text style={styles.menuOptionTextDanger}>Delete</Text>
+                </MenuOption>
+                <MenuOption onSelect={() => actions.deleteAllMessages(item?.senderId)}>
+                  <Text style={styles.menuOptionTextDanger}>Delete All</Text>
+                </MenuOption>
+                <MenuOption onSelect={() => actions.blockSender(item)}>
+                  <Text style={styles.menuOptionTextDanger}>Block</Text>
+                </MenuOption>
+                <MenuOption onSelect={() => actions.unblockSender(item)}>
+                  <Text style={styles.menuOptionText}>Unblock</Text>
+                </MenuOption>
+                <MenuOption onSelect={() => actions.pinMessage(item)}>
+                  <Text style={styles.menuOptionText}>Pin Message</Text>
+                </MenuOption>
+              </MenuOptions>
+            </Menu>
+          )}
+        </View>
+      </View>
+      )}
+    </View>
+  );
+});
+
 const MessagesList = ({
   channelPath,
   messages,
@@ -72,8 +488,14 @@ const MessagesList = ({
   const { triggerHapticFeedback } = useHaptic();
   const scrollButtonOpacity = useMemo(() => new Animated.Value(0), []);
 
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { isAdmin, api, freeTranslation, appdatabase } = useGlobalState();
+  const userId = user?.id;
+
+  // ✅ PERF: Hold messages in a ref so the row renderer and scrollToMessage
+  // don't depend on the array (a new message no longer re-creates them).
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
   // Re-renders rows when the role rosters load or change (badges).
   const roleRosterVersion = useRoleRosterVersion(appdatabase);
 
@@ -101,8 +523,8 @@ const MessagesList = ({
     if (!message || !message.text) return;
     Clipboard.setString(message.text);
     triggerHapticFeedback('impactLight');
-    showSuccessMessage('Success', 'Message Copied');
-  }, [triggerHapticFeedback]);
+    showSuccessMessage(t('home.alert.success'), t('private_chat.msg_copied'));
+  }, [triggerHapticFeedback, t]);
   // useEffect(() => {
   //   if (!messages || messages.length === 0) return;
   //   if (!isAtBottom) return; // only when user is at bottom
@@ -127,7 +549,8 @@ const MessagesList = ({
     (targetId) => {
       if (!flatListRef?.current || !targetId) return;
   
-      const index = messages.findIndex((m) => m.id === targetId);
+      const list = Array.isArray(messagesRef.current) ? messagesRef.current : [];
+      const index = list.findIndex((m) => m.id === targetId);
       if (index === -1) return;
   
       try {
@@ -149,7 +572,7 @@ const MessagesList = ({
         console.log('scrollToIndex error:', e);
       }
     },
-    [flatListRef, messages],
+    [flatListRef],
   );
 
   // ✅ Scroll to bottom handler
@@ -251,13 +674,13 @@ const MessagesList = ({
   // ✅ Memoize handleTranslate
   const handleTranslate = useCallback(async (item) => {
     if (!item || !item.text) {
-      Alert.alert('Error', 'Invalid message to translate.');
+      Alert.alert(t('chat.error'), t('private_chat.invalid_translate'));
       return;
     }
     const isUnlimited = freeTranslation || localState.isPro;
 
     if (!isUnlimited && !canTranslate()) {
-      Alert.alert('Limit Reached', 'You can only translate 20 messages per day.');
+      Alert.alert(t('private_chat.limit_reached'), t('private_chat.translate_limit'));
       return;
     }
 
@@ -266,19 +689,21 @@ const MessagesList = ({
     if (translated) {
       if (!isUnlimited) incrementTranslationCount();
 
-      const remaining = isUnlimited ? 'Unlimited' : `${getRemainingTranslationTries()} remaining`;
+      const remaining = isUnlimited
+        ? t('private_chat.unlimited')
+        : t('chat.translations_remaining', { count: getRemainingTranslationTries() });
 
       Alert.alert(
-        'Translated Message',
-        `${translated}\n\n🧠 Daily Limit: ${remaining}${isUnlimited
+        t('private_chat.translated_title'),
+        `${translated}\n\n${t('chat.daily_limit_line', { remaining })}${isUnlimited
           ? ''
-          : '\n\n🔓 Want more? Upgrade to Pro for unlimited translations.'
+          : `\n\n🔓 ${t('private_chat.upgrade_pro')}`
         }`
       );
     } else {
-      Alert.alert('Error', 'Translation failed. Please try again later.');
+      Alert.alert(t('chat.error'), t('private_chat.translate_failed'));
     }
-  }, [canTranslate, freeTranslation, localState?.isPro, incrementTranslationCount, getRemainingTranslationTries, translateText, deviceLanguage]);
+  }, [canTranslate, freeTranslation, localState?.isPro, incrementTranslationCount, getRemainingTranslationTries, translateText, deviceLanguage, t]);
 
   // ✅ Memoize handleLongPress
   const handleLongPress = useCallback((item) => {
@@ -355,417 +780,76 @@ const MessagesList = ({
       triggerHapticFeedback('impactLight');
     }
   }, [user?.id, toggleDrawer, triggerHapticFeedback]);
-  // ✅ Move getReplyPreview outside and memoize
-  const getReplyPreview = useCallback((replyTo) => {
-    if (!replyTo || typeof replyTo !== 'object') return '[Deleted message]';
-  
-    if (replyTo.text && typeof replyTo.text === 'string' && replyTo.text.trim().length > 0) {
-      return replyTo.text;
-    }
-  
-    if (replyTo.gif) {
-      return '[Emoji]';
-    }
-  
-    if (replyTo.hasFruits || (Array.isArray(replyTo.fruits) && replyTo.fruits.length > 0)) {
-      const count = replyTo.fruitsCount || (Array.isArray(replyTo.fruits) ? replyTo.fruits.length : 0);
-      return count > 0
-        ? `[${count} pet(s) message]`
-        : '[Pets message]';
-    }
-  
-    return '[Deleted message]';
+  // Row callbacks, read through a ref so `rowActions` keeps one identity for
+  // the life of the list. Parent props (onReply, onDeleteMessage, ...) and the
+  // handlers above can change identity on any render; routing them through
+  // the ref means the memoised rows still call the latest version without
+  // re-rendering when they change.
+  const rowActionsRef = useRef(null);
+  rowActionsRef.current = {
+    profileClick: handleProfileClick,
+    scrollToMessage,
+    longPress: handleLongPress,
+    copy: handleCopy,
+    reply: onReply,
+    translate: handleTranslate,
+    report: handleReport,
+    deleteMessage: onDeleteMessage,
+    deleteAllMessages: onDeleteAllMessage,
+    blockSender: handleBlockSender,
+    unblockSender: handleUnblockSender,
+    pinMessage: onPinMessage,
+  };
+  const rowActions = useMemo(() => {
+    const call = (name) => (...args) => rowActionsRef.current?.[name]?.(...args);
+    return {
+      profileClick: call('profileClick'),
+      scrollToMessage: call('scrollToMessage'),
+      longPress: call('longPress'),
+      copy: call('copy'),
+      reply: call('reply'),
+      translate: call('translate'),
+      report: call('report'),
+      deleteMessage: call('deleteMessage'),
+      deleteAllMessages: call('deleteAllMessages'),
+      blockSender: call('blockSender'),
+      unblockSender: call('unblockSender'),
+      pinMessage: call('pinMessage'),
+    };
   }, []);
 
+  // ✅ PERF: renderMessage reads the array through messagesRef and hands each
+  // row only primitives + stable objects, so its identity no longer changes on
+  // every incoming message and MessageRow's memo can skip unchanged rows.
   const renderMessage = useCallback(({ item, index }) => {
     // ✅ Safety checks
     if (!item || typeof item !== 'object') return null;
 
-    // Cosmetics (frame, chat text colour) for this message's sender. Messages
-    // are slim, so this comes from the profile cache — warmed above for other
-    // users, and seeded for the signed-in user by Trader.jsx.
-    const msgProfile = resolveProfile(item) || {};
-
-    const previousMessage = messages[index + 1];
+    const previousMessage = messagesRef.current[index + 1];
     const currentDate = item.timestamp ? new Date(item.timestamp).toDateString() : null;
     const previousDate = previousMessage?.timestamp
       ? new Date(previousMessage.timestamp).toDateString()
       : null;
-    const shouldShowDateHeader = currentDate !== previousDate;
-
-    const fruits = Array.isArray(item.fruits) ? item.fruits : [];
-    const hasFruits = fruits.length > 0;
-    const totalFruitValue = hasFruits
-      ? fruits.reduce((sum, f) => sum + (Number(f?.value) || 0), 0)
-      : 0;
-    // console.log(user.id)
-
-    // Winner badge info comes directly from message payload, similar to isPro / robloxUsernameVerified
-    const hasRecentWin =
-      !!item?.hasRecentGameWin ||
-      (typeof item?.lastGameWinAt === 'number' &&
-        Date.now() - item.lastGameWinAt <= 24 * 60 * 60 * 1000);
+    const showDateHeader = !!currentDate && currentDate !== previousDate;
 
     return (
-      <View>
-        {/* Display the date header if it's a new day */}
-        {shouldShowDateHeader && currentDate && (
-          <View>
-            <Text style={styles.dateSeparator}>{currentDate}</Text>
-          </View>
-        )}
-
-        {/* Render the message */}
-        {!item.isReportedByUser && (
-          <View
-          style={[
-            item.senderId === user?.id ? styles.mymessageBubble : styles.othermessageBubble,
-            item.senderId === user?.id ? styles.myMessage : styles.otherMessage, item.isReportedByUser && styles.reportedMessage,
-            item.id === highlightedMessageId && styles.highlightedMessage, // 👈 NEW
-            { width: '100%' } // Force full width so the right-aligned dots reach the screen edge
-          ]}
-        >
-          <View
-            style={[
-              styles.senderName,
-            ]}
-          >
-
-            <TouchableOpacity onPress={() => handleProfileClick(item)}>
-              <FramedAvatar
-                avatarUri={item.avatar || msgProfile.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png'}
-                frame={msgProfile.profileFrame || null}
-                isDarkMode={isDarkMode}
-                avatarSize={28}
-                forceDetail
-              />
-            </TouchableOpacity>
-
-          </View>
-
-          <View style={styles.messageTextBox}>
-            {/* Render reply context if present */}
-            {item.replyTo && (
-  <TouchableOpacity
-    style={styles.replyContainer}
-    activeOpacity={0.7}
-    onPress={() => scrollToMessage(item.replyTo.id)}
-  >
-    <Text style={styles.replyText} numberOfLines={2}>
-      Replying to: {'\n'}
-      {getReplyPreview(item.replyTo)}
-    </Text>
-  </TouchableOpacity>
-)}
-
-
-            {/* Render main message */}
-
-            <Menu>
-              <MenuTrigger
-                onLongPress={() => handleLongPress(item)}
-                customStyles={{ triggerTouchable: { activeOpacity: 1 } }}
-              >
-                
-                <View style={[
-                  item.senderId === user?.id ? styles.myBubbleContent : styles.otherBubbleContent,
-                  item.isReportedByUser && styles.reportedMessage,
-                  isAdmin && item.strikeCount === 1 ? { backgroundColor: 'rgba(255, 192, 203, 0.8)' } : null,
-                  isAdmin && item.strikeCount >= 2 ? { backgroundColor: 'rgba(255, 0, 0, 0.8)' } : null,
-                ]}>
-
-                  <View style={styles.bubbleInner}>
-                   <View style={styles.nameRow}>
-            <Text style={item.senderId === user?.id ? styles.userNameTextMy : styles.userNameText}>{item.sender}</Text>
-
-  {item?.isPro && (
-    <Image resizeMethod="resize"
-      source={require('../../../assets/pro.png')}
-      style={styles.icon}
-    />
-  )}
-
-  {/* Role pills from the roster (Code/Helper/roleRoster.js), not from
-      flags on the message: chat_new is open to any write, so a stamped
-      isAdmin / isModerator could be faked by anyone. */}
-  {(() => {
-    const roles = getUserRoles(item.senderId);
-    const firstBadge = getFirstBadgeType(roles);
-    return (
-      <>
-        {roles.isAdmin && (
-          <UserBadgePill type="admin" size="sm" isDarkMode={isDarkMode} labelOverride={t('chat.admin')} glow={firstBadge === 'admin'} />
-        )}
-        {!roles.isAdmin && roles.isModerator && (
-          <UserBadgePill type="mod" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'mod'} />
-        )}
-        {!roles.isAdmin && !roles.isModerator && roles.isBabyMod && (
-          <UserBadgePill type="jmd" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'jmd'} />
-        )}
-        {roles.isTrusted && (
-          <UserBadgePill type="trusted" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
-        )}
-        {roles.isCMSR && (
-          <UserBadgePill type="cmsr" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
-        )}
-        {roles.isHelper && (
-          <UserBadgePill type="helper" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
-        )}
-      </>
-    );
-  })()}
-
-  {item?.robloxUsernameVerified && (
-    <Image resizeMethod="resize"
-      source={require('../../../assets/verification.png')}
-      style={styles.icon}
-    />
-  )}
-
-  {hasRecentWin && (
-    <Image resizeMethod="resize"
-      source={require('../../../assets/trophy.webp')}
-      style={{  width: 10,
-        height: 10,
-        marginLeft: 4,}}
-    />
-  )}
-
-  {isAdmin && item.OS && (
-    <View
-      style={[
-        styles.platformBadge,
-      ]}
-    >
-      <Icon
-        name={item.OS === 'ios' ? 'logo-apple' : 'logo-android'}
-        size={14}
-        color={item.OS === 'ios' ? '#007AFF' : '#34C759' }
+      <MessageRow
+        item={item}
+        showDateHeader={showDateHeader}
+        isHighlighted={item.id === highlightedMessageId}
+        userId={userId}
+        isAdmin={isAdmin}
+        isDarkMode={isDarkMode}
+        styles={styles}
+        fruitColors={fruitColors}
+        t={t}
+        language={i18n.language}
+        actions={rowActions}
+        profileCacheVersion={profileCacheVersion}
+        roleRosterVersion={roleRosterVersion}
       />
-    </View>
-  )}
-</View>
-
-
-                  
-                      {item.gif && (
-                        <View>
-                          <Image resizeMethod="resize" 
-                            source={{ uri: item.gif }} 
-                            style={{ height: 50, width: 50, resizeMode: 'contain' }} 
-                          />
-                        </View>
-                      )}
-                    {item?.text && (
-                      isMultiColorText(msgProfile.chatTextColor)
-                        ? <RainbowText
-                            colors={getMultiColorPalette(msgProfile.chatTextColor)}
-                            style={[item.senderId === user?.id ? styles.myMessageTextOnly : styles.otherMessageTextOnly]}
-                          >{item.text}</RainbowText>
-                        : <Text style={[
-                            item.senderId === user?.id ? styles.myMessageTextOnly : styles.otherMessageTextOnly,
-                            msgProfile.chatTextColor ? { color: getSafeTextColor(msgProfile.chatTextColor, null) } : null,
-                          ]}>
-                            {parseMessageText(item.text)}
-                          </Text>
-                    )}
-
-                  {/* Timestamp inside bubble — WhatsApp style */}
-                  <Text style={{
-                    fontSize: 9,
-                    color: item.senderId === user?.id
-                      ? (isDarkMode ? '#ffffffaa' : '#00000066')
-                      : (isDarkMode ? '#ffffff77' : '#00000055'),
-                    alignSelf: 'flex-end',
-                    marginTop: 2,
-                  }}>
-                    {new Date(item.timestamp).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </Text>
-                  </View>
-                </View>
-                {hasFruits && (
-  <View
-    style={[
-      fruitStyles.fruitsWrapper,
-      { backgroundColor: fruitColors.wrapperBg },
-    ]}
-  >
-    {fruits.map((fruit, index) => {
-      return (
-        <View
-          key={`${fruit.id || fruit.name}-${index}`}
-          style={fruitStyles.fruitCard}
-        >
-          <Image resizeMethod="resize"
-            source={{ uri: fruit.imageUrl }}
-            style={fruitStyles.fruitImage}
-          />
-
-          <View style={fruitStyles.fruitInfo}>
-            <Text
-              style={[fruitStyles.fruitName, { color: fruitColors.name }]}
-              numberOfLines={1}
-            >
-              {`${fruit.name || fruit.Name}  `}
-            </Text>
-
-            <Text
-              style={[fruitStyles.fruitValue, { color: fruitColors.value }]}
-            >
-              · Value: {Number(fruit.value || 0).toLocaleString()}
-              {/* {fruit.category
-                ? `  ·  ${String(fruit.category).toUpperCase()}  `
-                : ''} */}{' '}
-            </Text>
-
-            <View style={fruitStyles.badgeRow}>
-              {/* D / N / M badge */}
-              {/* Fly badge */}
-              {fruit.isFly && (
-                <View style={[fruitStyles.badge, fruitStyles.badgeFly]}>
-                  <Text style={fruitStyles.badgeText}>F</Text>
-                </View>
-              )}
-
-              {/* Ride badge */}
-              {fruit.isRide && (
-                <View style={[fruitStyles.badge, fruitStyles.badgeRide]}>
-                  <Text style={fruitStyles.badgeText}>R</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-      );
-    })}
-
-    {/* ✅ Total row – only if more than one fruit */}
-    {fruits.length > 1 && (
-      <View
-        style={[
-          fruitStyles.totalRow,
-          { borderTopColor: fruitColors.divider },
-        ]}
-      >
-        <Text
-          style={[fruitStyles.totalLabel, { color: fruitColors.totalLabel }]}
-        >
-          Total:
-        </Text>
-        <Text
-          style={[fruitStyles.totalValue, { color: fruitColors.totalValue }]}
-        >
-          {totalFruitValue.toLocaleString()}
-        </Text>
-      </View>
-    )}
-
-    {/* Which catalogue priced this list. Replaces a 'D' badge that
-        was an Adopt Me leftover (Default/Neon/Mega) — MM2 has no such
-        variants, so it rendered 'D' on every item and meant nothing.
-        The two catalogues disagree on 70% of the items they share, so
-        a reader needs to know which one these numbers came from. */}
-    <Text style={fruitStyles.sourceNote}>
-      Based on {sourceLabelForItems(fruits)} values
-    </Text>
-  </View>
-)}
-              </MenuTrigger>
-            <MenuOptions customStyles={{
-                optionsContainer: styles.menuoptions,
-                optionWrapper: styles.menuOption,
-                optionText: styles.menuOptionText,
-              }}>
-                <MenuOption onSelect={() => handleCopy(item)}>
-                  <Text style={styles.menuOptionText}>Copy</Text>
-                </MenuOption>
-                {user.id && (
-                  <MenuOption onSelect={() => onReply(item)}>
-                    <Text style={styles.menuOptionText}>{t("chat.reply")}</Text>
-                  </MenuOption>
-                )}
-                <MenuOption onSelect={() => handleTranslate(item)}>
-                  <Text style={styles.menuOptionText}>Translate</Text>
-                </MenuOption>
-                <MenuOption onSelect={() => handleReport(item)}>
-                  <Text style={styles.menuOptionText}>{t("chat.report")}</Text>
-                </MenuOption>
-              </MenuOptions>
-            </Menu>
-
-            {/* {(item.reportCount > 0 || item.isReportedByUser) && (
-              <Text style={styles.reportIcon}>Reported</Text>
-            )} */}
-
-
-          </View>
-
-
-          {/* Admin Actions or Timestamp */}
-          <View style={{ flex: 1, alignItems: item.senderId === user?.id ? 'flex-start' : 'flex-end', justifyContent: 'center', paddingHorizontal: 4 }}>
-            {(!isAdmin && item.senderId === user?.id) && (
-              <Menu>
-                <MenuTrigger>
-                  <Icon
-                    name="ellipsis-vertical-outline"
-                    size={18}
-                    color={isDarkMode ? '#9ca3af' : '#6b7280'}
-                  />
-                </MenuTrigger>
-                <MenuOptions customStyles={{
-                  optionsContainer: styles.menuoptions,
-                  optionWrapper: styles.menuOption,
-                  optionText: styles.menuOptionText,
-                }}>
-                  <MenuOption onSelect={() => onDeleteMessage(item.id)}>
-                    <Text style={styles.menuOptionTextDanger}>Delete</Text>
-                  </MenuOption>
-                </MenuOptions>
-              </Menu>
-            )}
-            {(isAdmin) && (
-              <Menu>
-                <MenuTrigger>
-                  <Icon
-                    name="ellipsis-vertical-outline"
-                    size={18}
-                    color={isDarkMode ? '#9ca3af' : '#6b7280'}
-                  />
-                </MenuTrigger>
-                <MenuOptions customStyles={{
-                  optionsContainer: styles.menuoptions,
-                  optionWrapper: styles.menuOption,
-                  optionText: styles.menuOptionText,
-                }}>
-                  <MenuOption onSelect={() => onDeleteMessage(item.id)}>
-                    <Text style={styles.menuOptionTextDanger}>Delete</Text>
-                  </MenuOption>
-                  <MenuOption onSelect={() => onDeleteAllMessage(item?.senderId)}>
-                    <Text style={styles.menuOptionTextDanger}>Delete All</Text>
-                  </MenuOption>
-                  <MenuOption onSelect={() => handleBlockSender(item)}>
-                    <Text style={styles.menuOptionTextDanger}>Block</Text>
-                  </MenuOption>
-                  <MenuOption onSelect={() => handleUnblockSender(item)}>
-                    <Text style={styles.menuOptionText}>Unblock</Text>
-                  </MenuOption>
-                  <MenuOption onSelect={() => onPinMessage(item)}>
-                    <Text style={styles.menuOptionText}>Pin Message</Text>
-                  </MenuOption>
-                </MenuOptions>
-              </Menu>
-            )}
-          </View>
-        </View>
-        )}
-      </View>
     );
-    // isDarkMode: FramedAvatar needs the theme. Repaint-on-profiles-landing is
-    // handled by the FlatList's extraData, not here.
-  }, [messages, highlightedMessageId, user?.id, styles, getReplyPreview, handleCopy, handleTranslate, handleReport, handleLongPress, handleProfileClick, scrollToMessage, isAdmin, t, fruitColors, onReply, onDeleteMessage, onDeleteAllMessage, onPinMessage, isDarkMode, handleBlockSender, handleUnblockSender]);
+  }, [highlightedMessageId, userId, isAdmin, isDarkMode, styles, fruitColors, t, i18n.language, rowActions, profileCacheVersion, roleRosterVersion]);
 
   return (
     <>
@@ -952,4 +1036,4 @@ export const fruitStyles = StyleSheet.create({
     color: '#FF6666',
   },
 });
-export default MessagesList;
+export default memo(MessagesList);

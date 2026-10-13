@@ -11,6 +11,7 @@ import { updateMyCosmeticType } from '../Helper/cosmeticsCache';
 import { EGGS, ALL_ITEMS, COSMETIC_TYPE, getItemsByRarity } from './shopItems';
 import { spendStars } from './starUtils';
 import { getServerTime, getServerTimeQuick } from '../Helper/serverTime';
+import i18n from 'i18next';
 
 // ════════════════════════════════════════════════════════════
 //  SPEND XP — Atomic decrement with balance check (UNUSED NOW, but kept for legacy)
@@ -339,20 +340,21 @@ export const isItemExpired = (item) => {
 // ════════════════════════════════════════════════════════════
 //  HELPER: Format remaining time for UI
 // ════════════════════════════════════════════════════════════
+// Display text only (My Cosmetics), so it is translated here.
 export const formatTimeRemaining = (expiresAt) => {
-  if (expiresAt === -1) return 'Permanent ✨';
+  if (expiresAt === -1) return i18n.t('cosmetics.time_permanent');
 
   const remaining = expiresAt - getServerTimeQuick().getTime();
-  if (remaining <= 0) return 'Expired';
+  if (remaining <= 0) return i18n.t('cosmetics.time_expired');
 
   const hours = Math.floor(remaining / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);
   const remainingHours = hours % 24;
 
-  if (days > 0) return `${days}d ${remainingHours}h`;
-  if (hours > 0) return `${hours}h`;
+  if (days > 0) return i18n.t('cosmetics.time_days_hours', { days, hours: remainingHours });
+  if (hours > 0) return i18n.t('cosmetics.time_hours', { hours });
   const minutes = Math.floor(remaining / (1000 * 60));
-  return `${minutes}m`;
+  return i18n.t('cosmetics.time_minutes', { minutes });
 };
 
 // ════════════════════════════════════════════════════════════

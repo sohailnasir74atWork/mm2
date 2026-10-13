@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BIRTHDAY_PINK } from './BirthdayBits';
 import { updateMyBirthday, birthdayErrorKey } from './birthdayApi';
 import { monthShortName } from './birthdayDate';
+import { flipInRTL } from '../Helper/rtl';
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const DOB_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
@@ -83,7 +84,7 @@ export default function EditBirthdaySheet({ visible, dob, c, onClose, onSaved })
             style={[s.yearBtn, { borderColor: c.border, backgroundColor: c.bgAlt }]}
             hitSlop={8}
           >
-            <Icon name="chevron-back" size={20} color={c.text} />
+            <Icon name="chevron-back" size={20} color={c.text} style={flipInRTL} />
           </TouchableOpacity>
           <Text style={[s.yearText, { color: c.text }]}>{year || '—'}</Text>
           <TouchableOpacity
@@ -91,7 +92,7 @@ export default function EditBirthdaySheet({ visible, dob, c, onClose, onSaved })
             style={[s.yearBtn, { borderColor: c.border, backgroundColor: c.bgAlt }]}
             hitSlop={8}
           >
-            <Icon name="chevron-forward" size={20} color={c.text} />
+            <Icon name="chevron-forward" size={20} color={c.text} style={flipInRTL} />
           </TouchableOpacity>
         </View>
 

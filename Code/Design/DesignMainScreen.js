@@ -434,11 +434,10 @@ const DesignFeedScreen = ({ route }) => {
         const secondsLeft = Math.ceil((COOLDOWN_MS - (now - lastPostTime)) / 1000);
         const minutesLeft = Math.floor(secondsLeft / 60);
         const remainingSeconds = secondsLeft % 60;
-        const timeMessage = minutesLeft > 0 
-          ? `${minutesLeft} minute${minutesLeft === 1 ? '' : 's'} and ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'}`
-          : `${secondsLeft} second${secondsLeft === 1 ? '' : 's'}`;
         showMessage({ 
-          message: `Please wait ${timeMessage} before posting again.`, 
+          message: minutesLeft > 0
+            ? t('feed.post_cooldown_min_sec', { minutes: minutesLeft, seconds: remainingSeconds })
+            : t('feed.post_cooldown_msg', { count: secondsLeft }),
           type: 'danger',
           duration: 3000
         });
@@ -504,8 +503,8 @@ const DesignFeedScreen = ({ route }) => {
       await fetchInitialPosts();
       
       showMessage({
-        message: 'Success',
-        description: 'Post created successfully',
+        message: t('feed.post_success'),
+        description: t('feed.post_success_msg'),
         type: 'success',
       });
     } catch (error) {

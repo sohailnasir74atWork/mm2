@@ -22,9 +22,11 @@ import { getUserXP } from './xpUtils';
 import { getStarBalance } from './starUtils';
 import { purchaseEgg, formatTimeRemaining, getShopStats, getInventory } from './shopUtils';
 import { getMyCosmetics, syncMyCosmetics, getCachedEggData, setCachedEggXP, setCachedEggStats, setCachedEggInventory } from '../Helper/cosmeticsCache';
-import { EGG_LIST, RARITY_CONFIG, COSMETIC_TYPE, ALL_ITEMS } from './shopItems';
+import { EGG_LIST, RARITY_CONFIG, COSMETIC_TYPE, ALL_ITEMS, cosmeticName, eggName, rarityLabel } from './shopItems';
 import FramedAvatar from '../ChatScreen/GroupChat/FramedAvatar';
 import RewardedAdManager from '../Ads/RewardedAdManager';
+import { flipInRTL } from '../Helper/rtl';
+import ScreenBottomBanner from '../Ads/ScreenBottomBanner';
 
 const { width } = Dimensions.get('window');
 
@@ -114,7 +116,7 @@ const EggCard = ({ egg, starBalance, isDark, onPress, index }) => {
         {/* Center: Info */}
         <View style={{ flex: 1, zIndex: 1 }}>
           <Text style={[s.eggName, { color: canAfford ? '#4a2c2a' : (isDark ? '#cbd5e1' : '#475569'), textAlign: 'left' }]}>
-            {egg.name}
+            {eggName(egg, t)}
           </Text>
           <View style={[s.dropRatesRow, { justifyContent: 'flex-start', marginTop: 4 }]}>
             {Object.entries(egg.dropTable)
@@ -123,7 +125,7 @@ const EggCard = ({ egg, starBalance, isDark, onPress, index }) => {
                 <View key={rarity} style={s.dropRateItem}>
                   <View style={[s.dropDot, { backgroundColor: RARITY_CONFIG[rarity]?.color || '#94a3b8' }]} />
                   <Text style={[s.dropText, { color: canAfford ? '#6b4c4a' : (isDark ? '#94a3b8' : '#64748b') }]}>
-                    {RARITY_CONFIG[rarity]?.label || rarity} {weight}%
+                    {rarityLabel(rarity, t)} {weight}%
                   </Text>
                 </View>
               ))}
@@ -217,7 +219,7 @@ const RewardReveal = ({ reward, isDark }) => {
 
       {/* Rarity badge */}
       <View style={[s.rarityBadge, { backgroundColor: rarityConfig.color }]}>
-        <Text style={s.rarityText}>{rarityConfig.emoji} {rarityConfig.label}</Text>
+        <Text style={s.rarityText}>{rarityConfig.emoji} {rarityLabel(RARITY_CONFIG[reward.rarity] ? reward.rarity : 'common', t)}</Text>
       </View>
 
       {/* Large Preview — with glow behind */}
@@ -291,7 +293,7 @@ const RewardReveal = ({ reward, isDark }) => {
       </View>
 
       {/* Item name */}
-      <Text style={[s.rewardName, { color: rarityConfig.color }]}>{reward.name}</Text>
+      <Text style={[s.rewardName, { color: rarityConfig.color }]}>{cosmeticName(reward, t)}</Text>
       <Text style={[s.rewardType, { color: isDark ? '#94a3b8' : '#64748b' }]}>
         {isFrame ? t('mystery_egg.rewards.reward_type_frame') : isTextColor ? t('mystery_egg.rewards.reward_type_text_color') : isTradeBg ? t('mystery_egg.rewards.reward_type_trade_bg') : isBanner ? t('mystery_egg.rewards.reward_type_banner') : isChatBg ? t('mystery_egg.rewards.reward_type_chat_bg') : t('mystery_egg.rewards.reward_type_cosmetic')}
       </Text>
@@ -300,7 +302,7 @@ const RewardReveal = ({ reward, isDark }) => {
       <View style={[s.durationBadge, { backgroundColor: isDark ? '#0f172a' : '#f8fafc' }]}>
         <Icon name="time-outline" size={14} color={isDark ? '#94a3b8' : '#64748b'} />
         <Text style={[s.durationText, { color: isDark ? '#94a3b8' : '#64748b' }]}>
-          {reward.duration === -1 ? t('mystery_egg.rewards.permanent') : t(reward.duration > 1 ? 'mystery_egg.rewards.active_for_days_plural' : 'mystery_egg.rewards.active_for_days', { count: reward.duration })}
+          {reward.duration === -1 ? t('mystery_egg.rewards.permanent') : t('mystery_egg.rewards.active_days', { count: reward.duration })}
         </Text>
       </View>
 
@@ -337,17 +339,17 @@ const RewardCatalog = ({ isDark }) => {
               {previewFn(item, rc, isHidden, isDark)}
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={[s.rewardItemName, { color: isHidden ? rc?.color : (isDark ? '#e2e8f0' : '#334155') }]}>
-                  {isHidden ? t('mystery_egg.catalog.hidden_reward', { rarity: rc?.label }) : item.name}
+                  {isHidden ? t('mystery_egg.catalog.hidden_reward', { rarity: rarityLabel(item.rarity, t) }) : cosmeticName(item, t)}
                 </Text>
                 {item.duration && !isHidden && (
                   <Text style={{ fontSize: 9, color: isDark ? '#64748b' : '#94a3b8', marginTop: 1 }}>
-                    {item.duration === -1 ? t('mystery_egg.rewards.permanent') : t(item.duration > 1 ? 'mystery_egg.rewards.active_for_days_plural' : 'mystery_egg.rewards.active_for_days', { count: item.duration })}
+                    {item.duration === -1 ? t('mystery_egg.rewards.permanent') : t('mystery_egg.rewards.active_days', { count: item.duration })}
                   </Text>
                 )}
               </View>
               <View style={[s.rewardRarityPill, { backgroundColor: rc?.color + '20' }]}>
                 <Text style={[s.rewardRarityText, { color: rc?.color }]}>
-                  {isHidden ? '🔒 ' : ''}{rc?.label}
+                  {isHidden ? '🔒 ' : ''}{rarityLabel(item.rarity, t)}
                 </Text>
               </View>
             </View>
@@ -500,7 +502,7 @@ const MysteryEggScreen = ({ navigation }) => {
     if (loading) return;
 
     Alert.alert(
-      `${egg.emoji} ${egg.name}`,
+      `${egg.emoji} ${eggName(egg, t)}`,
       t('mystery_egg.alerts.buy_prompt_msg', { cost: egg.cost.toLocaleString(), balance: starBalance.toLocaleString() }),
       [
         { text: t('mystery_egg.alerts.nope'), style: 'cancel' },
@@ -598,7 +600,7 @@ const MysteryEggScreen = ({ navigation }) => {
         <View style={[s.headerBubble, { top: insets.top + 15, left: '35%', width: 45, height: 45, backgroundColor: isDark ? 'rgba(251,191,36,0.06)' : 'rgba(255,215,0,0.15)' }]} />
 
         <TouchableOpacity onPress={() => navigation.goBack()} style={[s.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.3)' }]} activeOpacity={0.7}>
-          <Icon name="arrow-back" size={22} color={isDark ? '#e2e8f0' : '#4a2c2a'} />
+          <Icon name="arrow-back" size={22} color={isDark ? '#e2e8f0' : '#4a2c2a'} style={flipInRTL} />
         </TouchableOpacity>
 
         <View style={s.headerCenter}>
@@ -901,6 +903,7 @@ const MysteryEggScreen = ({ navigation }) => {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+      <ScreenBottomBanner background={bgColor} ad={false} />
     </View>
   );
 };

@@ -45,7 +45,7 @@ const PAGE_SIZE = 10; // ✅ Pagination: load 10 messages per batch
 const PrivateChatScreen = ({route, bannedUsers, isDrawerVisible, setIsDrawerVisible, noTabBar }) => {
   const { selectedUser, selectedTheme, item } = route.params || {};
 
-  const { user, theme, appdatabase, updateLocalStateAndDatabase, firestoreDB } = useGlobalState();
+  const { user, theme, appdatabase, updateLocalStateAndDatabase, firestoreDB, isUserBlocked } = useGlobalState();
   const [trade, setTrade] = useState(null)
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -198,6 +198,13 @@ const bannerBottomPos = noTabBar ? Math.max(insets.bottom, 8) + 12 : 0; // with 
       showErrorMessage(t('home.alert.error'), t('private_chat.missing_data'));
       return;
     }
+
+    // Banned users (email OR device ban) cannot rate or review others, as in
+    // Adopt Me. Client-side gate only.
+    if (isUserBlocked) {
+      showErrorMessage(t('chat.access_denied'), t('chat.banned_message'));
+      return;
+    }
   
     try {
       setStartRating(true);
@@ -298,7 +305,7 @@ showSuccessMessage(
       showErrorMessage(t('home.alert.error'), t('private_chat.rating_error'));
       setStartRating(false);
     }
-  }, [rating, selectedUserId, myUserId, firestoreDB, reviewText, user?.id, user?.displayName]);
+  }, [rating, selectedUserId, myUserId, firestoreDB, reviewText, user?.id, user?.displayName, isUserBlocked]);
   
   
 
@@ -498,11 +505,11 @@ showSuccessMessage(
         t('home.alert.error', { defaultValue: 'Error' }),
         chatBlockedBy === 'them'
           ? (chatType === 'trade'
-            ? 'This user has disabled trade chat. You cannot message them from a trade.'
-            : 'This user has disabled chat. You cannot message them right now.')
+            ? t('private_chat.they_disabled_trade_chat')
+            : t('private_chat.they_disabled_chat'))
           : (chatType === 'trade'
-            ? 'You have disabled trade chat. Turn it back on in Settings.'
-            : 'You have disabled chat. Turn it back on in Settings.')
+            ? t('private_chat.you_disabled_trade_chat')
+            : t('private_chat.you_disabled_chat'))
       );
       return;
     }
@@ -527,6 +534,13 @@ showSuccessMessage(
     // ✅ Safety checks
     if (!myUserId || !selectedUserId || !appdatabase) {
       showErrorMessage(t("home.alert.error"), t('private_chat.missing_data'));
+      return;
+    }
+
+    // Email ban OR device ban (GlobelStats, server-time validated). Same gate
+    // and message as the community chat and Adopt Me's private chat.
+    if (isUserBlocked) {
+      showErrorMessage(t('chat.access_denied'), t('chat.banned_message'));
       return;
     }
 
@@ -612,7 +626,7 @@ showSuccessMessage(
       console.error("Error sending message:", error);
       Alert.alert(t('home.alert.error'), t('private_chat.send_failed'));
     }
-  }, [myUserId, selectedUserId, appdatabase, selectedUser, user, t, chatBlockedBy, chatType]);
+  }, [myUserId, selectedUserId, appdatabase, selectedUser, user, t, chatBlockedBy, chatType, isUserBlocked]);
   
   
 
@@ -835,11 +849,11 @@ useEffect(() => {
                   <Text style={styles.chatUnavailableText}>
                     {chatBlockedBy === 'them'
                       ? (chatType === 'trade'
-                        ? 'This user has disabled trade chat. You cannot message them from a trade.'
-                        : 'This user has disabled chat. You cannot message them right now.')
+                        ? t('private_chat.they_disabled_trade_chat')
+                        : t('private_chat.they_disabled_chat'))
                       : (chatType === 'trade'
-                        ? 'You have disabled trade chat. Turn it back on in Settings.'
-                        : 'You have disabled chat. Turn it back on in Settings.')}
+                        ? t('private_chat.you_disabled_trade_chat')
+                        : t('private_chat.you_disabled_chat'))}
                   </Text>
                 </View>
               )}

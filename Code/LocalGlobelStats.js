@@ -325,11 +325,11 @@ export const LocalStateProvider = ({ children }) => {
 
       if (proStatus) trackProPurchase(packageToPurchase, track);
 
-      showSuccessMessage("Success", "Purchase completed successfully!");
+      showSuccessMessage(t('home.alert.success'), t('paywall.purchase_completed'));
     } catch (error) {
       if (!error.userCancelled) {
         // console.error('❌ Purchase Error:', error);
-        showErrorMessage("Error", "Failed to complete purchase. Please try again.");
+        showErrorMessage(t('home.alert.error'), t('paywall.purchase_failed'));
       }
     } finally {
       setLoading(false);

@@ -87,6 +87,19 @@ export const EVENTS = [
   },
 ];
 
+/**
+ * Display name in the app language. `label` above stays English (it is the
+ * fallback and the thing a backend override replaces); the translations live
+ * under `events.names.<id>`. A label set from the backend (/events) is shown
+ * exactly as given, since no translation exists for it.
+ */
+export const eventLabel = (event, t) => {
+  if (!event) return '';
+  const base = EVENTS.find((e) => e.id === event.id);
+  if (!base || event.label !== base.label) return event.label;
+  return t(`events.names.${event.id}`, { defaultValue: event.label });
+};
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Estimated window for an event in a given year, as {start, end} ms. */

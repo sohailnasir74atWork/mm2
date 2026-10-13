@@ -6,6 +6,7 @@ import { getServerTime } from '../Helper/serverTime';
 import { invalidateFullProfile, setRoleOverride } from '../Helper/profileCache';
 import { CHAT_CHANNEL_PATHS } from './chatChannels';
 import { logModAction } from '../Helper/modLog';
+import { getDeviceFingerprint, isValidDeviceKey } from '../Helper/deviceFingerprint';
 
 // Initialize the database reference
 const database = getDatabase();
@@ -568,6 +569,176 @@ const actorFields = (bannerInfo) => ({
   actorRole: bannerInfo?.role || null,
 });
 
+// ── Device bans (ported from adoptme-jan7 2026-10-13) ──────────────────
+//
+// A ban or strike is mirrored onto banned_devices/{fingerprint} so the same
+// phone cannot sign up again with a fresh account and carry on. Mutes are
+// NOT mirrored (Adopt Me does not either): a mute is a timeout for one
+// account, not a sanction on whoever holds the phone.
+//
+//   banned_devices/{fp}
+//     { bannedUntil, bannedAt, bannedBy, reason, strikeCount, email, userId }
+//
+// The fingerprint comes from users_private/{uid}/deviceId, stamped at login
+// by builds from 2026-10-13 on (Helper/deviceFingerprint.js). An account
+// that has never signed in on such a build has none, and its ban stays
+// email-only, exactly as before. The ban record itself carries `deviceIds`
+// (plus `deviceId`, the first one, as Adopt Me writes it) so an unban knows
+// which device rows to clear. Both are extra fields: old builds ignore them.
+//
+// Writes need the banned_devices rule (staff only; a moderator cannot touch
+// a staff member's device). Until it is deployed the device write is refused
+// and only the email ban applies, which is today's behaviour.
+
+// A ban never waits longer than this on the device lookup.
+const DEVICE_LOOKUP_MS = 4000;
+
+const getUserDeviceId = async (db, userId) => {
+  if (!userId) return null;
+  try {
+    const snap = await get(ref(db, `users_private/${userId}/deviceId`));
+    const v = snap.exists() ? snap.val() : null;
+    return isValidDeviceKey(v) ? v : null;
+  } catch (_) {
+    return null;
+  }
+};
+
+// The device(s) a ban of `userId` should lock: the one stamped on the
+// account, plus THIS device when the caller is banning their own account
+// (Adopt Me's self-ban fallback, for a stamp that has not landed yet).
+const resolveBanDeviceIds = async (db, userId) => {
+  let timer = null;
+  const work = (async () => {
+    const stamped = await getUserDeviceId(db, userId);
+    let current = null;
+    const callerUid = getAuth()?.currentUser?.uid;
+    if (userId && callerUid && userId === callerUid) {
+      try { current = await getDeviceFingerprint(); } catch (_) { /* none */ }
+    }
+    return Array.from(new Set([stamped, current].filter(Boolean)));
+  })();
+  const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve([]), DEVICE_LOOKUP_MS); });
+  try {
+    return await Promise.race([work, timeout]);
+  } catch (_) {
+    return [];
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
+const deviceBanPayload = (record) => ({
+  bannedUntil: record.bannedUntil,
+  bannedAt: record.bannedAt || Date.now(),
+  bannedBy: record.bannedBy || 'Admin',
+  reason: record.reason || null,
+  strikeCount: record.strikeCount || 1,
+  email: record.email || null,
+  userId: record.userId || null,
+});
+
+// Never throws. Resolves to the ids that were actually written.
+const writeDeviceBans = async (db, deviceIds, record) => {
+  const payload = deviceBanPayload(record);
+  const results = await Promise.all(deviceIds.map((id) =>
+    set(ref(db, `banned_devices/${id}`), payload).then(() => id, (e) => {
+      console.warn('[deviceBan] write refused for', id, e?.message);
+      return null;
+    })));
+  return results.filter(Boolean);
+};
+
+// Ids an email-ban record says it mirrored to: `deviceIds` (array) and the
+// scalar `deviceId`, honouring both like Adopt Me's unban does.
+const deviceIdsOfRecord = (v) => {
+  const out = [];
+  if (Array.isArray(v?.deviceIds)) v.deviceIds.forEach((id) => { if (isValidDeviceKey(id)) out.push(id); });
+  if (isValidDeviceKey(v?.deviceId)) out.push(v.deviceId);
+  return out;
+};
+
+const sameEmail = (a, b) => typeof a === 'string' && typeof b === 'string'
+  && a.replace(/\(dot\)/g, '.').trim().toLowerCase() === b.replace(/\(dot\)/g, '.').trim().toLowerCase();
+
+/**
+ * Staff tools: the device recorded for `uid` and its live device-ban row.
+ * { deviceId: string|null, ban: object|null }. Never throws.
+ */
+export const getDeviceBanForUser = async (uid) => {
+  const db = getDatabase();
+  const deviceId = await getUserDeviceId(db, uid);
+  if (!deviceId) return { deviceId: null, ban: null };
+  try {
+    const snap = await get(ref(db, `banned_devices/${deviceId}`));
+    return { deviceId, ban: snap.exists() ? snap.val() : null };
+  } catch (_) {
+    return { deviceId, ban: null };
+  }
+};
+
+/**
+ * Lift ONLY the device ban, leaving any account ban in place. For a shared
+ * or family phone where a different account was the one banned.
+ */
+export const liftDeviceBan = async (deviceId, bannerInfo = null, target = null, reason = null, source = 'admin_dashboard') => {
+  if (!isValidDeviceKey(deviceId)) return false;
+  try {
+    const db = getDatabase();
+    const snap = await get(ref(db, `banned_devices/${deviceId}`));
+    const prior = snap.exists() ? snap.val() : null;
+    await set(ref(db, `banned_devices/${deviceId}`), null);
+    logModAction({
+      action: 'unban',
+      targetEmail: target?.email || prior?.email || null,
+      targetUid: target?.id || prior?.userId || null,
+      targetName: target?.displayName || null,
+      reason: typeof reason === 'string' && reason.trim() ? reason.trim() : 'Device ban lifted',
+      strikeCount: prior?.strikeCount ?? null,
+      source,
+      meta: { deviceOnly: true, bannedEmail: prior?.email || null },
+      ...actorFields(bannerInfo),
+    });
+    return true;
+  } catch (e) {
+    console.warn('[deviceBan] lift failed:', e?.message);
+    return false;
+  }
+};
+
+/**
+ * Extend an account's LIVE ban to the device it is signed in on now. For an
+ * account banned before it ever ran a build that records its device: once
+ * it signs in on a new build, staff can lock the phone too. Refuses when
+ * there is no live ban or no recorded device.
+ */
+export const applyBanToDevice = async (email, uid, bannerInfo = null) => {
+  if (!email || !uid) return { ok: false, why: 'missing' };
+  try {
+    const db = getDatabase();
+    const banRef = ref(db, `banned_users_by_email/${encodeEmailForBan(email)}`);
+    const snap = await get(banRef);
+    const record = snap.exists() ? snap.val() : null;
+    const until = record?.bannedUntil;
+    const live = until === 'permanent' || (typeof until === 'number' && until > Date.now());
+    if (!record || !live || !((record.strikeCount || 0) >= 1)) return { ok: false, why: 'no_ban' };
+    const deviceId = await getUserDeviceId(db, uid);
+    if (!deviceId) return { ok: false, why: 'no_device' };
+    const written = await writeDeviceBans(db, [deviceId], { ...record, email: record.email || email, userId: record.userId || uid });
+    if (written.length === 0) return { ok: false, why: 'refused' };
+    const ids = Array.from(new Set([...deviceIdsOfRecord(record), deviceId]));
+    await update(banRef, { deviceId: ids[0], deviceIds: ids }).catch(() => {});
+    logModAction({
+      action: 'ban', targetEmail: email, targetUid: uid, targetName: record.displayName || null,
+      reason: record.reason || null, strikeCount: record.strikeCount || null, bannedUntil: until,
+      source: 'admin_dashboard', meta: { deviceOnly: true }, ...actorFields(bannerInfo),
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, why: 'error' };
+  }
+};
+
 /**
  * Central gate for moderator ban/mute/strike powers.
  * Admins are NEVER affected. Moderators and Junior Mods lose ban/mute/strike
@@ -624,7 +795,17 @@ export const banUserwithEmail = async (
       email,
     });
 
+    // Device mirror: tag the record first (one write, no race with a fast
+    // unban), then lock the device row(s) without holding up the ban.
+    const deviceIds = await resolveBanDeviceIds(db, record.userId);
+    if (deviceIds.length > 0) {
+      record.deviceId = deviceIds[0];
+      record.deviceIds = deviceIds;
+    }
+
     await set(banRef, record);
+
+    if (deviceIds.length > 0) writeDeviceBans(db, deviceIds, record);
 
     // History, not awaited: a log failure must never fail a real ban.
     logModAction({
@@ -679,7 +860,16 @@ export const setUserStrike = async (
       email,
     });
 
+    // Device mirror, as in banUserwithEmail.
+    const deviceIds = await resolveBanDeviceIds(db, record.userId);
+    if (deviceIds.length > 0) {
+      record.deviceId = deviceIds[0];
+      record.deviceIds = deviceIds;
+    }
+
     await set(ref(db, `banned_users_by_email/${encodeEmailForBan(email)}`), record);
+
+    if (deviceIds.length > 0) writeDeviceBans(db, deviceIds, record);
 
     logModAction({
       action: 'strike', targetEmail: email, targetUid: record.userId, targetName: record.displayName,
@@ -753,6 +943,15 @@ export const muteUser = async (
       bannerInfo,
       email,
     });
+    // A mute is not mirrored to the device, but this set() replaces the
+    // record, so carry the device tags of an earlier ban forward: without
+    // them a later unban could not find the device rows to clear.
+    const priorDeviceIds = deviceIdsOfRecord(existing);
+    if (priorDeviceIds.length > 0) {
+      const ids = Array.from(new Set(priorDeviceIds));
+      record.deviceId = ids[0];
+      record.deviceIds = ids;
+    }
 
     await set(banRef, record);
 
@@ -787,20 +986,45 @@ export const unbanUserWithEmail = async (email, showAlert = true, bannerInfo = n
     const key = encodeEmailForBan(email);
     const keyLower = encodeEmailForBan(email.toLowerCase());
 
-    // Read before delete so the log can name the person and what was lifted.
+    // Read before delete so the log can name the person and what was lifted,
+    // and so the device rows this ban mirrored to can be cleared with it.
     let prior = null;
+    const mirroredIds = new Set();
     try {
       const snap = await get(ref(db, `banned_users_by_email/${key}`));
       prior = snap.exists() ? snap.val() : null;
-      if (!prior && keyLower !== key) {
+      deviceIdsOfRecord(prior).forEach((id) => mirroredIds.add(id));
+      if (keyLower !== key) {
         const s2 = await get(ref(db, `banned_users_by_email/${keyLower}`));
-        prior = s2.exists() ? s2.val() : null;
+        const v2 = s2.exists() ? s2.val() : null;
+        if (!prior) prior = v2;
+        deviceIdsOfRecord(v2).forEach((id) => mirroredIds.add(id));
       }
     } catch (e) { /* the delete still proceeds */ }
 
     await set(ref(db, `banned_users_by_email/${key}`), null);
     if (keyLower !== key) {
       await set(ref(db, `banned_users_by_email/${keyLower}`), null);
+    }
+
+    // Device rows. Besides the tagged ids, check the device the account is
+    // on now: a record rewritten by a writer that drops the tags (the server
+    // report auto-ban, an old build) would otherwise strand its device ban.
+    // That one is cleared only when its row names THIS account, so lifting
+    // one account never releases a device another account got banned on.
+    try {
+      const current = await getUserDeviceId(db, prior?.userId);
+      if (current && !mirroredIds.has(current)) {
+        const ds = await get(ref(db, `banned_devices/${current}`));
+        const row = ds.exists() ? ds.val() : null;
+        if (row && (sameEmail(row.email, email) || (prior?.userId && row.userId === prior.userId))) {
+          mirroredIds.add(current);
+        }
+      }
+    } catch (e) { /* best effort */ }
+    if (mirroredIds.size > 0) {
+      await Promise.all(Array.from(mirroredIds).map((id) =>
+        set(ref(db, `banned_devices/${id}`), null).catch(() => {})));
     }
 
     logModAction({

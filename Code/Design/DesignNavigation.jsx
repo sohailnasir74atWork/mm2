@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import config from '../Helper/Environment';
 import { useGlobalState } from '../GlobelStats';
 import { useHaptic } from '../Helper/HepticFeedBack';
+import { useTranslation } from 'react-i18next';
 
 import DesignFeedScreen from './DesignMainScreen';
 import PrivateChatScreen from '../ChatScreen/PrivateChat/PrivateChat';
@@ -19,6 +20,7 @@ const HighlightedText = ({ text }) => (
 export const DesignStack = ({ selectedTheme }) => {
   const [bannedUsers, setBannedUsers] = useState([]);
   const { triggerHapticFeedback } = useHaptic();
+  const { t } = useTranslation();
   const { theme } = useGlobalState();
   const isDarkMode = theme === 'dark';
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
@@ -71,7 +73,7 @@ export const DesignStack = ({ selectedTheme }) => {
       component={DesignFeedScreen}
       initialParams={sharedParams}
       options={{
-        title: 'Feed',
+        title: t('tabs.feed'),
         // iOS: the native navigation bar renders ~64pt tall here (the root
         // SafeAreaView in App.js already clears the status bar), 20pt taller
         // than the 44pt JS header the Calculator tab gets, so Feed's lone
@@ -83,7 +85,7 @@ export const DesignStack = ({ selectedTheme }) => {
               backgroundColor: selectedTheme.colors.background,
               borderBottomColor: selectedTheme.colors.border,
             }]}>
-              <Text style={[styles.compactHeaderTitle, { color: selectedTheme.colors.text }]}>Feed</Text>
+              <Text style={[styles.compactHeaderTitle, { color: selectedTheme.colors.text }]}>{t('tabs.feed')}</Text>
             </View>
           ),
         } : {}),
@@ -105,7 +107,7 @@ export const DesignStack = ({ selectedTheme }) => {
     <Stack.Screen
       name="ImageViewerScreen"
       component={ImageViewerScreen}
-      options={{ title: 'Image' }}
+      options={{ title: t('feed.image') }}
     />
   </Stack.Navigator>
   );

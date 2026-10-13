@@ -42,6 +42,7 @@ import { useGlobalState } from '../GlobelStats';
 import { useHaptic } from '../Helper/HepticFeedBack';
 import AppOpenAdManager from '../Ads/openApp';
 import { paywallPlacement, trackPaywallView, trackPaywallClose } from '../Helper/growthAnalytics';
+import { flipInRTL } from '../Helper/rtl';
 
 const { width, height } = Dimensions.get('window');
 const SMALL = height < 700;
@@ -640,7 +641,7 @@ const SubscriptionScreen = ({ visible, onClose, track }) => {
                   <Text style={s.ctaText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
                     {ctaLabel}
                   </Text>
-                  <Icon name="arrow-forward" size={19} color="#FFFFFF" style={s.ctaArrow} />
+                  <Icon name="arrow-forward" size={19} color="#FFFFFF" style={[s.ctaArrow, flipInRTL]} />
                 </View>
               )}
             </TouchableOpacity>

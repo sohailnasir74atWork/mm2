@@ -153,10 +153,10 @@ const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.overlay}>
           <View style={styles.modal}>
-            <Text style={styles.title}>Report Post</Text>
+            <Text style={styles.title}>{t('feed.report_post')}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Why are you reporting this post?"
+              placeholder={t('feed.report_post_placeholder')}
               placeholderTextColor="#999"
               value={reportText}
               onChangeText={setReportText}
@@ -171,10 +171,10 @@ const ReportModal = ({ visible, onClose, item, banUserwithEmail }) => {
                 style={[styles.submitButton, submitting && { opacity: 0.6 }]}
                 disabled={submitting}
               >
-                <Text style={styles.buttonText}>{submitting ? 'Submitting…' : 'Submit'}</Text>
+                <Text style={styles.buttonText}>{submitting ? t('private_chat.submitting') : t('chat.submit')}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={onClose} style={styles.cancelButton} disabled={submitting}>
-                <Text style={styles.buttonText}>Cancel</Text>
+                <Text style={styles.buttonText}>{t('feed.cancel')}</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -19,7 +19,10 @@
  *
  * Also handles TAPS on value pushes (this broadcast and the per-item alerts):
  * they open the Values screen; and on birthday pushes (functions/birthdays,
- * data.route 'Birthdays'): they open the Birthdays screen.
+ * data.route 'Birthdays'): they open the Birthdays screen; and on group pushes
+ * (groupChat / groupInvitation / groupJoinRequest): see groupNotifications.js;
+ * and on Trade Match alerts (type 'trade_match', route 'TradeMatch'): they open
+ * the Trade Match screen.
  */
 import { Platform } from 'react-native';
 import {
@@ -31,8 +34,10 @@ import {
   getInitialNotification,
 } from '@react-native-firebase/messaging';
 import notifee, { AndroidImportance, AuthorizationStatus, EventType } from '@notifee/react-native';
+import i18n from 'i18next';
 import { navigationRef } from './navigationService';
 import { whenAdsReady } from '../Ads/adsGate';
+import { notificationTargetForGroupPush } from './groupNotifications';
 
 let mmkv = null;
 try {
@@ -99,7 +104,8 @@ const ensureValueAlertsChannel = async () => {
   try {
     await notifee.createChannel({
       id: 'value_alerts',
-      name: 'Value Alerts',
+      // Shown in Android's notification settings, in the app language.
+      name: i18n.t('settings.channel_value_alerts', { defaultValue: 'Value Alerts' }),
       importance: AndroidImportance.HIGH,
     });
   } catch (_) {}
@@ -161,7 +167,7 @@ export function setValueUpdatesEnabled(enabled) {
 
 // Screens a push may open. data.route comes from the server, so it is
 // matched against this list and never passed to navigate() unchecked.
-const ALLOWED_ROUTES = ['Values', 'Birthdays'];
+const ALLOWED_ROUTES = ['Values', 'Birthdays', 'TradeMatch'];
 // Birthday pushes (functions/birthdays): the birthday itself, a first wish,
 // a thank-you. All carry route 'Birthdays'.
 const BIRTHDAY_TYPES = ['birthday', 'birthday_wish', 'birthday_thanks'];
@@ -175,9 +181,23 @@ export function routeForNotificationData(data) {
   if (BIRTHDAY_TYPES.includes(data.type)) {
     return data.route === 'Birthdays' && ALLOWED_ROUTES.includes(data.route) ? 'Birthdays' : null;
   }
+  // Trade Match dream alerts (functions/tradeMatch.js tradeMatchDreamAlerts):
+  // { type: 'trade_match', route: 'TradeMatch', itemKey, fromUid }.
+  if (data.type === 'trade_match' || data.route === 'TradeMatch') return 'TradeMatch';
   // Per-item alerts from valueAlertsPoll: { kind, game, item }, no route.
   if (data.kind === 'value_change') return 'Values';
   return null;
+}
+
+/**
+ * Where a tapped push leads, as { name, params } (params may be undefined),
+ * or null to only open the app. Root-stack routes come from
+ * routeForNotificationData; group pushes lead into the Chat tab's stack.
+ */
+export function targetForNotificationData(data) {
+  const route = routeForNotificationData(data);
+  if (route) return { name: route, params: undefined };
+  return notificationTargetForGroupPush(data);
 }
 
 let pendingRoute = null;
@@ -187,22 +207,26 @@ const flushPendingRoute = () => {
   if (!pendingRoute) return;
   try {
     if (!navigationRef.isReady()) return;
-    const route = pendingRoute;
+    const target = pendingRoute;
     pendingRoute = null;
-    navigationRef.navigate(route);
+    if (target.params) {
+      navigationRef.navigate(target.name, target.params);
+    } else {
+      navigationRef.navigate(target.name);
+    }
   } catch (_) {}
 };
 
 const openFromNotification = (data, key) => {
-  const route = routeForNotificationData(data);
-  if (!route) return;
+  const target = targetForNotificationData(data);
+  if (!target) return;
   // One tap can be reported twice (notifee's getInitialNotification and a
   // PRESS event); navigate once.
   if (key) {
     if (key === lastOpenedKey) return;
     lastOpenedKey = key;
   }
-  pendingRoute = route;
+  pendingRoute = target;
   flushPendingRoute();
 };
 
@@ -211,10 +235,19 @@ const onRemoteOpened = (msg) => {
   openFromNotification(msg.data, msg.messageId ? `fcm:${msg.messageId}` : null);
 };
 
+// groupNotifications.js reuses one notifee id per slot (a group, Trade
+// Match) and stamps each display with shownAt, so the id alone would make the
+// next tap in that slot look like a repeat. Other notifications: id only.
+const notifeeTapKey = (n) => {
+  if (!n?.id) return null;
+  const shownAt = n.data?.shownAt;
+  return shownAt ? `notifee:${n.id}:${shownAt}` : `notifee:${n.id}`;
+};
+
 const onNotifeeEvent = ({ type, detail } = {}) => {
   if (type !== EventType.PRESS) return;
   const n = detail?.notification;
-  openFromNotification(n?.data, n?.id ? `notifee:${n.id}` : null);
+  openFromNotification(n?.data, notifeeTapKey(n));
 };
 
 /**

@@ -12,7 +12,7 @@ import { validateContent } from '../../Helper/ContentModeration';
 import { showMessage } from 'react-native-flash-message';
 import { pickImages } from '../../Helper/imagePicker';
 import { uploadImage, UPLOAD_KIND } from '../../Helper/imageUpload';
-import RNFS from 'react-native-fs';
+import { prepareChatImages, CHAT_IMAGE_PICKER_OPTIONS } from '../../Helper/chatImages';
 
 const GroupMessageInput = ({
   onSend,
@@ -53,13 +53,14 @@ const GroupMessageInput = ({
     const remainingSlots = maxImages - currentCount;
 
     if (remainingSlots <= 0) {
-      Alert.alert('Limit Reached', 'You can only select up to 3 images per message.');
+      Alert.alert(t('private_chat.limit_reached'), t('private_chat.max_images'));
       return;
     }
 
     pickImages(
       {
-        mediaType: 'photo',
+        // Resized by the picker, then compressed below (Helper/chatImages.js).
+        ...CHAT_IMAGE_PICKER_OPTIONS,
         selectionLimit: remainingSlots, // Allow selecting up to remaining slots
       },
       async (response) => {
@@ -72,37 +73,15 @@ const GroupMessageInput = ({
 
         const assets = response.assets || [];
         if (assets.length > 0) {
-          const MAX_SIZE_BYTES = 1024 * 1024; // 1 MB
-          const validUris = [];
-          const rejectedCount = [];
-
-          // Check file size for each image
-          for (const asset of assets) {
-            if (!asset?.uri || typeof asset.uri !== 'string') continue;
-
-            try {
-              const filePath = asset.uri.replace('file://', '');
-              const fileInfo = await RNFS.stat(filePath);
-              const fileSize = fileInfo.size || 0;
-
-              if (fileSize > MAX_SIZE_BYTES) {
-                rejectedCount.push(asset.fileName || 'image');
-                continue;
-              }
-
-              validUris.push(asset.uri);
-            } catch (error) {
-              console.warn('Error checking file size:', error);
-              // If we can't check size, allow it (better UX than blocking)
-              validUris.push(asset.uri);
-            }
-          }
+          // Compress to about 1024px first; the 1 MB limit then applies to
+          // the compressed file, so ordinary camera photos are accepted.
+          const { uris: validUris, rejected: rejectedCount } = await prepareChatImages(assets);
 
           // Show alert if any images were rejected
-          if (rejectedCount.length > 0) {
+          if (rejectedCount > 0) {
             Alert.alert(
-              'Image Too Large',
-              `${rejectedCount.length} image(s) exceed 1 MB limit and were not added. Please select smaller images.`
+              t('private_chat.image_too_large_title'),
+              t('private_chat.image_too_large_msg', { count: rejectedCount })
             );
           }
 
@@ -116,7 +95,7 @@ const GroupMessageInput = ({
         }
       }
     );
-  }, [isBanned, imageUris.length]);
+  }, [isBanned, imageUris.length, t]);
 
   const handleSend = useCallback(async () => {
     if (isSending) return;
@@ -136,7 +115,7 @@ const GroupMessageInput = ({
       const validation = validateContent(textToSend);
       if (!validation.isValid) {
         showMessage({
-          message: validation.reason || 'Inappropriate content detected.',
+          message: validation.reason || t('private_chat.inappropriate_content'),
           type: 'danger',
           duration: 3000,
         });
@@ -192,7 +171,7 @@ const GroupMessageInput = ({
       if (setSelectedFruits && typeof setSelectedFruits === 'function') {
         setSelectedFruits(fruitsToSend);
       }
-      Alert.alert('Error', 'Failed to send message.');
+      Alert.alert(t('chat.error'), t('group_chat.failed_send'));
     } finally {
       setIsSending(false);
     }
@@ -207,6 +186,7 @@ const GroupMessageInput = ({
     uploadToBunny,
     replyTo,
     onCancelReply,
+    t,
   ]);
 
   const hasFruits = useMemo(
@@ -320,7 +300,7 @@ const GroupMessageInput = ({
           }}
         >
           <Text style={{ color: isDark ? '#ccc' : '#555', fontSize: 12, marginRight: 8 }}>
-            {imageUris.length} image{imageUris.length > 1 ? 's' : ''} attached
+            {t('chat.images_attached', { count: imageUris.length })}
           </Text>
           {imageUris.map((uri, index) => (
             <TouchableOpacity
@@ -347,7 +327,7 @@ const GroupMessageInput = ({
           }}
         >
           <Text style={{ color: isDark ? '#ccc' : '#555', fontSize: 12 }}>
-            {selectedFruits.length} pet(s) selected
+            {t('chat.items_selected', { count: selectedFruits.length })}
           </Text>
           <TouchableOpacity
             onPress={() => {

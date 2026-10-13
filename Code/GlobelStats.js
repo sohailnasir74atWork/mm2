@@ -2,11 +2,12 @@ import {trackGrowthEvent} from './Helper/growthAnalytics';
 import { fetchCatalog, refreshCatalog, usableCatalog, withDeadline } from './Helper/catalogNetwork';
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { getApp, getApps, initializeApp } from '@react-native-firebase/app';
-import { getAuth, onAuthStateChanged } from '@react-native-firebase/auth';
+import { getAuth, onAuthStateChanged, signOut } from '@react-native-firebase/auth';
 import { ref, set, update, get, onDisconnect, getDatabase, onValue, remove, query, orderByValue, equalTo } from '@react-native-firebase/database';
 import { getFirestore, doc, onSnapshot, getDoc } from '@react-native-firebase/firestore';
 import { syncValueAlertTopics } from './Helper/valueAlerts';
 import { initValueNotificationTapHandlers, initValueUpdatesOnStartup } from './Helper/valueUpdateNotifications';
+import { ensurePostChannel } from './Helper/postNotifications';
 import { createNewUser, registerForNotifications } from './Globelhelper';
 import { useLocalState } from './LocalGlobelStats';
 import { requestPermission } from './Helper/PermissionCheck';
@@ -16,6 +17,7 @@ import { getConfigNodes } from './Helper/configCache';
 import { indexMM2Images, indexSupremePrices, unwrapFeed } from './Helper/valueSources';
 import { getServerTime } from './Helper/serverTime';
 import { saveOwnPrivateProfile } from './Helper/privateProfile';
+import { getDeviceFingerprint, stampOwnDeviceId } from './Helper/deviceFingerprint';
 import { generateOnePieceUsername } from './Helper/RendomNamegen';
 import { getAnalytics, logEvent } from '@react-native-firebase/analytics';
 
@@ -38,6 +40,20 @@ const logStartupTiming = (name, params) => {
     logEvent(getAnalytics(), name, params);
   } catch (_) {}
 };
+
+// Profile-read robustness (2026-10-13, ported from adoptme-jan7's 2026-10-01
+// stuck-profile fix). The login read of users/{uid} is capped (10 s, 20 s on a
+// background reload), and a failed one is retried after RTDB reports
+// connected, backing off by these delays. The array's length is the
+// per-launch reload cap.
+const PROFILE_READ_TIMEOUT_MS = 10000;
+const PROFILE_RELOAD_TIMEOUT_MS = 20000;
+const PROFILE_RELOAD_DELAYS = [2000, 8000, 20000, 45000, 90000];
+
+// Grace before signing out an unverified email/password user (see the auth
+// listener). Long enough for SigninDrawer to send the verification email and
+// sign out by itself.
+const UNVERIFIED_SIGNOUT_GRACE_MS = 3000;
 
 const app = getApps().length ? getApp() : null;
 const auth = getAuth(app);
@@ -71,9 +87,19 @@ export const GlobalStateProvider = ({ children }) => {
   // Ban payload from banned_users_by_email — drives the ban card and the
   // "Strike N, Xh left" copy in chat.
   const [strikeInfo, setStrikeInfo] = useState(null);
+  // Email-keyed and device-keyed bans are tracked separately (as in
+  // adoptme-jan7) so a banned player cannot escape by signing up again with
+  // a fresh account on the same phone.
+  const [isEmailBanned, setIsEmailBanned] = useState(false);
+  const [isDeviceBanned, setIsDeviceBanned] = useState(false);
+  // Full banned_devices/{fp} row while this device is under a live ban. It
+  // names the email + uid of the account that was banned, so the Home ban
+  // card can explain a ban the signed-in account did not earn itself.
+  const [deviceBanInfo, setDeviceBanInfo] = useState(null);
   // Canonical gate. Every send/post path should read THIS, not strikeInfo,
   // because it is validated against server time rather than the device clock.
-  const [isUserBlocked, setIsUserBlocked] = useState(false);
+  // It is the OR of the email ban and the device ban.
+  const isUserBlocked = isEmailBanned || isDeviceBanned;
   // Admin kill switch for moderator ban/mute (RTDB /mod_controls_enabled).
   // Default ON: only an explicit `false` disables it, so a denied or offline
   // read leaves moderators working.
@@ -209,6 +235,9 @@ export const GlobalStateProvider = ({ children }) => {
   useEffect(() => {
     initValueNotificationTapHandlers();
     initValueUpdatesOnStartup();
+    // The Android channel comment/like pushes name. Made up front so a push
+    // that arrives in the background is high importance, not FCM's fallback.
+    ensurePostChannel();
   }, []);
 
   // ✅ Handle flag setting based on user preference (saves Firebase data costs)
@@ -261,19 +290,79 @@ export const GlobalStateProvider = ({ children }) => {
     });
   }, []); // No dependencies, so it never re-creates
 
+  // ── Failed-profile-read recovery (2026-10-13, from adoptme-jan7) ──
+  //
+  // When the login read of users/{uid} fails, handleUserLogin keeps the user
+  // signed in on a stub profile (see its catch). Nothing used to re-run it
+  // before the next auth change, so the stub (no roles, no admin, no stored
+  // name) lasted the whole session. This waits for RTDB to report connected
+  // (at once if it already is), backs off, and re-runs it for the same user.
+  // A connected socket is not a fast one: retrying immediately on a slow
+  // phone just timed out again, hence the growing delays.
+  const handleUserLoginRef = useRef(null);
+  const profileReloadRef = useRef({ uid: null, unsub: null, timer: null, runs: 0 });
+  const cancelProfileReload = useCallback(() => {
+    const pending = profileReloadRef.current;
+    if (pending.unsub) {
+      try { pending.unsub(); } catch (e) { /* noop */ }
+      pending.unsub = null;
+    }
+    if (pending.timer) {
+      clearTimeout(pending.timer);
+      pending.timer = null;
+    }
+  }, []);
+  const reloadProfileWhenConnected = useCallback((uid) => {
+    const pending = profileReloadRef.current;
+    if (pending.uid !== uid) {
+      pending.uid = uid;
+      pending.runs = 0;
+    }
+    if (pending.unsub || pending.timer || pending.runs >= PROFILE_RELOAD_DELAYS.length) return;
+    pending.unsub = onValue(ref(appdatabase, '.info/connected'), (snap) => {
+      if (snap.val() !== true) return;
+      cancelProfileReload();
+      pending.timer = setTimeout(() => {
+        pending.timer = null;
+        pending.runs += 1;
+        if (auth.currentUser?.uid === uid) handleUserLoginRef.current?.(auth.currentUser, { reload: true });
+      }, PROFILE_RELOAD_DELAYS[pending.runs]);
+    }, () => { /* denied / offline → the next auth change retries */ });
+  }, [cancelProfileReload]);
+
   // ✅ Memoize handleUserLogin
-  const handleUserLogin = useCallback(async (loggedInUser) => {
+  // `options.reload` marks a background retry from reloadProfileWhenConnected.
+  // (No destructured parameter default: Hermes rejects some of those.)
+  const handleUserLogin = useCallback(async (loggedInUser, options) => {
     if (!loggedInUser) {
       resetUserState(); // No longer recreates resetUserState
       return;
     }
+    const reload = !!(options && options.reload);
+    const userId = loggedInUser.uid;
     try {
-      const userId = loggedInUser.uid;
       const userRef = ref(appdatabase, `users/${userId}`);
 
+      // 🔄 Fetch user data, capped. A hung socket used to hold this await
+      // (and isAppReady behind it) forever. A read that fails or times out
+      // throws to the catch below, which NEVER treats it as "no record":
+      // only a successful read that finds nothing runs the new-user branch.
+      // Reloads run behind the UI, not the splash, so they can wait longer.
+      let readTimer = null;
+      const snapshot = await Promise.race([
+        get(userRef),
+        new Promise((_, reject) => {
+          readTimer = setTimeout(
+            () => reject(new Error('read-timeout')),
+            reload ? PROFILE_RELOAD_TIMEOUT_MS : PROFILE_READ_TIMEOUT_MS,
+          );
+        }),
+      ]).finally(() => { if (readTimer) clearTimeout(readTimer); });
 
-      // 🔄 Fetch user data
-      const snapshot = await get(userRef);
+      // Signed out or switched account while the read was in flight: this
+      // result belongs to nobody on screen any more.
+      if (auth.currentUser?.uid !== userId) return;
+
       let userData;
 
       // Admin comes from the real RTDB role flag (`users/{uid}/admin`) — the
@@ -292,16 +381,23 @@ export const GlobalStateProvider = ({ children }) => {
       // sign-in must never wait on, or fail because of, this write.
       saveOwnPrivateProfile(appdatabase, userId, { email: loggedInUser.email }).catch(() => {});
 
+      // Record this device on the account (users_private/{uid}/deviceId) so
+      // a later staff ban can lock the device too. Same fire-and-forget
+      // contract: a failure only weakens the device ban, never sign-in.
+      stampOwnDeviceId(appdatabase, userId).catch(() => {});
+
       if (snapshot.exists()) {
         // ⏳ USER EXISTS → Keep existing createdAt
         const existing = snapshot.val();
         userData = {
           ...existing,
           id: userId,
-          createdAt: existing.createdAt || Date.now()   // fallback if missing
+          createdAt: existing.createdAt || Date.now()   // fallback if missing (local only, never written)
         };
 
-        // 🛡️ Fix: If displayName is empty/falsy, regenerate one and save it
+        // 🛡️ Fix: If displayName is empty/falsy, regenerate one and save it.
+        // Safe to write: this is a SUCCESSFUL whole-node read, so an empty
+        // name here really is empty (a failed read never reaches this line).
         if (!userData.displayName || !userData.displayName.trim()) {
           const newName = loggedInUser.displayName || generateOnePieceUsername() || 'Player';
           userData.displayName = newName;
@@ -316,10 +412,17 @@ export const GlobalStateProvider = ({ children }) => {
           createdAt: Date.now()
         };
 
-        await set(userRef, userData);
+        // update() instead of set(): identical for a genuinely new node, but
+        // if this branch is ever reached for an existing user it merges
+        // instead of wiping the fields it does not carry (roles, createdAt…).
+        await update(userRef, userData);
       }
 
+      // A successful read replaces the stub (and its profileIncomplete flag).
       setUser(userData);
+      if (reload) {
+        logStartupTiming('profile_reload_ok', { runs: profileReloadRef.current.runs });
+      }
 
       // (FCM token registration is NOT done here: the `user?.id` effect below
       // does it once. It used to run here, in that effect, AND after login in
@@ -330,17 +433,22 @@ export const GlobalStateProvider = ({ children }) => {
       // ⚠️ A failed profile read must NOT look like a logout.
       //
       // Firebase Auth still holds a valid session at this point — only the
-      // RTDB round-trip failed. Previously this catch was empty, so `user.id`
-      // stayed null, every screen rendered the signed-out UI and popped the
-      // sign-in drawer. That is the "I keep getting logged out" report, and it
-      // hits hardest wherever firebaseio.com is slow or throttled.
+      // RTDB round-trip failed (or hit the cap). An empty catch here used to
+      // leave `user.id` null, so every screen rendered the signed-out UI and
+      // popped the sign-in drawer ("I keep getting logged out").
       //
       // Keep the session alive using the identity we already have from the
-      // auth record. Fields we could not read stay at their defaults and get
-      // filled in by the next successful read.
+      // auth record, and reload the real profile once RTDB is reachable.
+      // NOTHING from this stub is ever written back: the name, join date and
+      // roles stay as stored, and the next successful read replaces it.
       console.warn('[Auth] profile read failed, keeping session:', error?.message);
-      setUser((prev) => (prev?.id === loggedInUser.uid ? prev : {
-        id: loggedInUser.uid,
+      if (auth.currentUser?.uid !== userId) return; // signed out meanwhile
+      // The ban listener keys off the email, so it must run on the stub too.
+      setCurrentuserEmail(loggedInUser.email);
+      // A failed RELOAD keeps whatever profile is already on screen; only a
+      // user with nothing loaded yet gets the stub.
+      setUser((prev) => (prev?.id === userId ? prev : {
+        id: userId,
         displayName: loggedInUser.displayName || 'Player',
         avatar: loggedInUser.photoURL || null,
         isBlock: false,
@@ -349,9 +457,18 @@ export const GlobalStateProvider = ({ children }) => {
         online: false,
         isPro: false,
         createdAt: null,
+        // Local state only. Fields are missing because they were not read,
+        // not because the user lacks them: anything that would prompt for
+        // or act on a missing field should wait while this is set.
+        profileIncomplete: true,
       }));
+      logStartupTiming('profile_reads_partial', { reload: reload ? 1 : 0 });
+      reloadProfileWhenConnected(userId);
     }
-  }, [appdatabase, resetUserState]); // ✅ Uses memoized resetUserState
+  }, [appdatabase, resetUserState, reloadProfileWhenConnected]); // ✅ Uses memoized resetUserState
+  useEffect(() => {
+    handleUserLoginRef.current = handleUserLogin;
+  }, [handleUserLogin]);
   useEffect(() => {
     if (!user?.id) return;
 
@@ -371,20 +488,44 @@ export const GlobalStateProvider = ({ children }) => {
   // ✅ Ensure useEffect runs only when necessary
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (loggedInUser) => {
-      if (loggedInUser && !loggedInUser.emailVerified) {
-        await auth.signOut();
-        // showErrorMessage("Email Not Verified", "Please check your inbox and verify your email.");
+      // A new auth state supersedes any profile reload queued for the old one.
+      cancelProfileReload();
+
+      // Enforce email verification ONLY for the email/password provider
+      // (ported from adoptme-jan7, 2026-10-13). This listener fires with the
+      // persisted session on every cold start and token refresh, and it used
+      // to sign out EVERY emailVerified=false user, which also hit social
+      // logins (Apple, and some Google accounts, report false).
+      //
+      // It also raced registration: SigninDrawer creates the account, then
+      // sends the verification email, then signs out. Signing out under it
+      // (Adopt Me measured 190 of 191 such sign-outs mid-session) stopped the
+      // email or made the drawer's own signOut fail. So give the drawer a few
+      // seconds, and only sign out a user who is still here: a restored
+      // unverified session, or a drawer flow that failed part-way.
+      const isPasswordUser = !!loggedInUser?.providerData?.some((p) => p?.providerId === 'password');
+      if (loggedInUser && isPasswordUser && !loggedInUser.emailVerified) {
+        const uid = loggedInUser.uid;
+        setTimeout(() => {
+          if (auth.currentUser?.uid !== uid) return; // the drawer already signed out
+          if (auth.currentUser?.emailVerified) return; // verified meanwhile
+          signOut(auth).catch(() => {});
+        }, UNVERIFIED_SIGNOUT_GRACE_MS);
         return;
       }
 
       setTimeout(async () => {
         const _loginStartedAt = Date.now();
-        await handleUserLogin(loggedInUser);
-        logStartupTiming('startup_profile_reads', { ms: Date.now() - _loginStartedAt });
+        try {
+          // Swallows its own errors and caps its read, so this cannot hang.
+          await handleUserLogin(loggedInUser);
+        } finally {
+          logStartupTiming('startup_profile_reads', { ms: Date.now() - _loginStartedAt });
 
-        // Time-to-interactive: process start -> splash hide.
-        logStartupTiming('startup_ready', { ms: Date.now() - _launchedAt });
-        await updateLocalState('isAppReady', true);
+          // Time-to-interactive: process start -> splash hide.
+          logStartupTiming('startup_ready', { ms: Date.now() - _launchedAt });
+          await updateLocalState('isAppReady', true);
+        }
       }, 0);
     });
 
@@ -786,7 +927,7 @@ export const GlobalStateProvider = ({ children }) => {
   // the foreground re-probes, so a clock changed while backgrounded is caught.
   useEffect(() => {
     if (!currentUserEmail || !appdatabase) {
-      setIsUserBlocked(false);
+      setIsEmailBanned(false);
       setStrikeInfo(null);
       return;
     }
@@ -802,19 +943,19 @@ export const GlobalStateProvider = ({ children }) => {
       if (expiryTimer) { clearTimeout(expiryTimer); expiryTimer = null; }
 
       const banData = currentBan;
-      if (!banData) { setIsUserBlocked(false); return; }
+      if (!banData) { setIsEmailBanned(false); return; }
 
       const { bannedUntil } = banData;
-      if (bannedUntil === 'permanent') { setIsUserBlocked(true); return; }
-      if (typeof bannedUntil !== 'number') { setIsUserBlocked(false); return; }
+      if (bannedUntil === 'permanent') { setIsEmailBanned(true); return; }
+      if (typeof bannedUntil !== 'number') { setIsEmailBanned(false); return; }
 
       const serverNow = (await getServerTime(appdatabase, user?.id || currentUserEmail)).getTime();
       if (cancelled) return;
 
       const remaining = bannedUntil - serverNow;
-      if (remaining <= 0) { setIsUserBlocked(false); return; }
+      if (remaining <= 0) { setIsEmailBanned(false); return; }
 
-      setIsUserBlocked(true);
+      setIsEmailBanned(true);
       // Cap at ~24h so a long ban never sits on a stale offset.
       expiryTimer = setTimeout(evaluate, Math.min(remaining, 24 * 60 * 60 * 1000));
     };
@@ -836,6 +977,73 @@ export const GlobalStateProvider = ({ children }) => {
       unsubscribe();
     };
   }, [currentUserEmail, user?.id]);
+
+  // ── Device ban (ported from adoptme-jan7 2026-10-13) ──
+  //
+  // Closes "ban the email, sign up again on the same phone". Staff bans
+  // write banned_devices/{fingerprint} (ChatScreen/utils.js), and every
+  // account signed in on that device is held by isUserBlocked exactly like
+  // an email ban. Same server-time validation as the email listener above.
+  //
+  // Signed-in only (Adopt Me also listens signed out): a signed-out user can
+  // send nothing the gate protects, and it saves a listener on every
+  // signed-out launch. A denied or failed read (rule not deployed yet,
+  // offline) fails OPEN, so nobody is locked out by an error.
+  useEffect(() => {
+    const clear = () => { setIsDeviceBanned(false); setDeviceBanInfo(null); };
+    if (!user?.id || !appdatabase) { clear(); return undefined; }
+
+    let unsub = null;
+    let appStateSub = null;
+    let cancelled = false;
+    let currentBan = null;
+    let expiryTimer = null;
+
+    const evaluate = async () => {
+      if (cancelled) return;
+      if (expiryTimer) { clearTimeout(expiryTimer); expiryTimer = null; }
+
+      const data = currentBan;
+      if (!data) { clear(); return; }
+
+      const { bannedUntil } = data;
+      if (bannedUntil === 'permanent') { setIsDeviceBanned(true); setDeviceBanInfo(data); return; }
+      if (typeof bannedUntil !== 'number') { clear(); return; }
+
+      const serverNow = (await getServerTime(appdatabase, user?.id || 'anon')).getTime();
+      if (cancelled) return;
+
+      const remaining = bannedUntil - serverNow;
+      if (remaining <= 0) { clear(); return; }
+
+      setIsDeviceBanned(true);
+      setDeviceBanInfo(data);
+      expiryTimer = setTimeout(evaluate, Math.min(remaining, 24 * 60 * 60 * 1000));
+    };
+
+    getDeviceFingerprint().then((fp) => {
+      if (cancelled) return;
+      if (!fp) { clear(); return; }
+      unsub = onValue(
+        ref(appdatabase, `banned_devices/${fp}`),
+        (snapshot) => {
+          currentBan = snapshot.val() || null;
+          evaluate();
+        },
+        () => { currentBan = null; clear(); },
+      );
+      appStateSub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') evaluate();
+      });
+    }).catch(() => clear());
+
+    return () => {
+      cancelled = true;
+      if (expiryTimer) clearTimeout(expiryTimer);
+      if (appStateSub) appStateSub.remove();
+      if (unsub) unsub();
+    };
+  }, [user?.id]);
 
   // ✅ Set up online status tracking using separate presence node (RTDB-only, optimized for scale)
   // ✅ Foreground-only presence (ACTIVE = online, background/inactive = offline)
@@ -978,11 +1186,14 @@ export const GlobalStateProvider = ({ children }) => {
       acceptedInviteRoom, // ✅ Accepted invite from toast
       setAcceptedInviteRoom, // ✅ Set accepted invite
       strikeInfo,          // raw ban payload — reason, strike count, expiry
-      isUserBlocked,       // canonical gate, server-time validated
+      isUserBlocked,       // canonical gate, server-time validated: email ban OR device ban
+      isEmailBanned,       // this account's own ban/mute is live
+      isDeviceBanned,      // this device is under a live device ban
+      deviceBanInfo,       // banned_devices row: originating email/userId, reason, expiry
       modControlsEnabled,  // moderator ban/mute kill switch
       canGrantJmd,         // delegated Junior-Mod grant permission
     }),
-    [user, theme, loading, catalogStatus, api, freeTranslation, currentUserEmail, tradingServerLink, isInActiveGame, acceptedInviteRoom, isAdmin, single_offer_wall, fetchStockData, reload, updateLocalStateAndDatabase, strikeInfo, isUserBlocked, modControlsEnabled, canGrantJmd]
+    [user, theme, loading, catalogStatus, api, freeTranslation, currentUserEmail, tradingServerLink, isInActiveGame, acceptedInviteRoom, isAdmin, single_offer_wall, fetchStockData, reload, updateLocalStateAndDatabase, strikeInfo, isUserBlocked, isEmailBanned, isDeviceBanned, deviceBanInfo, modControlsEnabled, canGrantJmd]
   );
 
   return (

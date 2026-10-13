@@ -1,5 +1,7 @@
-import { getDatabase, ref, set, update, get, increment, remove } from '@react-native-firebase/database';
+import i18n from 'i18next';
+import { getDatabase, ref, set, update, get, increment, remove, query as dbQuery, orderByKey, startAt, endAt, limitToLast } from '@react-native-firebase/database';
 import {
+  getFirestore,
   collection,
   doc,
   getDoc,
@@ -19,6 +21,49 @@ import {
 
 const MAX_GROUP_MEMBERS = 50; // Maximum members per group
 
+// How many active groups one player may own at a time. Ported from Adopt Me
+// (owner decision there 2026-10-07: was 1). Client-side only, like the rest of
+// group creation; old builds still stop their own users at one.
+export const MAX_GROUPS_PER_USER = 2;
+
+/**
+ * Every active group the user created (newest first). Same two equality
+ * filters as getUserAdminGroup, so no new composite index; sorted on the
+ * client because adding orderBy would need one.
+ * @returns {Promise<Array<{groupId: string, groupData: object}>>}
+ */
+export const getUserAdminGroups = async (firestoreDB, userId) => {
+  if (!firestoreDB || !userId) return [];
+  try {
+    const snapshot = await getDocs(query(
+      collection(firestoreDB, 'groups'),
+      where('createdBy', '==', userId),
+      where('isActive', '==', true),
+    ));
+    return snapshot.docs
+      .map((d) => ({ groupId: d.id, groupData: d.data() }))
+      .sort((a, b) => (b.groupData?.createdAt?.toMillis?.() || 0) - (a.groupData?.createdAt?.toMillis?.() || 0));
+  } catch (error) {
+    console.error('Error getting user admin groups:', error);
+    return [];
+  }
+};
+
+// ── Member picker target ────────────────────────────────────────────────
+// The member picker (OnlineUsersList, select mode) asks getUserAdminGroup
+// whether to ADD the picked players to an owned group or CREATE a new one.
+// With two groups per player that question has three answers, and the screen
+// that opens the picker (GroupsScreen's button) is where the player picks
+// one. It records the choice here before opening the picker:
+//   { mode: 'create' }              → getUserAdminGroup reports no group
+//   { mode: 'add', groupId, groupData } → getUserAdminGroup returns that group
+//   null (default)                  → the old behaviour, the first owned group
+// GroupsScreen clears it when the picker closes.
+let pickerTarget = null;
+export const setGroupPickerTarget = (target) => {
+  pickerTarget = target || null;
+};
+
 /**
  * Get user's group where they are admin/creator
  * @param {Object} firestoreDB - Firestore database instance
@@ -28,6 +73,14 @@ const MAX_GROUP_MEMBERS = 50; // Maximum members per group
 export const getUserAdminGroup = async (firestoreDB, userId) => {
   if (!firestoreDB || !userId) {
     return { success: false };
+  }
+
+  // See "Member picker target" above.
+  if (pickerTarget?.mode === 'create') {
+    return { success: false };
+  }
+  if (pickerTarget?.mode === 'add' && pickerTarget.groupId && pickerTarget.groupData?.createdBy === userId) {
+    return { success: true, groupId: pickerTarget.groupId, groupData: pickerTarget.groupData };
   }
 
   try {
@@ -95,37 +148,37 @@ export const getUserAdminGroup = async (firestoreDB, userId) => {
  */
 export const createGroup = async (firestoreDB, appdatabase, creatorData, memberIds = [], groupName = null, invitedUsersMap = null, groupAvatarUrl = null, groupDescription = null) => {
   if (!firestoreDB || !appdatabase || !creatorData?.id) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   // Group name is required
   if (!groupName || !groupName.trim()) {
-    return { success: false, error: 'Group name is required' };
+    return { success: false, error: i18n.t('group_errors.name_required') };
   }
 
   // Group description is required
   if (!groupDescription || !groupDescription.trim()) {
-    return { success: false, error: 'Group description is required' };
+    return { success: false, error: i18n.t('group_errors.description_required') };
   }
 
-  // Check if user already has a group as admin/creator
-  const existingGroup = await getUserAdminGroup(firestoreDB, creatorData.id);
-  if (existingGroup.success) {
+  // Up to MAX_GROUPS_PER_USER groups as admin/creator at a time.
+  const ownGroups = await getUserAdminGroups(firestoreDB, creatorData.id);
+  if (ownGroups.length >= MAX_GROUPS_PER_USER) {
     return {
       success: false,
-      error: 'You can only be admin of one group at a time. Please delete your existing group to create a new one.',
-      existingGroupId: existingGroup.groupId,
+      error: i18n.t('groups_screen.group_limit', { max: MAX_GROUPS_PER_USER }),
+      existingGroupId: ownGroups[0].groupId,
     };
   }
 
   // Validate member count (creator + members <= MAX_GROUP_MEMBERS)
   const totalMembers = 1 + (memberIds?.length || 0);
   if (totalMembers > MAX_GROUP_MEMBERS) {
-    return { success: false, error: `Maximum ${MAX_GROUP_MEMBERS} members allowed` };
+    return { success: false, error: i18n.t('group_errors.max_members', { max: MAX_GROUP_MEMBERS }) };
   }
 
   if (totalMembers < 2) {
-    return { success: false, error: 'Group must have at least 2 members' };
+    return { success: false, error: i18n.t('group_errors.min_members') };
   }
 
   try {
@@ -293,26 +346,26 @@ export const createGroup = async (firestoreDB, appdatabase, creatorData, memberI
 // matches acceptGroupInvite / leaveGroup / addMembersToGroup.
 export const sendGroupInvite = async (firestoreDB, appdatabase, groupId, invitedUserId, inviterData, invitedUserData = null) => {
   if (!firestoreDB || !groupId || !invitedUserId || !inviterData?.id) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   try {
     // Check if user is already in group (1 Firestore read)
     const groupDoc = await getDoc(doc(firestoreDB, 'groups', groupId));
     if (!groupDoc.exists()) {
-      return { success: false, error: 'Group not found' };
+      return { success: false, error: i18n.t('group_errors.not_found') };
     }
 
     const groupData = groupDoc.data();
     const memberIds = groupData.memberIds || [];
 
     if (memberIds.includes(invitedUserId)) {
-      return { success: false, error: 'User is already in group' };
+      return { success: false, error: i18n.t('group_errors.user_already_in') };
     }
 
     // Check group size limit
     if (memberIds.length >= MAX_GROUP_MEMBERS) {
-      return { success: false, error: `Group is full (max ${MAX_GROUP_MEMBERS} members)` };
+      return { success: false, error: i18n.t('group_errors.full', { max: MAX_GROUP_MEMBERS }) };
     }
 
     // Check if pending invite exists (1 Firestore query)
@@ -325,7 +378,7 @@ export const sendGroupInvite = async (firestoreDB, appdatabase, groupId, invited
     const existingInvite = await getDocs(existingInviteQuery);
 
     if (!existingInvite.empty) {
-      return { success: false, error: 'Invitation already sent' };
+      return { success: false, error: i18n.t('group_errors.invite_already_sent') };
     }
 
     // ✅ Fetch invited user data if not provided
@@ -387,7 +440,7 @@ export const sendGroupInvite = async (firestoreDB, appdatabase, groupId, invited
  */
 export const acceptGroupInvite = async (firestoreDB, appdatabase, inviteId, userData) => {
   if (!firestoreDB || !appdatabase || !inviteId || !userData?.id) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   try {
@@ -395,29 +448,29 @@ export const acceptGroupInvite = async (firestoreDB, appdatabase, inviteId, user
     const inviteSnap = await getDoc(inviteRef);
 
     if (!inviteSnap.exists()) {
-      return { success: false, error: 'Invitation not found' };
+      return { success: false, error: i18n.t('group_errors.invite_not_found') };
     }
 
     const inviteData = inviteSnap.data();
 
     // Validate
     if (inviteData.invitedUserId !== userData.id) {
-      return { success: false, error: 'Not your invitation' };
+      return { success: false, error: i18n.t('group_errors.invite_not_yours') };
     }
 
     if (inviteData.status !== 'pending') {
-      return { success: false, error: 'Invitation already processed' };
+      return { success: false, error: i18n.t('group_errors.invite_processed') };
     }
 
     if (Date.now() > inviteData.expiresAt) {
-      return { success: false, error: 'Invitation expired' };
+      return { success: false, error: i18n.t('group_errors.invite_expired') };
     }
 
     const groupRef = doc(firestoreDB, 'groups', inviteData.groupId);
     const groupSnap = await getDoc(groupRef);
 
     if (!groupSnap.exists()) {
-      return { success: false, error: 'Group not found' };
+      return { success: false, error: i18n.t('group_errors.not_found') };
     }
 
     const groupData = groupSnap.data();
@@ -425,12 +478,12 @@ export const acceptGroupInvite = async (firestoreDB, appdatabase, inviteId, user
     // Check if already member
     if (groupData.memberIds?.includes(userData.id)) {
       await updateDoc(inviteRef, { status: 'accepted' });
-      return { success: false, error: 'Already in group' };
+      return { success: false, error: i18n.t('group_errors.already_in') };
     }
 
     // Check group size limit
     if (groupData.memberIds?.length >= MAX_GROUP_MEMBERS) {
-      return { success: false, error: `Group is full (max ${MAX_GROUP_MEMBERS} members)` };
+      return { success: false, error: i18n.t('group_errors.full', { max: MAX_GROUP_MEMBERS }) };
     }
 
     // Add user to group (transaction to prevent race conditions)
@@ -509,7 +562,7 @@ export const acceptGroupInvite = async (firestoreDB, appdatabase, inviteId, user
  */
 export const declineGroupInvite = async (firestoreDB, inviteId, userId) => {
   if (!firestoreDB || !inviteId || !userId) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   try {
@@ -517,12 +570,12 @@ export const declineGroupInvite = async (firestoreDB, inviteId, userId) => {
     const inviteSnap = await getDoc(inviteRef);
 
     if (!inviteSnap.exists()) {
-      return { success: false, error: 'Invitation not found' };
+      return { success: false, error: i18n.t('group_errors.invite_not_found') };
     }
 
     const inviteData = inviteSnap.data();
     if (inviteData.invitedUserId !== userId) {
-      return { success: false, error: 'Not your invitation' };
+      return { success: false, error: i18n.t('group_errors.invite_not_yours') };
     }
 
     await updateDoc(inviteRef, { status: 'declined' });
@@ -543,7 +596,7 @@ export const declineGroupInvite = async (firestoreDB, inviteId, userId) => {
  */
 export const leaveGroup = async (firestoreDB, appdatabase, groupId, userId) => {
   if (!firestoreDB || !appdatabase || !groupId || !userId) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   try {
@@ -725,7 +778,7 @@ export const leaveGroup = async (firestoreDB, appdatabase, groupId, userId) => {
  */
 export const sendGroupMessage = async (appdatabase, firestoreDB, groupId, messageData, senderData) => {
   if (!appdatabase || !firestoreDB || !groupId || !messageData || !senderData?.id) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   try {
@@ -741,7 +794,7 @@ export const sendGroupMessage = async (appdatabase, firestoreDB, groupId, messag
     // 2. Get group members from Firestore (1 read)
     const groupDoc = await getDoc(doc(firestoreDB, 'groups', groupId));
     if (!groupDoc.exists()) {
-      return { success: false, error: 'Group not found' };
+      return { success: false, error: i18n.t('group_errors.not_found') };
     }
 
     const groupData = groupDoc.data();
@@ -833,13 +886,17 @@ export const sendGroupMessage = async (appdatabase, firestoreDB, groupId, messag
  * @param {Object} invitedUsersMap - Optional map of { userId: { displayName, avatar } } to avoid extra Firestore reads
  * @returns {Promise<{success: boolean, invitedCount?: number, error?: string}>}
  */
-export const addMembersToGroup = async (firestoreDB, appdatabase, groupId, newMemberIds, inviterData, invitedUsersMap = null) => {
+export const addMembersToGroup = async (firestoreDBArg, appdatabase, groupId, newMemberIds, inviterData, invitedUsersMap = null) => {
+  // The member picker (OnlineUsersList) has always passed null here, so this
+  // bailed with missing_params and "Add to group" never sent an invitation.
+  // Firestore has one instance; fall back to it.
+  const firestoreDB = firestoreDBArg || getFirestore();
   if (!firestoreDB || !appdatabase || !groupId || !Array.isArray(newMemberIds) || !inviterData?.id) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   if (newMemberIds.length === 0) {
-    return { success: false, error: 'No members to invite' };
+    return { success: false, error: i18n.t('group_errors.no_members') };
   }
 
   try {
@@ -847,7 +904,7 @@ export const addMembersToGroup = async (firestoreDB, appdatabase, groupId, newMe
     const groupSnap = await getDoc(groupRef);
     
     if (!groupSnap.exists()) {
-      return { success: false, error: 'Group not found' };
+      return { success: false, error: i18n.t('group_errors.not_found') };
     }
 
     const groupData = groupSnap.data();
@@ -857,20 +914,20 @@ export const addMembersToGroup = async (firestoreDB, appdatabase, groupId, newMe
     // ✅ Only creator can add members
     const isCreator = groupData.createdBy === inviterData.id;
     if (!isCreator) {
-      return { success: false, error: 'Only the creator can add members' };
+      return { success: false, error: i18n.t('group_errors.creator_only_add') };
     }
 
     // Filter out users already in group
     const uniqueNewMembers = newMemberIds.filter(id => !currentMemberIds.includes(id));
     
     if (uniqueNewMembers.length === 0) {
-      return { success: false, error: 'All selected users are already in the group' };
+      return { success: false, error: i18n.t('group_errors.all_already_in') };
     }
 
     // Check total member count (if all accept)
     const newTotal = currentMemberIds.length + uniqueNewMembers.length;
     if (newTotal > MAX_GROUP_MEMBERS) {
-      return { success: false, error: `Group cannot exceed ${MAX_GROUP_MEMBERS} members` };
+      return { success: false, error: i18n.t('group_errors.cannot_exceed', { max: MAX_GROUP_MEMBERS }) };
     }
 
     // ✅ Use provided user data map, or fetch from RTDB users node only if needed (OPTIMIZATION: avoid extra reads)
@@ -967,7 +1024,7 @@ export const addMembersToGroup = async (firestoreDB, appdatabase, groupId, newMe
  */
 export const removeMemberFromGroup = async (firestoreDB, appdatabase, groupId, memberIdToRemove, adminId) => {
   if (!firestoreDB || !appdatabase || !groupId || !memberIdToRemove || !adminId) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   try {
@@ -1176,7 +1233,7 @@ export const hasGroupPermission = (groupData, userId, permission) => {
  */
 export const makeMemberCreator = async (firestoreDB, appdatabase, groupId, memberIdToMakeCreator, currentCreatorId) => {
   if (!firestoreDB || !appdatabase || !groupId || !memberIdToMakeCreator || !currentCreatorId) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   try {
@@ -1233,7 +1290,7 @@ export const makeMemberCreator = async (firestoreDB, appdatabase, groupId, membe
 // ✅ Update group name (Admin only)
 export const updateGroupName = async (firestoreDB, appdatabase, groupId, userId, groupName, isAdmin = false) => {
   if (!firestoreDB || !appdatabase || !groupId || !userId || !groupName) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   try {
@@ -1241,19 +1298,19 @@ export const updateGroupName = async (firestoreDB, appdatabase, groupId, userId,
     const groupSnap = await getDoc(groupRef);
 
     if (!groupSnap.exists()) {
-      return { success: false, error: 'Group not found' };
+      return { success: false, error: i18n.t('group_errors.not_found') };
     }
 
     const groupData = groupSnap.data();
 
     // Only admin can update name
     if (!isAdmin) {
-      return { success: false, error: 'Only admin can update the group name' };
+      return { success: false, error: i18n.t('group_errors.admin_only_rename') };
     }
 
     const trimmedName = groupName.trim();
     if (!trimmedName || trimmedName.length === 0) {
-      return { success: false, error: 'Group name cannot be empty' };
+      return { success: false, error: i18n.t('group_errors.name_empty') };
     }
 
     // Update Firestore
@@ -1287,7 +1344,7 @@ export const updateGroupName = async (firestoreDB, appdatabase, groupId, userId,
 // ✅ Update group description (Admin only, max 100 chars)
 export const updateGroupDescription = async (firestoreDB, appdatabase, groupId, userId, description, isAdmin = false) => {
   if (!firestoreDB || !appdatabase || !groupId || !userId) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   try {
@@ -1295,14 +1352,14 @@ export const updateGroupDescription = async (firestoreDB, appdatabase, groupId, 
     const groupSnap = await getDoc(groupRef);
 
     if (!groupSnap.exists()) {
-      return { success: false, error: 'Group not found' };
+      return { success: false, error: i18n.t('group_errors.not_found') };
     }
 
     const groupData = groupSnap.data();
 
     // Only admin can update description
     if (!isAdmin) {
-      return { success: false, error: 'Only admin can update the group description' };
+      return { success: false, error: i18n.t('group_errors.admin_only_description') };
     }
 
     // Limit description to 100 characters
@@ -1336,7 +1393,7 @@ export const updateGroupDescription = async (firestoreDB, appdatabase, groupId, 
 
 export const updateGroupAvatar = async (firestoreDB, appdatabase, groupId, userId, avatarUrl, isAdmin = false) => {
   if (!firestoreDB || !appdatabase || !groupId || !userId) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   try {
@@ -1344,14 +1401,14 @@ export const updateGroupAvatar = async (firestoreDB, appdatabase, groupId, userI
     const groupSnap = await getDoc(groupRef);
 
     if (!groupSnap.exists()) {
-      return { success: false, error: 'Group not found' };
+      return { success: false, error: i18n.t('group_errors.not_found') };
     }
 
     const groupData = groupSnap.data();
 
     // Only creator or admin can update avatar
     if (!isAdmin && groupData.createdBy !== userId) {
-      return { success: false, error: 'Only the creator or admin can update the group icon' };
+      return { success: false, error: i18n.t('group_errors.creator_or_admin_icon') };
     }
 
     // Update Firestore
@@ -1388,7 +1445,7 @@ export const updateGroupAvatar = async (firestoreDB, appdatabase, groupId, userI
  */
 export const sendJoinRequest = async (firestoreDB, groupId, requesterData) => {
   if (!firestoreDB || !groupId || !requesterData?.id) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   try {
@@ -1397,7 +1454,7 @@ export const sendJoinRequest = async (firestoreDB, groupId, requesterData) => {
     const groupSnap = await getDoc(groupRef);
 
     if (!groupSnap.exists()) {
-      return { success: false, error: 'Group not found' };
+      return { success: false, error: i18n.t('group_errors.not_found') };
     }
 
     const groupData = groupSnap.data();
@@ -1405,12 +1462,12 @@ export const sendJoinRequest = async (firestoreDB, groupId, requesterData) => {
     // Check if group is full
     const memberCount = groupData.memberIds?.length || 0;
     if (memberCount >= MAX_GROUP_MEMBERS) {
-      return { success: false, error: `Group is full (max ${MAX_GROUP_MEMBERS} members)` };
+      return { success: false, error: i18n.t('group_errors.full', { max: MAX_GROUP_MEMBERS }) };
     }
 
     // Check if user is already a member
     if (groupData.memberIds?.includes(requesterData.id)) {
-      return { success: false, error: 'You are already a member of this group' };
+      return { success: false, error: i18n.t('group_errors.already_member_self') };
     }
 
     // Check if user already has a pending request
@@ -1423,7 +1480,7 @@ export const sendJoinRequest = async (firestoreDB, groupId, requesterData) => {
     const existingRequestSnap = await getDocs(existingRequestQuery);
 
     if (!existingRequestSnap.empty) {
-      return { success: false, error: 'You already have a pending request for this group' };
+      return { success: false, error: i18n.t('group_errors.request_pending') };
     }
 
     // Create join request
@@ -1434,7 +1491,10 @@ export const sendJoinRequest = async (firestoreDB, groupId, requesterData) => {
       requesterAvatar: requesterData.avatar || null,
       status: 'pending',
       createdAt: serverTimestamp(),
-      groupName: groupData.groupName || 'Group',
+      // Groups store their name in `name` (`groupName` only on some); this
+      // read groupName alone, so every request said "Group". The join-request
+      // push and the creator's request list show it.
+      groupName: groupData.name || groupData.groupName || 'Group',
       creatorId: groupData.createdBy,
     };
     
@@ -1458,7 +1518,7 @@ export const sendJoinRequest = async (firestoreDB, groupId, requesterData) => {
  */
 export const approveJoinRequest = async (firestoreDB, appdatabase, requestId, creatorId) => {
   if (!firestoreDB || !appdatabase || !requestId || !creatorId) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   try {
@@ -1466,19 +1526,19 @@ export const approveJoinRequest = async (firestoreDB, appdatabase, requestId, cr
     const requestSnap = await getDoc(requestRef);
 
     if (!requestSnap.exists()) {
-      return { success: false, error: 'Join request not found' };
+      return { success: false, error: i18n.t('group_errors.request_not_found') };
     }
 
     const requestData = requestSnap.data();
 
     // Verify creator authorization
     if (requestData.creatorId !== creatorId) {
-      return { success: false, error: 'Only the group creator can approve requests' };
+      return { success: false, error: i18n.t('group_errors.creator_only_approve') };
     }
 
     // Check if request is still pending
     if (requestData.status !== 'pending') {
-      return { success: false, error: 'This request has already been processed' };
+      return { success: false, error: i18n.t('group_errors.request_processed') };
     }
 
     const groupId = requestData.groupId;
@@ -1489,7 +1549,7 @@ export const approveJoinRequest = async (firestoreDB, appdatabase, requestId, cr
     const groupSnap = await getDoc(groupRef);
 
     if (!groupSnap.exists()) {
-      return { success: false, error: 'Group not found' };
+      return { success: false, error: i18n.t('group_errors.not_found') };
     }
 
     const groupData = groupSnap.data();
@@ -1503,7 +1563,7 @@ export const approveJoinRequest = async (firestoreDB, appdatabase, requestId, cr
         rejectedAt: serverTimestamp(),
         rejectionReason: 'Group is now full',
       });
-      return { success: false, error: 'Group is now full' };
+      return { success: false, error: i18n.t('group_errors.now_full') };
     }
 
     // Check if user is already a member
@@ -1513,7 +1573,7 @@ export const approveJoinRequest = async (firestoreDB, appdatabase, requestId, cr
         status: 'approved',
         approvedAt: serverTimestamp(),
       });
-      return { success: false, error: 'User is already a member' };
+      return { success: false, error: i18n.t('group_errors.user_already_member') };
     }
 
     // Get requester data from the request document (already fetched above)
@@ -1583,7 +1643,7 @@ export const approveJoinRequest = async (firestoreDB, appdatabase, requestId, cr
  */
 export const rejectJoinRequest = async (firestoreDB, requestId, creatorId) => {
   if (!firestoreDB || !requestId || !creatorId) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   try {
@@ -1591,19 +1651,19 @@ export const rejectJoinRequest = async (firestoreDB, requestId, creatorId) => {
     const requestSnap = await getDoc(requestRef);
 
     if (!requestSnap.exists()) {
-      return { success: false, error: 'Join request not found' };
+      return { success: false, error: i18n.t('group_errors.request_not_found') };
     }
 
     const requestData = requestSnap.data();
 
     // Verify creator authorization
     if (requestData.creatorId !== creatorId) {
-      return { success: false, error: 'Only the group creator can reject requests' };
+      return { success: false, error: i18n.t('group_errors.creator_only_reject') };
     }
 
     // Check if request is still pending
     if (requestData.status !== 'pending') {
-      return { success: false, error: 'This request has already been processed' };
+      return { success: false, error: i18n.t('group_errors.request_processed') };
     }
 
     // Update request status
@@ -1629,7 +1689,7 @@ export const rejectJoinRequest = async (firestoreDB, requestId, creatorId) => {
 // ✅ Delete group (Admin only)
 export const deleteGroup = async (firestoreDB, appdatabase, groupId) => {
   if (!firestoreDB || !appdatabase || !groupId) {
-    return { success: false, error: 'Missing required parameters' };
+    return { success: false, error: i18n.t('group_errors.missing_params') };
   }
 
   try {
@@ -1981,3 +2041,38 @@ export const getAllGroups = async (firestoreDB, filter = 'all', searchQuery = ''
   }
 };
 
+
+// ── Reactions (ported from Adopt Me) ────────────────────────────────────
+// One emoji per user, on the RTDB message itself:
+//   group_messages/{groupId}/messages/{messageId}/reactions/{uid} = '🔥'
+// A new child of an existing message, so old builds (which spread the whole
+// message into their row and render only the fields they know) ignore it.
+// Each player writes only their own key; `null` clears it. Adopt Me's
+// tap-the-same-emoji-again-to-clear rule is applied by the caller.
+export const setGroupReaction = async (appdatabase, groupId, messageId, userId, emoji) => {
+  if (!appdatabase || !groupId || !messageId || !userId) return;
+  await set(
+    ref(appdatabase, `group_messages/${groupId}/messages/${messageId}/reactions/${userId}`),
+    emoji || null,
+  );
+};
+
+// ── Jump to an old pinned message ───────────────────────────────────────
+// Everything from the pinned message's key (inclusive) up to the oldest key
+// already on screen, so a jump fills the gap in one read instead of paging 10
+// at a time. Message keys are send timestamps of equal length, so key order
+// is time order. Capped at `maxCount` newest rows: past that the pin is not in
+// the result and the caller gives up on the jump (Adopt Me: 300).
+// Returns newest-first, the screen's order.
+export const loadGroupMessagesBetween = async (appdatabase, groupId, fromKey, beforeKey, maxCount) => {
+  if (!appdatabase || !groupId || !fromKey) return [];
+  const constraints = [orderByKey(), startAt(String(fromKey))];
+  if (beforeKey) constraints.push(endAt(String(beforeKey)));
+  constraints.push(limitToLast(maxCount || 300));
+  const snapshot = await get(dbQuery(ref(appdatabase, `group_messages/${groupId}/messages`), ...constraints));
+  const data = snapshot.val() || {};
+  return Object.entries(data)
+    .filter(([, value]) => value && typeof value === 'object')
+    .map(([key, value]) => ({ id: key, ...value }))
+    .sort((a, b) => (b?.timestamp || 0) - (a?.timestamp || 0));
+};

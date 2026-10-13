@@ -10,10 +10,20 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGlobalState } from '../../GlobelStats';
 import config from '../../Helper/Environment';
+import { useTranslation } from 'react-i18next';
+import { MAX_GROUPS_PER_USER } from '../utils/groupUtils';
+
+// Each step / rule / feature is its own key under groups_guide.*, so a
+// language can reword one line without touching the others.
+const CREATE_STEPS = ['create_step_1', 'create_step_2', 'create_step_3', 'create_step_4', 'create_step_5', 'create_step_6'];
+// 'one_group' text takes {{max}} (MAX_GROUPS_PER_USER); the other rules ignore it.
+const RULES = ['one_group', 'min_members', 'max_members', 'group_admin', 'admin_transfer', 'leaving', 'invitations'];
+const FEATURES = ['feature_messages', 'feature_online', 'feature_members', 'feature_notifications'];
 
 const GroupsGuideModal = ({ visible, onClose }) => {
   const { theme } = useGlobalState();
   const isDarkMode = theme === 'dark';
+  const { t } = useTranslation();
 
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
 
@@ -29,7 +39,7 @@ const GroupsGuideModal = ({ visible, onClose }) => {
           {/* Header */}
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
-              Groups Guide
+              {t('groups_guide.title')}
             </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Icon name="close-circle" size={28} color={isDarkMode ? '#9CA3AF' : '#6B7280'} />
@@ -47,15 +57,10 @@ const GroupsGuideModal = ({ visible, onClose }) => {
                 <Icon name="people" size={24} color={config.colors.primary} />
               </View>
               <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
-                How to Create a Group
+                {t('groups_guide.how_to_create')}
               </Text>
               <Text style={[styles.sectionText, { color: isDarkMode ? '#D1D5DB' : '#4B5563' }]}>
-                1. Go to the main Chat screen and tap the plus icon (+) in the header.{'\n\n'}
-                2. Select members from the online users list (you can select multiple users by tapping on them).{'\n\n'}
-                3. Tap "Create" or "Add" button at the top (it will show "Create" if you don't have a group, or "Add" if you already have a group).{'\n\n'}
-                4. If creating a new group, enter a group name (required, max 50 characters) in the modal that appears.{'\n\n'}
-                5. Tap "Create Group" to finalize.{'\n\n'}
-                6. Selected members will receive invitations to join your group.
+                {CREATE_STEPS.map((k, i) => `${i + 1}. ${t(`groups_guide.${k}`)}`).join('\n\n')}
               </Text>
             </View>
 
@@ -66,16 +71,14 @@ const GroupsGuideModal = ({ visible, onClose }) => {
                 <Icon name="information-circle" size={24} color={config.colors.primary} />
               </View>
               <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
-                Important Rules
+                {t('groups_guide.important_rules')}
               </Text>
               <Text style={[styles.sectionText, { color: isDarkMode ? '#D1D5DB' : '#4B5563' }]}>
-                • <Text style={styles.boldText}>One Group Limit:</Text> Each user can only be an admin/creator of one group at a time.{'\n\n'}
-                • <Text style={styles.boldText}>Minimum Members:</Text> A group must have at least 2 members (including yourself).{'\n\n'}
-                • <Text style={styles.boldText}>Maximum Members:</Text> Each group can have up to 50 members.{'\n\n'}
-                • <Text style={styles.boldText}>Group Admin:</Text> The creator is the admin. Admins can remove members and make other members admin.{'\n\n'}
-                • <Text style={styles.boldText}>Admin Transfer:</Text> If an admin (not creator) makes another member admin, they will revert to a regular member. The creator always remains admin.{'\n\n'}
-                • <Text style={styles.boldText}>Leaving Groups:</Text> Members can leave at any time. If an admin/creator leaves, a new admin is randomly selected. If the last member leaves, the group is deleted.{'\n\n'}
-                • <Text style={styles.boldText}>Invitations:</Text> Members must accept invitations before they can join.
+                {RULES.map((k, i) => (
+                  <React.Fragment key={k}>
+                    {i > 0 ? '\n\n' : ''}• <Text style={styles.boldText}>{t(`groups_guide.rule_${k}_title`)}</Text> {t(`groups_guide.rule_${k}`, { max: MAX_GROUPS_PER_USER })}
+                  </React.Fragment>
+                ))}
               </Text>
             </View>
 
@@ -86,13 +89,10 @@ const GroupsGuideModal = ({ visible, onClose }) => {
                 <Icon name="chatbubbles" size={24} color={config.colors.primary} />
               </View>
               <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>
-                Group Features
+                {t('groups_guide.group_features')}
               </Text>
               <Text style={[styles.sectionText, { color: isDarkMode ? '#D1D5DB' : '#4B5563' }]}>
-                • Send text messages, images, and pets (up to 18 pets per message).{'\n\n'}
-                • See who's online in your group.{'\n\n'}
-                • View group members and their roles.{'\n\n'}
-                • Receive notifications for new messages when you're not active in the chat.
+                {FEATURES.map((k) => `• ${t(`groups_guide.${k}`)}`).join('\n\n')}
               </Text>
             </View>
           </ScrollView>
@@ -102,7 +102,7 @@ const GroupsGuideModal = ({ visible, onClose }) => {
             style={[styles.gotItButton, { backgroundColor: config.colors.primary }]}
             onPress={onClose}
           >
-            <Text style={styles.gotItButtonText}>Got It!</Text>
+            <Text style={styles.gotItButtonText}>{t('chat.got_it')}</Text>
           </TouchableOpacity>
         </View>
       </View>

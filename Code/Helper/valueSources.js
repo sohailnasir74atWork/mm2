@@ -1,3 +1,5 @@
+import i18n from 'i18next';
+
 /**
  * valueSources.js — the one place that knows how the two value feeds differ.
  *
@@ -400,15 +402,16 @@ export const UNPRICED_REASON = {
   UNKNOWN: 'unknown',
 };
 
+// i18n keys; translated where they are read (unpricedLabelFor).
 const UNPRICED_LABEL = {
-  [UNPRICED_REASON.UNTRADABLE]: 'Untradable',
-  [UNPRICED_REASON.UNRELEASED]: 'Unreleased',
-  [UNPRICED_REASON.AWARD]: 'Award only',
-  [UNPRICED_REASON.GIFT]: 'Gift only',
-  [UNPRICED_REASON.EVOLUTION]: 'Evolution',
-  [UNPRICED_REASON.PRICELESS]: 'Priceless',
-  [UNPRICED_REASON.WORTHLESS]: 'No value',
-  [UNPRICED_REASON.UNKNOWN]: 'Not priced',
+  [UNPRICED_REASON.UNTRADABLE]: 'value.unpriced.untradable',
+  [UNPRICED_REASON.UNRELEASED]: 'value.unpriced.unreleased',
+  [UNPRICED_REASON.AWARD]: 'value.unpriced.award_only',
+  [UNPRICED_REASON.GIFT]: 'value.unpriced.gift_only',
+  [UNPRICED_REASON.EVOLUTION]: 'value.unpriced.evolution',
+  [UNPRICED_REASON.PRICELESS]: 'value.unpriced.priceless',
+  [UNPRICED_REASON.WORTHLESS]: 'value.unpriced.no_value',
+  [UNPRICED_REASON.UNKNOWN]: 'value.unpriced.not_priced',
 };
 
 /** Classify an unpriced Supreme record. Returns a UNPRICED_REASON. */
@@ -433,7 +436,7 @@ export const unpricedReason = (record) => {
   return UNPRICED_REASON.UNKNOWN;
 };
 
-export const unpricedLabelFor = (reason) => UNPRICED_LABEL[reason] || UNPRICED_LABEL[UNPRICED_REASON.UNKNOWN];
+export const unpricedLabelFor = (reason) => i18n.t(UNPRICED_LABEL[reason] || UNPRICED_LABEL[UNPRICED_REASON.UNKNOWN]);
 
 /**
  * The active price for an item, without touching the item.
@@ -540,7 +543,7 @@ export const displayValueText = (item, source = DEFAULT_VALUE_SOURCE) => {
   if (!item) return '';
   const priced = priceOf(item, source);
   if (isSummable(priced)) return '';
-  if (priced.missing) return 'Not listed';
+  if (priced.missing) return i18n.t('value.not_listed');
   // A modeled item still has the source's own words ("x3 T1 Legendaries").
   if (priced.valueConfidence === VALUE_CONFIDENCE.MODELED) return priced.valueText || '';
   // An unpriced one gets the REASON, which is the useful part. "Award only"

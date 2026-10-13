@@ -20,9 +20,20 @@ const HighlightedText = ({ text }) => {
   );
 };
 
+// The (i) guide. Label + body pairs, numbered at render.
+const TRADE_RULES = [
+  { label: 'trade.rules_post_label', body: 'trade.rules_post_body' },
+  { label: 'trade.rules_values_label', body: 'trade.rules_values_body' },
+  { label: 'trade.rules_offer_label', body: 'trade.rules_offer_body' },
+  { label: 'trade.rules_ingame_label', body: 'trade.rules_ingame_body' },
+  { label: 'trade.rules_safe_label', body: 'trade.rules_safe_body' },
+  { label: 'trade.rules_boost_label', body: 'trade.rules_boost_body' },
+];
+
 const TradeRulesModal = ({ visible, onClose }) => {
   const { theme } = useGlobalState();
   const isDarkMode = theme === 'dark';
+  const { t } = useTranslation();
 
 
   return (
@@ -31,7 +42,7 @@ const TradeRulesModal = ({ visible, onClose }) => {
         <View style={[styles.modalContainer, { backgroundColor: isDarkMode ? config.colors.surfaceDark : 'white' }]}>
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: isDarkMode ? 'white' : 'black' }]}>
-              How Trading Works in Adopt Me
+              {t('trade.rules_title')}
             </Text>
             <TouchableOpacity onPress={onClose}>
               <Icon name="close-circle" size={28} color={isDarkMode ? '#bbb' : '#333'} />
@@ -39,19 +50,19 @@ const TradeRulesModal = ({ visible, onClose }) => {
           </View>
           <ScrollView showsVerticalScrollIndicator={false}>
             <Text style={[styles.modalText, { color: isDarkMode ? '#ccc' : '#333' }]}>
-              1. <HighlightedText text="Basics:" /> Players trade pets, items, and vehicles using the in-game trading system.{"\n"}{"\n"}
-              2. <HighlightedText text="Trade Window:" /> Each player can offer up to 9 items per trade.{"\n"}{"\n"}
-              3. <HighlightedText text="Two-Step Confirmation:" /> Players must first select items, then confirm again to finalize the trade.{"\n"}{"\n"}
-              4. <HighlightedText text="Trade License:" /> Required for trading ultra-rare or legendary items (obtained by passing a short test).{"\n"}{"\n"}
-              5. <HighlightedText text="Safe Trading:" /> Warnings appear for unfair trades; players should review offers carefully.{"\n"}{"\n"}
-              6. <HighlightedText text="Report Feature:" /> Suspicious trades can be reported directly from the trade window.{"\n"}
+              {TRADE_RULES.map((rule, i) => (
+                <React.Fragment key={rule.label}>
+                  {i + 1}. <HighlightedText text={t(rule.label)} /> {t(rule.body)}
+                  {i < TRADE_RULES.length - 1 ? '\n\n' : '\n'}
+                </React.Fragment>
+              ))}
             </Text>
           </ScrollView>
           <TouchableOpacity
             style={[styles.closeButton, { backgroundColor: config.colors.primary }]}
             onPress={onClose}
           >
-            <Text style={[styles.closeButtonText, { color: isDarkMode ? 'white' : 'white' }]}>Close</Text>
+            <Text style={[styles.closeButtonText, { color: isDarkMode ? 'white' : 'white' }]}>{t('reward_center.close')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -94,7 +105,7 @@ export const TradeStack = ({ selectedTheme }) => {
           component={TradeList}
           initialParams={{ bannedUsers, selectedTheme, showMyTradesOnly: showMyTrades }}
           options={({ navigation }) => ({
-            title: showMyTrades ? 'My Trades' : t("tabs.trade"),
+            title: showMyTrades ? t('trade.my_trades') : t("tabs.trade"),
             headerRight: () => (
               <View style={{ flexDirection: 'row' }}>
                 <TouchableOpacity
@@ -160,7 +171,7 @@ export const TradeStack = ({ selectedTheme }) => {
         <Stack.Screen
           name="Trade Notifier"
           component={NotifierDrawer}
-         
+          options={{ title: t('notifier.title') }}
         />
       </Stack.Navigator>
       

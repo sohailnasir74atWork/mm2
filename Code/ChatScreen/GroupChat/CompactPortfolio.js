@@ -8,10 +8,10 @@ import {
     TouchableOpacity,
     ScrollView,
     ActivityIndicator,
-    LayoutAnimation,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import config from '../../Helper/Environment';
+import { useTranslation, Trans } from 'react-i18next';
 
 
 // ── Value Formatter ────────────────────────────────────
@@ -41,11 +41,11 @@ const CompactPortfolio = ({
     ownedPets: ownedItems = [],
     wishlistPets: wishlistItems = [],
     isDarkMode,
-    t,
     loadingPets: loadingItems,
     renderPetBubble: renderItemBubble,
     lookupPetValue: lookupItemValue,
 }) => {
+    const { t } = useTranslation();
     const [expanded, setExpanded] = useState(false);
     const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
 
@@ -80,8 +80,9 @@ const CompactPortfolio = ({
         return { totalValue, totalItems, avgValue, categories, wishVal };
     }, [ownedItems, wishlistItems]);
 
+    // No LayoutAnimation: it is a suspect in the RN 0.87 Fabric addViewAt
+    // crash, and Adopt Me removed every call (2026-10-05).
     const toggleExpand = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setExpanded((prev) => !prev);
     };
 
@@ -107,16 +108,18 @@ const CompactPortfolio = ({
                     }}>
                         <Icon name="diamond" size={12} color="#ec4899" />
                     </View>
-                    <Text style={styles.summaryTitle}>Portfolio</Text>
+                    <Text style={styles.summaryTitle}>{t('profile.portfolio')}</Text>
                 </View>
                 {/* Empty message */}
                 <View style={styles.emptyBox}>
                     <Text style={styles.emptyIcon}>📦</Text>
-                    <Text style={styles.emptyTitle}>No items listed yet</Text>
+                    <Text style={styles.emptyTitle}>{t('profile.portfolio_empty_title')}</Text>
                     <Text style={styles.emptyHint}>
-                        This trader hasn't added any items to their inventory. Items added in{' '}
-                        <Text style={{ fontWeight: '700', color: '#ec4899' }}>My Stuff</Text>{' '}
-                        will appear here.
+                        <Trans
+                            t={t}
+                            i18nKey="profile.portfolio_empty_hint"
+                            components={{ bold: <Text style={{ fontWeight: '700', color: '#ec4899' }} /> }}
+                        />
                     </Text>
                 </View>
             </View>
@@ -140,7 +143,7 @@ const CompactPortfolio = ({
                         <Icon name="diamond" size={12} color="#ec4899" />
                     </View>
                     <Text style={styles.summaryTitle}>
-                        Portfolio
+                        {t('profile.portfolio')}
                     </Text>
                 </View>
                 <View style={styles.summaryRight}>
@@ -149,7 +152,7 @@ const CompactPortfolio = ({
                     </Text>
                     <View style={styles.badge}>
                         <Text style={styles.badgeText}>
-                            {portfolio.totalItems} items
+                            {t('profile.items_count', { count: portfolio.totalItems })}
                         </Text>
                     </View>
                     <Icon
@@ -187,7 +190,7 @@ const CompactPortfolio = ({
                     {/* ── Owned Items (full list) ── */}
                     <View style={styles.petSection}>
                         <Text style={styles.petSectionLabel}>
-                            Owned Items
+                            {t('value.owned_pets')}
                         </Text>
                         <ScrollView
                             horizontal
@@ -205,11 +208,11 @@ const CompactPortfolio = ({
                     {/* ── Wishlist (full list) ── */}
                     <View style={styles.petSection}>
                         <Text style={styles.petSectionLabel}>
-                            Wishlist
+                            {t('value.wishlist')}
                         </Text>
                         {wishlistItems.length === 0 ? (
                             <Text style={styles.petEmpty}>
-                                No wishlist items yet.
+                                {t('profile.no_wishlist_items')}
                             </Text>
                         ) : (
                             <ScrollView
@@ -230,7 +233,7 @@ const CompactPortfolio = ({
                     <View style={styles.valCard}>
                         <View>
                             <Text style={styles.valLabel}>
-                                Total Value
+                                {t('profile.total_value')}
                             </Text>
                             <Text style={styles.valNum}>
                                 {formatValue(portfolio.totalValue)}
@@ -260,13 +263,13 @@ const CompactPortfolio = ({
                         <View style={styles.wishRow}>
                             <View style={styles.wishItem}>
                                 <Icon name="heart-outline" size={12} color="#FF6B6B" />
-                                <Text style={styles.wishLabel}>Wishlist Value</Text>
+                                <Text style={styles.wishLabel}>{t('profile.wishlist_value')}</Text>
                                 <Text style={styles.wishVal}>{formatValue(portfolio.wishVal)}</Text>
                             </View>
                             <View style={styles.wishDivider} />
                             <View style={styles.wishItem}>
                                 <Icon name="trending-up-outline" size={12} color="#51CF66" />
-                                <Text style={styles.wishLabel}>Gap</Text>
+                                <Text style={styles.wishLabel}>{t('profile.value_gap')}</Text>
                                 <Text style={[styles.wishVal, {
                                     color: portfolio.wishVal > portfolio.totalValue ? '#FF6B6B' : '#51CF66',
                                 }]}>

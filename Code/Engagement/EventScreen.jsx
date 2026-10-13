@@ -31,16 +31,16 @@
  */
 import React, { useMemo, useCallback, useState } from 'react';
 import {
-  View, Text, Image, FlatList, StyleSheet, TouchableOpacity, Modal, Platform,
+  View, Text, Image, FlatList, StyleSheet, TouchableOpacity, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// react-native's SafeAreaView was a no-op on Android and only ever inset on
-// iOS; react-native-safe-area-context's insets on both. Pinning the edges
-// per-platform keeps the layout exactly what it was before the swap.
-const LEGACY_SAFE_AREA_EDGES = Platform.OS === 'ios'
-  ? ['top', 'bottom', 'left', 'right']
-  : [];
+// The item list is a full-screen modal on Android (pageSheet is iOS-only) and
+// Android draws it edge-to-edge (targetSdk 36), so it insets on every edge
+// there too; before, Android got none and the header sat under the status bar
+// and the last rows under the nav bar. A SafeAreaView inside a Modal measures
+// the modal's own window.
+const MODAL_SAFE_AREA_EDGES = ['top', 'bottom', 'left', 'right'];
 
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useLocalState } from '../LocalGlobelStats';
@@ -49,7 +49,9 @@ import {
   buildItemPool, unwrapFeed, resolveItemImage, priceOf, displayValueText,
   DEFAULT_VALUE_SOURCE,
 } from '../Helper/valueSources';
-import { resolveEvent, eventItems } from './eventConfig';
+import { resolveEvent, eventItems, eventLabel } from './eventConfig';
+import { useTranslation } from 'react-i18next';
+import { flipInRTL } from '../Helper/rtl';
 
 const parseFeed = (raw) => {
   try {
@@ -118,6 +120,7 @@ const EventRow = React.memo(({ item, valueSource, C }) => {
 
 const EventCard = ({ isDarkMode = false }) => {
   const { localState } = useLocalState();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const valueSource = localState?.valueSource || DEFAULT_VALUE_SOURCE;
   const C = palette(isDarkMode);
@@ -150,20 +153,21 @@ const EventCard = ({ isDarkMode = false }) => {
 
   const { event, phase, daysUntil, daysLeft, estimated } = state;
 
+  const name = eventLabel(event, t);
   const title = phase === 'active'
-    ? `${event.label} is live`
-    : `${event.label} in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
+    ? t('events.live_title', { event: name })
+    : t('events.starts_in', { event: name, count: daysUntil });
 
   // "around" whenever the window is our own estimate rather than a real date
   // from the backend. The dates genuinely move year to year, and claiming a
   // precision we do not have is how a countdown ends up simply wrong.
   const subtitle = phase === 'active'
     ? (estimated
-        ? `${items.length} items · values move fastest now`
-        : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left · ${items.length} items`)
+        ? t('events.sub_active_estimated', { count: items.length })
+        : t('events.sub_days_left', { count: daysLeft, items: items.length }))
     : (estimated
-        ? `${items.length} items · dates shift each year`
-        : `${items.length} items · confirmed start`);
+        ? t('events.sub_upcoming_estimated', { count: items.length })
+        : t('events.sub_upcoming_confirmed', { count: items.length }));
 
   const preview = items.slice(0, 4).map(resolveItemImage).filter(Boolean);
 
@@ -184,7 +188,7 @@ const EventCard = ({ isDarkMode = false }) => {
             <Image resizeMethod="resize" key={uri + i} source={{ uri }} style={styles.previewThumb} />
           ))}
         </View>
-        <Icon name="chevron-forward" size={18} color={C.sub} />
+        <Icon name="chevron-forward" size={18} color={C.sub} style={flipInRTL} />
       </TouchableOpacity>
 
       <Modal
@@ -193,7 +197,7 @@ const EventCard = ({ isDarkMode = false }) => {
         onRequestClose={() => setOpen(false)}
         presentationStyle="pageSheet"
       >
-        <SafeAreaView edges={LEGACY_SAFE_AREA_EDGES} style={[styles.modal, { backgroundColor: C.screen }]}>
+        <SafeAreaView edges={MODAL_SAFE_AREA_EDGES} style={[styles.modal, { backgroundColor: C.screen }]}>
           <View style={[styles.modalHeader, { borderBottomColor: C.border }]}>
             <View style={styles.modalTitleWrap}>
               <Text style={[styles.modalTitle, { color: C.text }]} numberOfLines={1}>
@@ -211,7 +215,7 @@ const EventCard = ({ isDarkMode = false }) => {
 
           {items.length === 0 ? (
             <Text style={[styles.empty, { color: C.sub }]}>
-              Items appear here as soon as they are added to the values list.
+              {t('events.empty')}
             </Text>
           ) : (
             <FlatList

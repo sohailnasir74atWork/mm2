@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useTranslation } from 'react-i18next';
 import ChatScreen from './GroupChat/Trader';
 import PrivateChatScreen from './PrivateChat/PrivateChat';
 import InboxScreen from './GroupChat/InboxScreen';
@@ -28,6 +29,7 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
   const { user, unreadMessagesCount, appdatabase } = useGlobalState();
   const [bannedUsers, setBannedUsers] = useState([]);
   const { triggerHapticFeedback } = useHaptic();
+  const { t } = useTranslation();
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(false);
   const [unreadcount, setunreadcount] = useState(0);
@@ -233,9 +235,11 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
 
           return {
             groupId,
-            groupName: groupData.groupName || 'Group',
+            // Empty fallbacks: GroupsScreen shows the translated
+            // "Group" / "No messages yet" at render.
+            groupName: groupData.groupName || '',
             groupAvatar: groupData.groupAvatar || null,
-            lastMessage: groupData.lastMessage || 'No messages yet',
+            lastMessage: groupData.lastMessage || '',
             lastMessageTimestamp: groupData.lastMessageTimestamp || 0,
             unreadCount: groupData.unreadCount || 0,
             memberCount: groupData.memberCount || 0,
@@ -282,7 +286,7 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
   const [onlineUsersVisible, setOnlineUsersVisible] = useState(false);
 
   const getGroupChatOptions = useCallback(({ navigation }) => ({
-    title: user?.id ? '' : 'Community Chat', // Show title if logged out
+    title: user?.id ? '' : t('chat.community_chat'), // Show title if logged out
     headerTitleAlign: 'left',
     headerTitleStyle: { 
       fontFamily: 'Lato-Bold', 
@@ -307,7 +311,7 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
       paddingRight: 0,
       marginRight: 0,
     },
-  }), [selectedTheme, unreadcount, setunreadcount, groupUnreadCount, setGroupUnreadCount, triggerHapticFeedback, user?.id]);
+  }), [selectedTheme, unreadcount, setunreadcount, groupUnreadCount, setGroupUnreadCount, triggerHapticFeedback, user?.id, t]);
 
   return (
     <Stack.Navigator screenOptions={headerOptions}>
@@ -325,7 +329,7 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
       {/* ✅ Optimized: Pass `chats` & `setChats` via `screenProps` instead of inline function */}
       <Stack.Screen
         name="Inbox"
-        options={{ title: 'Inbox' }}
+        options={{ title: t('misc.inbox') }}
       >
         {/* EMPTY_CHATS / NOOP are module-level constants, NOT inline literals.
             InboxScreen's focus effect lists `setChats` in its deps, and this
@@ -338,7 +342,7 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
 
       <Stack.Screen
         name="Groups"
-        options={{ title: 'Groups' }}
+        options={{ title: t('chat.groups') }}
       >
         {(props) => <GroupsScreen {...props} groups={groups} setGroups={setGroups} groupsLoading={groupsLoading} />}
       </Stack.Screen>
@@ -362,7 +366,7 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
 
       <Stack.Screen
         name="BlockedUsers"
-        options={{ title: 'Blocked Users' }} >
+        options={{ title: t('chat.blocked_users') }} >
         {props => <BlockedUsersScreen {...props} bannedUsers={bannedUsers} />}
       </Stack.Screen>
 
@@ -392,7 +396,7 @@ export const ChatStack = ({ selectedTheme, setChatFocused, modalVisibleChatinfo,
         <Stack.Screen
         name="ImageViewerScreenChat"
         component={ImageViewerScreenChat}
-        options={{ title: 'Image' }}
+        options={{ title: t('chat.image') }}
       />
 
 

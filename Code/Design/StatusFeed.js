@@ -30,17 +30,20 @@ import {
 } from '@react-native-firebase/firestore';
 import { pickImages } from '../Helper/imagePicker';
 import { uploadImage, UPLOAD_KIND } from '../Helper/imageUpload';
-import { Image as CompressorImage } from 'react-native-compressor';
+import { safeCompressImage } from '../Helper/safeCompressImage';
 import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 import { useTranslation } from 'react-i18next';
 import { addXP, XP_ACTIONS } from '../Engagement/xpUtils';
 import PostAdManager from '../Ads/PostAd';
 import { useLocalState } from '../LocalGlobelStats';
+import { useGlobalState } from '../GlobelStats';
 import config from '../Helper/Environment';
 import { createMMKV } from 'react-native-mmkv';
 import ProfileBottomDrawer from '../ChatScreen/GroupChat/BottomDrawer';
 import { ModalKeyboardView } from '../Helper/keyboardAvoidingContainer';
+import useNavBarInset from '../Helper/useNavBarInset';
 import { SCREEN_GUTTER } from '../Helper/layout';
+import { timeAgo } from '../Helper/timeAgo';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BUBBLE_SIZE = 58;
@@ -199,20 +202,16 @@ const LoadingImage = ({ source, style, resizeMode = 'cover', borderRadius, fallb
   );
 };
 
-const getTimeAgo = (date) => {
-  const mins = Math.floor((Date.now() - date.getTime()) / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-};
-
 
 const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignIn }) => {
   const { t } = useTranslation();
+  // Email ban OR device ban (server-time validated). Gates posting a status
+  // and following, as in Adopt Me. Client-side only.
+  const { isUserBlocked } = useGlobalState();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  // Status composer sheet: clears the Android nav bar while the keyboard is down.
+  const navBarInset = useNavBarInset();
   const [statuses, setStatuses] = useState(() => {
     const cached = getCachedJSON('statuses_grouped');
     if (!cached) return [];
@@ -526,7 +525,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
       });
       if (result.didCancel) return;
       if (result.errorCode) {
-        Alert.alert('Error', result.errorMessage || 'Could not pick image');
+        Alert.alert(t('home.alert.error'), result.errorMessage || t('feed.could_not_pick_image'));
         return;
       }
       const asset = result.assets?.[0];
@@ -534,9 +533,10 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
 
       let finalUri = asset.uri;
       try {
-        const compressPromise = CompressorImage.compress(asset.uri, {
+        // Resolves to the original uri when it cannot compress (never throws).
+        const compressPromise = safeCompressImage(asset.uri, {
           maxWidth: 1200, quality: 0.7, returnableOutputType: 'uri',
-        });
+        }).then((out) => out.uri || asset.uri);
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Compression timeout')), 5000)
         );
@@ -546,9 +546,9 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
       setSelectedImage({ ...asset, uri: finalUri });
       setShowCreator(true);
     } catch (err) {
-      Alert.alert('Error', 'Could not open image picker');
+      Alert.alert(t('home.alert.error'), t('feed.could_not_open_picker'));
     }
-  }, [user?.id, onRequireSignIn]);
+  }, [user?.id, onRequireSignIn, t]);
 
   // ── Post status (local-first) ──
   const { localState } = useLocalState();
@@ -560,8 +560,12 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
 
   const handlePostStatus = useCallback(async () => {
     if (!user?.id || !firestoreDB) return;
+    if (isUserBlocked) {
+      Alert.alert(t('chat.access_denied'), t('chat.banned_message'));
+      return;
+    }
     if (!caption.trim() && !selectedImage) {
-      Alert.alert('Empty Status', 'Write something or add a photo!');
+      Alert.alert(t('feed.empty_status'), t('feed.empty_status_msg'));
       return;
     }
 
@@ -569,7 +573,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
     const sinceLast = Date.now() - lastStatusPostAt;
     if (sinceLast < STATUS_COOLDOWN_MS) {
       const secondsLeft = Math.ceil((STATUS_COOLDOWN_MS - sinceLast) / 1000);
-      Alert.alert('Cooldown Active', `Please wait ${secondsLeft} second${secondsLeft === 1 ? '' : 's'} before posting another status.`);
+      Alert.alert(t('feed.cooldown_active'), t('feed.status_cooldown_msg', { count: secondsLeft }));
       return;
     }
 
@@ -583,7 +587,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
         if (selectedImage?.uri) {
           imageUrl = await uploadToBunny(selectedImage.uri);
           if (!imageUrl) {
-            Alert.alert('Upload Failed', 'Image could not be uploaded. Try again.');
+            Alert.alert(t('feed.upload_failed'), t('feed.image_upload_failed_msg'));
             setUploading(false);
             return;
           }
@@ -644,7 +648,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
         posted = true;
         lastStatusPostAt = Date.now();
       } catch (err) {
-        Alert.alert('Error', 'Could not post status');
+        Alert.alert(t('home.alert.error'), t('feed.could_not_post_status'));
       }
       setUploading(false);
     };
@@ -662,15 +666,15 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
         }, 400);
       });
     }
-  }, [user, firestoreDB, appdatabase, caption, selectedImage, uploadToBunny, localState.isPro]);
+  }, [user, firestoreDB, appdatabase, caption, selectedImage, uploadToBunny, localState.isPro, t, isUserBlocked]);
 
   // ── Delete status (local-first) ──
   const handleDeleteStatus = useCallback((statusId) => {
     if (!firestoreDB || !statusId) return;
-    Alert.alert('Delete Status', 'Are you sure you want to delete this status?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('feed.delete_status'), t('feed.delete_status_confirm'), [
+      { text: t('feed.cancel'), style: 'cancel' },
       {
-        text: 'Delete', style: 'destructive',
+        text: t('trade.delete'), style: 'destructive',
         onPress: async () => {
           try {
             await deleteDoc(doc(firestoreDB, 'statuses', statusId));
@@ -685,12 +689,12 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
               return updated;
             });
           } catch {
-            Alert.alert('Error', 'Could not delete status');
+            Alert.alert(t('home.alert.error'), t('feed.could_not_delete_status'));
           }
         },
       },
     ]);
-  }, [firestoreDB, user?.id]);
+  }, [firestoreDB, user?.id, t]);
 
   // ── Mark viewed ──
   const markViewed = useCallback(async (statusId) => {
@@ -753,6 +757,10 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
   // ── Follow toggle ──
   const handleFollowToggle = useCallback(async (targetUserId) => {
     if (!user?.id || !firestoreDB || !targetUserId || user.id === targetUserId) return;
+    if (isUserBlocked) {
+      Alert.alert(t('chat.access_denied'), t('chat.banned_message'));
+      return;
+    }
     setFollowLoading(true);
     const isFollowing = followingIds.includes(targetUserId);
     try {
@@ -778,7 +786,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
       }
     } catch {}
     setFollowLoading(false);
-  }, [user?.id, firestoreDB, followingIds]);
+  }, [user?.id, firestoreDB, followingIds, isUserBlocked, t]);
 
   // ── Story auto-play controls ──
   const startStoryTimer = useCallback((index, total) => {
@@ -899,11 +907,11 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
           </View>
         )}
         <Text style={[styles.bubbleName, { color: subtextColor }]} numberOfLines={1}>
-          {isMe ? 'You' : (item.userName || '').split(' ')[0]}
+          {isMe ? t('birthdays.you') : (item.userName || '').split(' ')[0]}
         </Text>
       </TouchableOpacity>
     );
-  }, [user?.id, isDarkMode, handlePickImage, handleViewStatus, subtextColor]);
+  }, [user?.id, isDarkMode, handlePickImage, handleViewStatus, subtextColor, t]);
 
   // Build data
   const feedData = useMemo(() => {
@@ -987,7 +995,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
                   {viewingStatus.userName}
                 </Text>
                 <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginRight: 10 }}>
-                  {currentStatus.createdAt?.toDate ? getTimeAgo(currentStatus.createdAt.toDate()) : ''}
+                  {currentStatus.createdAt?.toDate ? timeAgo(currentStatus.createdAt.toDate(), t, 'short') : ''}
                 </Text>
                 {user?.id && viewingStatus.userId !== user.id && (
                   <TouchableOpacity
@@ -1003,7 +1011,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
                     }}
                   >
                     <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>
-                      {followingIds.includes(viewingStatus.userId) ? 'Following' : 'Follow'}
+                      {followingIds.includes(viewingStatus.userId) ? t('feed.following') : t('feed.follow')}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -1111,7 +1119,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
                       }}
                     >
                       <FontAwesome name="paper-plane" size={12} color="#fff" solid />
-                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>Chat</Text>
+                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>{t('tabs.chat')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -1123,14 +1131,14 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
                       style={[styles.deleteBtn, { backgroundColor: 'rgba(106,90,205,0.25)' }]}
                     >
                       <FontAwesome name="plus" size={12} color="#6A5ACD" solid />
-                      <Text style={[styles.deleteText, { color: '#6A5ACD' }]}>New</Text>
+                      <Text style={[styles.deleteText, { color: '#6A5ACD' }]}>{t('feed.new')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => { stopStoryTimer(); handleDeleteStatus(currentStatus.id); }}
                       style={styles.deleteBtn}
                     >
                       <FontAwesome name="trash" size={12} color="#EF4444" />
-                      <Text style={styles.deleteText}>Delete</Text>
+                      <Text style={styles.deleteText}>{t('trade.delete')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -1153,9 +1161,9 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
       {/* ── Status Creator Modal ── */}
       <Modal visible={showCreator} transparent animationType="slide" onRequestClose={() => setShowCreator(false)}>
         <ModalKeyboardView style={styles.creatorOverlay}>
-          <View style={[styles.creatorCard, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#FFF' }]}>
+          <View style={[styles.creatorCard, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#FFF', paddingBottom: 20 + navBarInset }]}>
             <View style={styles.creatorHeader}>
-              <Text style={[styles.creatorTitle, { color: textColor }]}>New Status</Text>
+              <Text style={[styles.creatorTitle, { color: textColor }]}>{t('feed.new_status')}</Text>
               <TouchableOpacity onPress={() => { setShowCreator(false); setCaption(''); setSelectedImage(null); }}>
                 <Text style={{ fontSize: 18, color: subtextColor }}>✕</Text>
               </TouchableOpacity>
@@ -1176,7 +1184,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
                 onPress={handlePickImage}
               >
                 <FontAwesome name="image" size={20} color={subtextColor} />
-                <Text style={{ color: subtextColor, fontSize: 13, marginTop: 4 }}>Add Photo</Text>
+                <Text style={{ color: subtextColor, fontSize: 13, marginTop: 4 }}>{t('feed.add_photo')}</Text>
               </TouchableOpacity>
             )}
 
@@ -1186,7 +1194,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
                 backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f8fafc',
                 borderColor: isDarkMode ? '#334155' : '#e2e8f0',
               }]}
-              placeholder="What's on your mind?"
+              placeholder={t('feed.status_placeholder')}
               placeholderTextColor={subtextColor}
               multiline
               maxLength={200}
@@ -1202,10 +1210,10 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
               {uploading ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <ActivityIndicator size="small" color="#FFF" />
-                  <Text style={styles.creatorPostText}>Uploading...</Text>
+                  <Text style={styles.creatorPostText}>{t('feed.uploading')}</Text>
                 </View>
               ) : (
-                <Text style={styles.creatorPostText}>Post Status</Text>
+                <Text style={styles.creatorPostText}>{t('feed.post_status')}</Text>
               )}
             </TouchableOpacity>
           </View>

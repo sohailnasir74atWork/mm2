@@ -5,6 +5,7 @@ enableFreeze(true);
 
 import React, { lazy, Suspense } from 'react';
 import { AppRegistry, Text } from 'react-native';
+import i18n from 'i18next';
 import AppWrapper from './App';
 import { name as appName } from './app.json';
 import { GlobalStateProvider } from './Code/GlobelStats';
@@ -33,6 +34,17 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
 import { initValueAlertForegroundHandler } from './Code/Helper/valueAlerts';
 initValueAlertForegroundHandler();
 
+// ✅ Foreground display for feed pushes (a comment on / like of your post),
+// which were dropped while the app was open. See postNotifications.js.
+import { initPostForegroundHandler } from './Code/Helper/postNotifications';
+initPostForegroundHandler();
+
+// ✅ Foreground display for group pushes (message, invitation, join request).
+// Skips blocked senders and the group the user is looking at. Taps route via
+// valueUpdateNotifications.js. See groupNotifications.js.
+import { initGroupForegroundHandler } from './Code/Helper/groupNotifications';
+initGroupForegroundHandler();
+
 // ✅ Presses on those app-shown alerts while the app is in the background.
 // notifee keeps ONE background handler and wants it registered here, before
 // the app renders. Taps on system-shown pushes are wired up in GlobelStats.
@@ -55,7 +67,7 @@ class ErrorBoundary extends React.Component {
     } catch (_) {}
   }
   render() {
-    return this.state.hasError ? <Text>Something went wrong.</Text> : this.props.children;
+    return this.state.hasError ? <Text>{i18n.t('misc.something_went_wrong', { defaultValue: 'Something went wrong.' })}</Text> : this.props.children;
   }
 }
 

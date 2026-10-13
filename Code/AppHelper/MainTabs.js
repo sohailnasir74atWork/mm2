@@ -13,6 +13,7 @@ import config from '../Helper/Environment';
 import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 import { useGlobalState } from '../GlobelStats';
 import DesignStack from '../Design/DesignNavigation';
+import { MoreStack } from '../More/MoreNavigator';
 import InterstitialAdManager from '../Ads/IntAd';
 import { NATURAL_BREAK } from '../Ads/adPolicy';
 
@@ -61,6 +62,7 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
     Trade: ['handshake', 'handshake'],
     Chat: ['envelope', 'envelope'],
     Designs: ['house-chimney-crack', 'house-chimney-crack'],
+    More: ['grip', 'grip'],
   }), []);
 
   const getTabIcon = useCallback((routeName, focused) => {
@@ -96,6 +98,31 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
     },
   }), []);
 
+  // ✅ PERF: Tab children as stable callbacks. An inline `{() => <X/>}` is a
+  // new function on every render, which defeats React Navigation's
+  // StaticContainer, so every global-state change (MainTabs reads
+  // useGlobalState) re-rendered the focused tab's whole stack. Same as
+  // Adopt Me's MainTabs.
+  const renderHome = useCallback(() => <HomeTabNavigator selectedTheme={selectedTheme} />, [selectedTheme]);
+  const renderCalculator = useCallback(() => <HomeScreen selectedTheme={selectedTheme} />, [selectedTheme]);
+  const renderTrade = useCallback(() => (
+    <TradeStack
+      selectedTheme={selectedTheme}
+      setChatFocused={setChatFocused}
+      modalVisibleChatinfo={modalVisibleChatinfo}
+      setModalVisibleChatinfo={setModalVisibleChatinfo}
+    />
+  ), [selectedTheme, setChatFocused, modalVisibleChatinfo, setModalVisibleChatinfo]);
+  const renderDesigns = useCallback(() => <DesignStack selectedTheme={selectedTheme} />, [selectedTheme]);
+  const renderChat = useCallback(() => (
+    <ChatStack
+      selectedTheme={selectedTheme}
+      setChatFocused={setChatFocused}
+      modalVisibleChatinfo={modalVisibleChatinfo}
+      setModalVisibleChatinfo={setModalVisibleChatinfo}
+    />
+  ), [selectedTheme, setChatFocused, modalVisibleChatinfo, setModalVisibleChatinfo]);
+  const renderMore = useCallback(() => <MoreStack selectedTheme={selectedTheme} />, [selectedTheme]);
 
   return (
     <Tab.Navigator
@@ -196,7 +223,7 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
           headerShown: false,
         })}
       >
-        {() => <HomeTabNavigator selectedTheme={selectedTheme} />}
+        {renderHome}
       </Tab.Screen>
 
       <Tab.Screen
@@ -206,7 +233,7 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
           headerRight: () => headerRight(navigation),
         })}
       >
-        {() => <HomeScreen selectedTheme={selectedTheme} />}
+        {renderCalculator}
       </Tab.Screen>
 
       {/* <Tab.Screen
@@ -225,14 +252,7 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
           title: t('tabs.trade'), // Translation applied here
         }}
       >
-        {() => (
-          <TradeStack
-            selectedTheme={selectedTheme}
-            setChatFocused={setChatFocused}
-            modalVisibleChatinfo={modalVisibleChatinfo}
-            setModalVisibleChatinfo={setModalVisibleChatinfo}
-          />
-        )}
+        {renderTrade}
       </Tab.Screen>
       <Tab.Screen
         name="Designs"
@@ -241,7 +261,7 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
           headerShown: false
         }}
       >
-        {() => <DesignStack selectedTheme={selectedTheme} />}
+        {renderDesigns}
       </Tab.Screen>
 
       <Tab.Screen
@@ -260,14 +280,17 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
           },
         }}
       >
-        {() => (
-          <ChatStack
-            selectedTheme={selectedTheme}
-            setChatFocused={setChatFocused}
-            modalVisibleChatinfo={modalVisibleChatinfo}
-            setModalVisibleChatinfo={setModalVisibleChatinfo}
-          />
-        )}
+        {renderChat}
+      </Tab.Screen>
+
+      <Tab.Screen
+        name="More"
+        options={{
+          headerShown: false,
+          title: t('tabs.more'),
+        }}
+      >
+        {renderMore}
       </Tab.Screen>
 
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import { useLocalState } from '../../LocalGlobelStats';
 import config from '../../Helper/Environment';
 import CreateGroupModal from './CreateGroupModal';
 import { useHaptic } from '../../Helper/HepticFeedBack';
+import useNavBarInset from '../../Helper/useNavBarInset';
 import { getUserAdminGroup, addMembersToGroup } from '../utils/groupUtils';
 import { showSuccessMessage, showErrorMessage } from '../../Helper/MessageHelper';
 import { sendGameInvite, isUserInActiveGame } from '../../ValuesScreen/PetGuessingGame/utils/gameInviteSystem';
@@ -49,6 +50,8 @@ const OnlineUsersList = ({
   const { localState } = useLocalState();
   const navigation = useNavigation();
   const { t } = useTranslation();
+  // Bottom sheet: the list clears the nav bar / home indicator (keyboard down).
+  const navBarInset = useNavBarInset();
   const { triggerHapticFeedback } = useHaptic();
   const isDarkMode = theme === 'dark';
   
@@ -62,8 +65,26 @@ const OnlineUsersList = ({
   // ✅ Group creation state (only used in 'select' mode)
   const [isSelectionMode, setIsSelectionMode] = useState(mode === 'select');
   const [selectedUserIds, setSelectedUserIds] = useState(new Set());
+  // Every user ever ticked, keyed by id. Selection is by id, but the create
+  // sheet and the invite map need the name and avatar, and a player picked
+  // from Search is not in allOnlineUsers -- nor in searchResults once the
+  // query changes. Without this they were silently dropped from the group.
+  const [pickedUsers, setPickedUsers] = useState({});
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
-  
+
+  // 'online' = people online now, 'search' = anyone by name or ID (select mode
+  // only, ported from Adopt Me's member picker).
+  const [activeTab, setActiveTab] = useState('online');
+
+  // Search state (the Search tab in select mode; the inline box in gameInvite).
+  const [searchText, setSearchText] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
+  // Bumped per request so a slow answer to an older query never overwrites
+  // the newer one.
+  const searchSeqRef = useRef(0);
+
   // ✅ User's existing group state (only used in 'select' mode)
   const [userGroup, setUserGroup] = useState(null);
   const [checkingGroup, setCheckingGroup] = useState(false);
@@ -265,7 +286,13 @@ const OnlineUsersList = ({
     if (!visible) {
       setIsSelectionMode(mode === 'select');
       setSelectedUserIds(new Set());
+      setPickedUsers({});
       setShowCreateGroupModal(false);
+      setActiveTab('online');
+      setSearchText('');
+      setSearchResults([]);
+      setSearching(false);
+      setSearchFailed(false);
     }
   }, [visible, mode]);
 
@@ -280,8 +307,12 @@ const OnlineUsersList = ({
   }, [mode, isSelectionMode, triggerHapticFeedback]);
 
   // ✅ Handle user selection for group creation
-  const handleToggleUserSelection = useCallback((userId) => {
+  const handleToggleUserSelection = useCallback((picked) => {
+    const userId = picked?.id;
+    if (!userId) return;
     triggerHapticFeedback('impactLight');
+    // Remember who this is, whichever list it came from (see pickedUsers).
+    setPickedUsers((prev) => (prev[userId] ? prev : { ...prev, [userId]: picked }));
     setSelectedUserIds((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(userId)) {
@@ -297,10 +328,21 @@ const OnlineUsersList = ({
     });
   }, [triggerHapticFeedback]);
 
+  // ✅ Get selected users for group creation -- from the online list AND from
+  // Search. This used to read allOnlineUsers only, so anyone picked from
+  // search vanished on the way to CreateGroupModal and the group was created
+  // with the online picks alone.
+  const selectedUsers = useMemo(() => {
+    const onlineById = new Map(allOnlineUsers.map((u) => [u.id, u]));
+    return Array.from(selectedUserIds)
+      .map((id) => pickedUsers[id] || onlineById.get(id))
+      .filter(Boolean);
+  }, [allOnlineUsers, pickedUsers, selectedUserIds]);
+
   // ✅ Handle create group or add members button
   const handleCreateOrAddMembers = useCallback(async () => {
     if (selectedUserIds.size === 0) {
-      showErrorMessage('No Selection', 'Please select at least one user');
+      showErrorMessage(t('online.no_selection_title'), t('online.select_one_or_more'));
       return;
     }
 
@@ -312,9 +354,10 @@ const OnlineUsersList = ({
       setLoading(true);
       
       try {
-        // ✅ Build user data map from allOnlineUsers to avoid extra Firestore read
+        // ✅ Build user data map from the picked users (online AND search) to
+        // avoid an extra read per invitee
         const invitedUsersMap = {};
-        allOnlineUsers.forEach((u) => {
+        selectedUsers.forEach((u) => {
           if (u.id && selectedIds.includes(u.id)) {
             invitedUsersMap[u.id] = {
               displayName: u.displayName || 'Anonymous',
@@ -337,15 +380,16 @@ const OnlineUsersList = ({
         );
 
         if (result.success) {
-          showSuccessMessage('Success', `Invitations sent to ${result.invitedCount || selectedIds.length} user(s)!`);
+          showSuccessMessage(t('home.alert.success'), t('online.invitations_sent', { count: result.invitedCount || selectedIds.length }));
           setSelectedUserIds(new Set());
+          setPickedUsers({});
           setIsSelectionMode(false);
         } else {
-          showErrorMessage('Error', result.error || 'Failed to send invitations');
+          showErrorMessage(t('chat.error'), result.error || t('online.invitations_failed'));
         }
       } catch (error) {
         console.error('Error adding members:', error);
-        showErrorMessage('Error', 'Failed to add members. Please try again.');
+        showErrorMessage(t('chat.error'), t('online.add_members_failed'));
       } finally {
         setLoading(false);
       }
@@ -353,7 +397,7 @@ const OnlineUsersList = ({
       // Create new group
       setShowCreateGroupModal(true);
     }
-  }, [selectedUserIds, userGroup, user, appdatabase, allOnlineUsers, triggerHapticFeedback]);
+  }, [selectedUserIds, userGroup, user, appdatabase, selectedUsers, triggerHapticFeedback, t]);
 
   // ✅ Handle group created (navigate to group chat)
   const handleGroupCreated = useCallback((groupId) => {
@@ -433,7 +477,7 @@ const OnlineUsersList = ({
   const handleStartChat = useCallback((selectedUser) => {
     if (mode === 'select') {
       // In select mode, toggle selection instead
-      handleToggleUserSelection(selectedUser.id);
+      handleToggleUserSelection(selectedUser);
       return;
     }
 
@@ -458,11 +502,6 @@ const OnlineUsersList = ({
 
     callbackFunction();
   }, [mode, onClose, navigation, localState?.isPro, handleToggleUserSelection, handleGameInvite]);
-
-  // ✅ Get selected users for group creation
-  const selectedUsers = useMemo(() => {
-    return allOnlineUsers.filter((u) => selectedUserIds.has(u.id));
-  }, [allOnlineUsers, selectedUserIds]);
 
   // ✅ Memoize render user item
   const renderUserItem = useCallback(({ item }) => {
@@ -493,12 +532,14 @@ const OnlineUsersList = ({
             style={styles.avatar}
             defaultSource={{ uri: 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
           />
-          <View style={styles.onlineIndicator} />
+          {/* Online-list rows have no isOnline and are online by definition;
+              search rows carry it, and an offline player gets no dot. */}
+          {item.isOnline !== false && <View style={styles.onlineIndicator} />}
         </View>
         <View style={styles.userInfo}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
             <Text style={styles.userName} numberOfLines={1}>
-              {`${item.displayName || 'Anonymous'}`}
+              {`${item.displayName || t('group_chat.anonymous')}`}
             </Text>
             
             {/* Pro badge */}
@@ -606,7 +647,7 @@ const OnlineUsersList = ({
         )}
       </TouchableOpacity>
     );
-  }, [styles, handleStartChat, isDarkMode, isSelectionMode, selectedUserIds, mode, invitingIds, invitedIds, handleGameInvite]);
+  }, [styles, handleStartChat, isDarkMode, isSelectionMode, selectedUserIds, mode, invitingIds, invitedIds, handleGameInvite, t]);
 
   // ✅ Memoize key extractor
   // ── Search by name ──────────────────────────────────────────────────────
@@ -615,39 +656,90 @@ const OnlineUsersList = ({
   // swaps the data source to a prefix search over /users; clearing it returns
   // to the online list untouched. See utils/userSearch.js for why prefix and
   // not substring.
-  const [searchText, setSearchText] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
-  const isSearching = searchText.trim().length >= 2;
+  //
+  // In select mode (group creation) this is a separate Search tab beside the
+  // Online tab, as in Adopt Me's picker; gameInvite keeps the inline box.
+  const inSearchTab = mode === 'select' && activeTab === 'search';
+  const searchTerm = searchText.trim();
+  const isSearching = mode === 'select' ? inSearchTab : searchTerm.length >= 2;
 
+  // Never addable: yourself, and anyone you have blocked. The same rule is
+  // applied to the online list below, so both tabs offer the same people.
+  const blockedIds = localState?.bannedUsers;
+  const excludedIds = useMemo(() => {
+    const ids = new Set(Array.isArray(blockedIds) ? blockedIds : []);
+    if (user?.id) ids.add(user.id);
+    return ids;
+  }, [blockedIds, user?.id]);
+
+  const onlineIdSet = useMemo(() => new Set(allOnlineUserIds), [allOnlineUserIds]);
+
+  const runSearch = useCallback(async (term) => {
+    const seq = ++searchSeqRef.current;
+    setSearching(true);
+    setSearchFailed(false);
+    try {
+      const found = await searchUsersByName(appdatabase, term, {
+        limit: 25,
+        excludeIds: Array.from(excludedIds),
+      });
+      if (seq !== searchSeqRef.current) return; // a newer query owns the list
+      setSearchResults(found.map((u) => ({ ...u, isOnline: onlineIdSet.has(u.id) })));
+    } catch (err) {
+      if (seq !== searchSeqRef.current) return;
+      setSearchResults([]);
+      setSearchFailed(true);
+      console.warn('[OnlineUsersList] search failed:', err?.message || err);
+    } finally {
+      if (seq === searchSeqRef.current) setSearching(false);
+    }
+  }, [appdatabase, excludedIds, onlineIdSet]);
+
+  // Debounced search as you type (~300 ms). Any answer still in flight is for
+  // an older term, so it is invalidated the moment the term changes.
   useEffect(() => {
-    const term = searchText.trim();
-    if (term.length < 2) {
+    searchSeqRef.current += 1;
+    if (searchTerm.length < 2) {
       setSearchResults([]);
       setSearching(false);
-      return;
+      setSearchFailed(false);
+      return undefined;
     }
-
-    let cancelled = false;
     setSearching(true);
-    const timer = setTimeout(async () => {
-      try {
-        const found = await searchUsersByName(appdatabase, term, { limit: 25 });
-        if (!cancelled) setSearchResults(found);
-      } catch (err) {
-        if (!cancelled) setSearchResults([]);
-        console.warn('[OnlineUsersList] search failed:', err?.message || err);
-      } finally {
-        if (!cancelled) setSearching(false);
-      }
-    }, 350);
+    const timer = setTimeout(() => runSearch(searchTerm), 300);
+    return () => clearTimeout(timer);
+    // runSearch is left out on purpose: it changes when the online id list
+    // loads, and re-firing the query for that is not worth a read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, appdatabase]);
 
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [searchText, appdatabase]);
+  // The Search button / keyboard "search" key: run now, skip the debounce.
+  const handleSearchNow = useCallback(() => {
+    if (searchTerm.length < 2) return;
+    runSearch(searchTerm);
+  }, [searchTerm, runSearch]);
+
+  const handleTabChange = useCallback((tab) => {
+    if (tab === activeTab) return;
+    triggerHapticFeedback('impactLight');
+    setActiveTab(tab);
+    if (tab === 'online') {
+      // As in Adopt Me: leaving Search clears it. Picks are kept (pickedUsers).
+      setSearchText('');
+      setSearchResults([]);
+    }
+  }, [activeTab, triggerHapticFeedback]);
+
+  // In select mode you, and anyone you have blocked, are not offered.
+  const onlineUsersForMode = useMemo(() => (
+    mode === 'select'
+      ? allOnlineUsers.filter((u) => !excludedIds.has(u.id))
+      : allOnlineUsers
+  ), [mode, allOnlineUsers, excludedIds]);
 
   // Selection state is keyed by id and lives outside both lists, so a user
   // picked from search stays selected after the query is cleared.
-  const visibleUsers = isSearching ? searchResults : allOnlineUsers;
+  const visibleUsers = isSearching ? searchResults : onlineUsersForMode;
 
   const keyExtractor = useCallback((item) => item?.id || Math.random().toString(), []);
 
@@ -669,13 +761,13 @@ const OnlineUsersList = ({
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View 
-          style={styles.modalContent}
+          style={[styles.modalContent, { paddingBottom: navBarInset }]}
           onStartShouldSetResponder={() => true}
         >
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>
-              {mode === 'select' ? 'Select Members' : mode === 'gameInvite' ? 'Invite Friends to Play' : 'Online Users'}
+              {mode === 'select' ? t('online.select_members') : mode === 'gameInvite' ? 'Invite Friends to Play' : t('online.online_users')}
             </Text>
             <View style={styles.headerRight}>
               {mode === 'select' ? (
@@ -685,7 +777,7 @@ const OnlineUsersList = ({
                     onPress={onClose}
                     style={styles.headerButton}
                   >
-                    <Text style={styles.cancelText}>Cancel</Text>
+                    <Text style={styles.cancelText}>{t('chat.cancel')}</Text>
                   </TouchableOpacity>
                   {selectedUserIds.size > 0 && (
                     <TouchableOpacity
@@ -695,8 +787,8 @@ const OnlineUsersList = ({
                     >
                       <Text style={styles.createGroupText}>
                         {userGroup
-                          ? `Add to ${userGroup.groupData?.name || userGroup.groupData?.groupName || 'group'} (${selectedUserIds.size})`
-                          : `Create (${selectedUserIds.size})`}
+                          ? t('online.add_to_group', { group: userGroup.groupData?.name || userGroup.groupData?.groupName || t('groups_screen.group'), count: selectedUserIds.size })
+                          : t('online.create_count', { count: selectedUserIds.size })}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -710,16 +802,79 @@ const OnlineUsersList = ({
             </View>
           </View>
 
-          {/* Search. Only in the member pickers -- 'view' mode is a presence
-              list, where searching offline people would be misleading. */}
-          {(mode === 'select' || mode === 'gameInvite') && (
+          {/* Tab bar (group member picker only): Online | Search, as in
+              Adopt Me. */}
+          {mode === 'select' && (
+            <View style={styles.tabBar}>
+              {[
+                { key: 'online', label: t('online.online_users') },
+                { key: 'search', label: t('create_group.tab_search') },
+              ].map((tab) => {
+                const active = activeTab === tab.key;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    onPress={() => handleTabChange(tab.key)}
+                    style={[styles.tab, active && styles.tabActive]}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: active }}
+                  >
+                    <Text style={[styles.tabText, active && styles.tabTextActive]} numberOfLines={1}>
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Search input (select mode: Search tab only) */}
+          {inSearchTab && (
+            <View style={[styles.searchWrap, styles.searchWrapWithButton]}>
+              <Icon name="search" size={16} color={isDarkMode ? '#9CA3AF' : '#6B7280'} />
+              <TextInput
+                style={styles.searchInput}
+                value={searchText}
+                onChangeText={setSearchText}
+                placeholder={t('online.search_placeholder')}
+                placeholderTextColor={isDarkMode ? '#6B7280' : '#9CA3AF'}
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="search"
+                onSubmitEditing={handleSearchNow}
+              />
+              {searchText.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchText('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Icon name="close-circle" size={16} color={isDarkMode ? '#6B7280' : '#9CA3AF'} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                onPress={handleSearchNow}
+                disabled={searchTerm.length < 2 || searching}
+                style={[
+                  styles.searchButton,
+                  searchTerm.length < 2 && styles.searchButtonDisabled,
+                ]}
+              >
+                {searching ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.searchButtonText}>{t('create_group.search_button')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Inline search for the game-invite picker ('view' mode is a
+              presence list, where searching offline people would mislead). */}
+          {mode === 'gameInvite' && (
             <View style={styles.searchWrap}>
               <Icon name="search" size={16} color={isDarkMode ? '#9CA3AF' : '#6B7280'} />
               <TextInput
                 style={styles.searchInput}
                 value={searchText}
                 onChangeText={setSearchText}
-                placeholder="Search by name or ID"
+                placeholder={t('online.search_placeholder')}
                 placeholderTextColor={isDarkMode ? '#6B7280' : '#9CA3AF'}
                 autoCorrect={false}
                 autoCapitalize="none"
@@ -734,9 +889,31 @@ const OnlineUsersList = ({
           )}
 
           {/* Users List */}
-          {(isSearching ? searching : loading) ? (
+          {inSearchTab && searchTerm.length < 2 ? (
+            // Nothing typed yet (or one character): say what Search does.
+            <View style={styles.emptyContainer}>
+              <Icon name="search-outline" size={64} color={isDarkMode ? '#4B5563' : '#D1D5DB'} />
+              <Text style={[styles.emptyText, styles.centeredText]}>
+                {searchTerm.length === 0
+                  ? t('create_group.search_prompt')
+                  : t('create_group.search_min_chars', { min: 2 })}
+              </Text>
+              {selectedUserIds.size > 0 && (
+                <Text style={styles.searchHintText}>
+                  {t('create_group.search_keeps_picks')}
+                </Text>
+              )}
+            </View>
+          ) : (isSearching ? searching : loading) ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={config.colors.primary} />
+            </View>
+          ) : isSearching && searchFailed ? (
+            <View style={styles.emptyContainer}>
+              <Icon name="cloud-offline-outline" size={64} color={isDarkMode ? '#4B5563' : '#D1D5DB'} />
+              <Text style={[styles.emptyText, styles.centeredText]}>
+                {t('social.search_users_failed')}
+              </Text>
             </View>
           ) : visibleUsers.length === 0 ? (
             <View style={styles.emptyContainer}>
@@ -746,11 +923,11 @@ const OnlineUsersList = ({
                 color={isDarkMode ? '#4B5563' : '#D1D5DB'} 
               />
               <Text style={styles.emptyText}>
-                {isSearching ? `No one found for "${searchText.trim()}"` : 'No online users'}
+                {isSearching ? t('online.no_one_found', { query: searchText.trim() }) : t('online.no_online_users')}
               </Text>
               {isSearching && (
                 <Text style={styles.searchHintText}>
-                  Search matches the start of a name
+                  {t('online.search_hint')}
                 </Text>
               )}
             </View>
@@ -777,7 +954,7 @@ const OnlineUsersList = ({
                       <ActivityIndicator size="small" color={config.colors.primary} />
                     ) : (
                       <Text style={styles.loadMoreText}>
-                        {allOnlineUserIds.length - loadedUserIds.size} more users available
+                        {t('online.more_users', { count: allOnlineUserIds.length - loadedUserIds.size })}
                       </Text>
                     )}
                   </View>
@@ -791,9 +968,11 @@ const OnlineUsersList = ({
             <Text style={styles.footerText}>
               {mode === 'select'
                 ? selectedUserIds.size > 0
-                  ? `${selectedUserIds.size} selected (max ${MAX_GROUP_MEMBERS - 1})`
-                  : 'Select users to create a group'
-                : `${allOnlineUserIds.length} ${allOnlineUserIds.length === 1 ? 'user' : 'users'} online${allOnlineUsers.length < allOnlineUserIds.length ? ` (loaded ${allOnlineUsers.length})` : ''}`
+                  ? t('online.selected_max', { count: selectedUserIds.size, max: MAX_GROUP_MEMBERS - 1 })
+                  : t('online.select_to_create')
+                : allOnlineUsers.length < allOnlineUserIds.length
+                  ? t('online.users_online_loaded', { count: allOnlineUserIds.length, loaded: allOnlineUsers.length })
+                  : t('online.users_online', { count: allOnlineUserIds.length })
               }
             </Text>
           </View>
@@ -808,6 +987,7 @@ const OnlineUsersList = ({
           setShowCreateGroupModal(false);
           setIsSelectionMode(false);
           setSelectedUserIds(new Set());
+          setPickedUsers({});
         }}
         selectedUsers={selectedUsers}
       />
@@ -995,6 +1175,60 @@ const getStyles = (isDark) =>
       fontSize: 14,
       padding: 0,
       color: isDark ? '#FFFFFF' : '#111827',
+    },
+    // Search tab: the Search button sits flush in the box's trailing end.
+    searchWrapWithButton: {
+      paddingEnd: 0,
+      overflow: 'hidden',
+    },
+    searchButton: {
+      height: 40,
+      minWidth: 64,
+      paddingHorizontal: 14,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: config.colors.primary || '#8B5CF6',
+      borderTopEndRadius: 12,
+      borderBottomEndRadius: 12,
+    },
+    searchButtonDisabled: {
+      backgroundColor: isDark ? '#374151' : '#D1D5DB',
+    },
+    searchButtonText: {
+      fontSize: 13,
+      color: '#FFFFFF',
+      fontFamily: 'Lato-Bold',
+    },
+    tabBar: {
+      flexDirection: 'row',
+      marginHorizontal: 16,
+      marginTop: 10,
+      marginBottom: 10,
+      padding: 4,
+      borderRadius: 12,
+      backgroundColor: isDark ? '#1F2937' : '#F1F3F6',
+    },
+    tab: {
+      flex: 1,
+      paddingVertical: 8,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    tabActive: {
+      backgroundColor: isDark ? config.colors.surfaceElevatedDark : '#FFFFFF',
+    },
+    tabText: {
+      fontSize: 13,
+      fontFamily: 'Lato-Regular',
+      color: isDark ? '#9CA3AF' : '#6B7280',
+    },
+    tabTextActive: {
+      fontFamily: 'Lato-Bold',
+      color: isDark ? '#FFFFFF' : '#111827',
+    },
+    centeredText: {
+      textAlign: 'center',
+      paddingHorizontal: 24,
     },
     searchHintText: {
       marginTop: 6,

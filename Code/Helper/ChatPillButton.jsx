@@ -2,18 +2,22 @@ import React from 'react';
 import { Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import config from './Environment';
+import { useTranslation } from 'react-i18next';
 
 // The "Chat" button on trade cards and feed post cards. Shared so the two
 // stay identical. CHAT_PILL_HEIGHT is exported so neighbours (the trade
 // bookmark) can match it and sit on the same line.
 export const CHAT_PILL_HEIGHT = 24;
 
-const ChatPillButton = ({ onPress, style }) => (
-  <TouchableOpacity style={[styles.btn, style]} onPress={onPress} activeOpacity={0.8} hitSlop={8}>
-    <Icon name="chatbubble" size={10} color="#fff" />
-    <Text style={styles.label}>Chat</Text>
-  </TouchableOpacity>
-);
+const ChatPillButton = ({ onPress, style }) => {
+  const { t } = useTranslation();
+  return (
+    <TouchableOpacity style={[styles.btn, style]} onPress={onPress} activeOpacity={0.8} hitSlop={8}>
+      <Icon name="chatbubble" size={10} color="#fff" />
+      <Text style={styles.label}>{t('tabs.chat')}</Text>
+    </TouchableOpacity>
+  );
+};
 
 const styles = StyleSheet.create({
   btn: {

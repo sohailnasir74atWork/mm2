@@ -1,6 +1,7 @@
 import { Text, Alert } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Linking } from 'react-native';
+import i18n from 'i18next';
 
 // ✅ Pre-compile regex patterns for better performance
 const URL_REGEX = /^https?:\/\/\S+$/;
@@ -26,7 +27,7 @@ export const parseMessageText = (text) => {
           style={{ color: '#1E90FF', textDecorationLine: 'underline' }}
           onPress={() =>
             Linking.openURL(part).catch(() =>
-              Alert.alert('Error', 'Unable to open the link.')
+              Alert.alert(i18n.t('chat.error'), i18n.t('chat.unable_open_link'))
             )
           }
         >
@@ -43,7 +44,7 @@ export const parseMessageText = (text) => {
           style={{ color: '#007BFF', fontFamily: 'Lato-Bold' }}
           onPress={() => {
             Clipboard.setString(part.replace('@', '')); // Copy without '@'
-            Alert.alert('Copied', `${part.replace('@', '')} has been copied.`);
+            Alert.alert(i18n.t('value.copy'), i18n.t('chat.mention_copied', { name: part.replace('@', '') }));
           }}
         >
           {part}

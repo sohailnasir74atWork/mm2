@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { View, TextInput, TouchableOpacity, Text, Modal, StyleSheet, Image, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useModalWindowInsets } from '../../Helper/useNavBarInset';
 import { getStyles } from './../Style';
 import Icon from 'react-native-vector-icons/Ionicons';
 import config from '../../Helper/Environment';
@@ -74,6 +75,8 @@ const MessageInput = ({
   const { theme } = useGlobalState();
   const isDark = theme === 'dark';
   const insets = useSafeAreaInsets();
+  // Emoji sheet (a Modal): its last row clears the nav bar / home indicator.
+  const modalInsets = useModalWindowInsets();
   const [showEmojiPopup, setShowEmojiPopup] = useState(false);
 
   // ✅ Memoize computed values
@@ -100,7 +103,7 @@ const MessageInput = ({
       const validation = validateContent(trimmedInput);
       if (!validation.isValid) {
         showMessage({
-          message: validation.reason || "Inappropriate content detected.",
+          message: validation.reason || t('private_chat.inappropriate_content'),
           type: "danger",
           duration: 3000,
         });
@@ -140,7 +143,7 @@ const MessageInput = ({
       console.error('Error sending message:', error);
       setIsSending(false);
     }
-  }, [input, hasFruits, selectedEmoji, replyTo, handleSendMessage, onCancelReply, setInput, setSelectedFruits, setSelectedEmoji, localState?.isPro, messageCount, triggerHapticFeedback]);
+  }, [input, hasFruits, selectedEmoji, replyTo, handleSendMessage, onCancelReply, setInput, setSelectedFruits, setSelectedEmoji, localState?.isPro, messageCount, triggerHapticFeedback, t]);
 
   // ✅ Memoize selectEmoji
   const selectEmoji = useCallback((emojiUrl) => {
@@ -230,7 +233,7 @@ const MessageInput = ({
           }}
         >
           <Text style={{ color: isDark ? config.colors.textSecondaryDark : config.colors.textSecondaryLight, fontSize: 12 }}>
-            {selectedFruits.length} pet(s) selected
+            {t('chat.items_selected', { count: selectedFruits.length })}
           </Text>
 
           <TouchableOpacity
@@ -251,7 +254,7 @@ const MessageInput = ({
           onPress={() => setShowEmojiPopup(false)}
           activeOpacity={1}
         >
-          <View style={[modalStyles.sheet, { backgroundColor: isDark ? config.colors.surfaceDark : config.colors.surfaceLight }]} onStartShouldSetResponder={() => true}>
+          <View style={[modalStyles.sheet, { backgroundColor: isDark ? config.colors.surfaceDark : config.colors.surfaceLight, paddingBottom: 20 + modalInsets.bottom }]} onStartShouldSetResponder={() => true}>
             <ScrollView 
               style={[modalStyles.emojiScrollContainer, { backgroundColor: isDark ? config.colors.surfaceDark : config.colors.surfaceLight }]}
               showsVerticalScrollIndicator={false}

@@ -27,6 +27,7 @@ import {
 } from './birthdayApi';
 import { daysUntilBirthday } from './birthdayDate';
 import { BirthdayGradient, BIRTHDAY_PINK } from './BirthdayBits';
+import { flipInRTL } from '../Helper/rtl';
 
 const COUNTDOWN_DAYS = 7;
 
@@ -110,7 +111,7 @@ export default function BirthdayHomeCard({ userId, userName }) {
               : <Text style={styles.claimText}>{t('birthdays.claim_stars', { stars: BIRTHDAY_GIFT_STARS })}</Text>}
           </TouchableOpacity>
         ) : (
-          <FontAwesome name="chevron-right" size={14} color="#fff" />
+          <FontAwesome name="chevron-right" size={14} color="#fff" style={flipInRTL} />
         )}
       </TouchableOpacity>
     );
@@ -130,7 +131,7 @@ export default function BirthdayHomeCard({ userId, userName }) {
             {own.show ? t('birthdays.home_soon_shown') : t('birthdays.home_soon_hidden')}
           </Text>
         </View>
-        <FontAwesome name="chevron-right" size={14} color="#fff" />
+        <FontAwesome name="chevron-right" size={14} color="#fff" style={flipInRTL} />
       </TouchableOpacity>
     );
   }
@@ -147,7 +148,7 @@ export default function BirthdayHomeCard({ userId, userName }) {
             {todayCount > 0 ? t('birthdays.home_others', { count: todayCount }) : t('birthdays.home_add_sub', { stars: BIRTHDAY_GIFT_STARS })}
           </Text>
         </View>
-        <FontAwesome name="chevron-right" size={14} color="#fff" />
+        <FontAwesome name="chevron-right" size={14} color="#fff" style={flipInRTL} />
       </TouchableOpacity>
     );
   }
@@ -162,7 +163,7 @@ export default function BirthdayHomeCard({ userId, userName }) {
           <Text style={styles.title} numberOfLines={1}>{t('birthdays.home_others', { count: todayCount })}</Text>
           <Text style={styles.sub} numberOfLines={1}>{t('birthdays.home_send_wish')}</Text>
         </View>
-        <FontAwesome name="chevron-right" size={14} color="#fff" />
+        <FontAwesome name="chevron-right" size={14} color="#fff" style={flipInRTL} />
       </TouchableOpacity>
     );
   }

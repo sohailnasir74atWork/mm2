@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../Translation/LanguageProvider';
 import { showSuccessMessage, showErrorMessage } from '../Helper/MessageHelper';
 import InterstitialAdManager from '../Ads/IntAd';
+import PostAdManager from '../Ads/PostAd';
 import BannerAdComponent from '../Ads/bannerAds';
 import Share from 'react-native-share';
 import ShareTradeModal from '../Trades/ShareTradeModal';
@@ -801,6 +802,7 @@ const HomeScreen = ({ selectedTheme }) => {
 
       setType('create');
       setModalVisible(true);
+      PostAdManager.prepare('trade');
       // Clean up after execution
       delete timeoutRefs.current[timeoutKey];
     }, 100); // Small delay to allow React state to settle
@@ -982,7 +984,7 @@ const HomeScreen = ({ selectedTheme }) => {
                 if (!isMountedRef.current) return;
 
                 try {
-                  InterstitialAdManager.showAd(callbackfunction);
+                  PostAdManager.show('trade', callbackfunction);
                 } catch (err) {
                   console.warn('[AdManager] Failed to show ad:', err);
                   callbackfunction();

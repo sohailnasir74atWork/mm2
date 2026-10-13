@@ -34,7 +34,7 @@ import { Image as CompressorImage } from 'react-native-compressor';
 import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 import { useTranslation } from 'react-i18next';
 import { addXP, XP_ACTIONS } from '../Engagement/xpUtils';
-import InterstitialAdManager from '../Ads/IntAd';
+import PostAdManager from '../Ads/PostAd';
 import { useLocalState } from '../LocalGlobelStats';
 import config from '../Helper/Environment';
 import { createMMKV } from 'react-native-mmkv';
@@ -547,6 +547,11 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
   // ── Post status (local-first) ──
   const { localState } = useLocalState();
 
+  // Warm the feed-post ad while the status composer is open (PostAd.js).
+  useEffect(() => {
+    if (showCreator) PostAdManager.prepare('feed');
+  }, [showCreator]);
+
   const handlePostStatus = useCallback(async () => {
     if (!user?.id || !firestoreDB) return;
     if (!caption.trim() && !selectedImage) {
@@ -555,6 +560,9 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
     }
 
     // Core upload logic — called after ad (or directly if Pro)
+    // The feed-post ad (PostAd.js) shows only once the status is live —
+    // never before it, never on a failed upload.
+    let posted = false;
     const performUpload = async () => {
       setUploading(true);
       try {
@@ -620,26 +628,25 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
         setCaption('');
         setSelectedImage(null);
         setShowCreator(false);
+        posted = true;
       } catch (err) {
         Alert.alert('Error', 'Could not post status');
       }
       setUploading(false);
     };
 
-    // Show ad before upload for non-Pro users (like UploadModal)
-    if (!localState.isPro) {
+    await performUpload();
+
+    if (posted && !localState.isPro) {
       requestAnimationFrame(() => {
         setTimeout(() => {
           try {
-            InterstitialAdManager.showAd(performUpload);
+            PostAdManager.show('feed');
           } catch (err) {
-            console.warn('[AdManager] Failed to show ad:', err);
-            performUpload();
+            console.warn('[StatusFeed] Ad failed:', err);
           }
         }, 400);
       });
-    } else {
-      performUpload();
     }
   }, [user, firestoreDB, appdatabase, caption, selectedImage, uploadToBunny, localState.isPro]);
 

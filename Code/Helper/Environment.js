@@ -23,6 +23,13 @@ const config = {
   // In-feed inline banner units (Code/Ads/FeedBannerAd.jsx); null = fall back to the anchored banner unit until the dedicated AdMob units are filled in.
   andriodFeedBanner: 'ca-app-pub-5740215782746766/7645096771', // feed_inline_banner
   IOsFeedBanner: 'ca-app-pub-5740215782746766/4598373448', // feed_inline_banner
+  // Post interstitials (Code/Ads/PostAd.js): own units so AdMob reports the
+  // trade-post and feed-post placements apart; no AdMob frequency cap on them
+  // (created 2026-10-13).
+  andriodTradePostInterstitial: 'ca-app-pub-5740215782746766/1858892987', // int_trade_post
+  andriodFeedPostInterstitial: 'ca-app-pub-5740215782746766/3088214173', // int_feed_post
+  IOsTradePostInterstitial: 'ca-app-pub-5740215782746766/3551248607', // int_trade_post
+  IOsFeedPostInterstitial: 'ca-app-pub-5740215782746766/7603928276', // int_feed_post
   // No separate "game" interstitial units exist in this AdMob app, so the
   // IntAd A/B slot B points at the real interstitial unit (valid unit, no
   // no-fill). Create a 2nd interstitial unit per platform later for true A/B.

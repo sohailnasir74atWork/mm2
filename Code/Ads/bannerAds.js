@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback, useContext } from 'react';
 import { View, Platform } from 'react-native';
+import { NavigationContext } from '@react-navigation/native';
 import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import getAdUnitId from './ads';
 import { useLocalState } from '../LocalGlobelStats';
@@ -18,6 +19,22 @@ import { logAdRevenue } from './adTelemetry';
 //                    compliant until the user makes a choice.
 const npaRequiredFor = (status) =>
   status !== 'OBTAINED' && status !== 'NOT_REQUIRED';
+
+// Focus of the screen this banner sits in. Plain useIsFocused() throws when
+// there is no navigation context, so a banner rendered outside a screen
+// counts as focused instead of crashing.
+const useScreenFocused = () => {
+  const navigation = useContext(NavigationContext);
+  const [focused, setFocused] = useState(() => (navigation ? navigation.isFocused() : true));
+  useEffect(() => {
+    if (!navigation) return undefined;
+    setFocused(navigation.isFocused());
+    const offFocus = navigation.addListener('focus', () => setFocused(true));
+    const offBlur = navigation.addListener('blur', () => setFocused(false));
+    return () => { offFocus(); offBlur(); };
+  }, [navigation]);
+  return focused;
+};
 
 const BannerAdComponent = ({
   adType = 'banner',
@@ -95,7 +112,23 @@ const BannerAdComponent = ({
   // content above the banner until the user collapses it; refreshes are
   // ordinary banners. iOS banners earned the same without it, so iOS stays a
   // plain strip.
-  const isCollapsible = collapsible && Platform.OS === 'android';
+  //
+  // The expanded ad is drawn ABOVE the app, not inside this screen, so it
+  // stayed floating over the next screen the user opened (seen in Blox on the
+  // emulator, 2026-10-07: a tap on the next screen clicked the ad). So a
+  // collapsible banner is unmounted while its screen is out of focus, which
+  // removes the overlay, and once its screen has been left it comes back as a
+  // plain banner: it can expand only on the first visit. (Port of Blox.)
+  const wantsCollapsible = collapsible && Platform.OS === 'android';
+  const isFocused = useScreenFocused();
+  const [expandSpent, setExpandSpent] = useState(false);
+  useEffect(() => {
+    if (wantsCollapsible && !isFocused) {
+      setExpandSpent(true);
+      setIsAdLoaded(false);
+    }
+  }, [wantsCollapsible, isFocused]);
+  const isCollapsible = wantsCollapsible && !expandSpent;
   const requestOptions = useMemo(
     () => ({
       requestNonPersonalizedAdsOnly: npaRequiredFor(localState?.consentStatus),
@@ -120,7 +153,8 @@ const BannerAdComponent = ({
     (paid) => logAdRevenue('banner', isCollapsible ? 'banner_collapsible' : 'banner', paid, unitId),
     [isCollapsible, unitId],
   );
-  const suppressed = !!localState?.isPro || !visible || !adsReady;
+  const suppressed = !!localState?.isPro || !visible || !adsReady ||
+    (wantsCollapsible && !isFocused);
   const showingAd = !suppressed && isAdLoaded;
 
   // Hold the callback in a ref so an inline arrow from the parent can't make
@@ -161,11 +195,12 @@ const BannerAdComponent = ({
       <BannerAd
         key={reloadKey}
         unitId={unitId}
-        // Fixed 320x50 on every screen (owner decision 2026-09-27). Adaptive
-        // banners change height per device and read as the banner
-        // "stretching"; a standard banner is the same small strip everywhere.
-        // (The collapsible format, see requestOptions, expands on its own.)
-        size={BannerAdSize.BANNER}
+        // Anchored adaptive, full screen width (owner decision, 2026-10-13,
+        // reversing the fixed 320x50 of 2026-09-27): the SDK picks the height per
+        // device (about 50-60dp on phones), and adaptive banners usually earn
+        // more per impression than the fixed size. Screens reserve the real
+        // height through onHeightChange (measured below), so nothing is covered.
+        size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
         requestOptions={requestOptions}
         onAdLoaded={handleAdLoaded}
         onAdFailedToLoad={handleAdFailedToLoad}

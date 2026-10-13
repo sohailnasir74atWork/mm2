@@ -46,6 +46,63 @@
         "$other": { ".validate": false }
       }
     },
+    "birthday_prefs": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['show'])",
+        "show": { ".validate": "newData.isBoolean()" },
+        "$other": { ".validate": false }
+      }
+    },
+    "birthday_index": {
+      "$key": {
+        ".read": "auth != null"
+      },
+      ".write": false
+    },
+    "birthday_counts": {
+      "$key": {
+        ".read": "auth != null"
+      },
+      ".write": false
+    },
+    "birthday_server": {
+      ".read": false,
+      ".write": false
+    },
+    "birthday_wishes": {
+      "$year": {
+        "$toUid": {
+          ".read": "auth != null && auth.uid === $toUid"
+        }
+      },
+      ".write": false
+    },
+    "birthday_sent": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid"
+      },
+      ".write": false
+    },
+    "birthday_wish_counts": {
+      "$year": {
+        "$uid": {
+          ".read": "auth != null"
+        }
+      },
+      ".write": false
+    },
+    "birthday_wished_by": {
+      ".read": false,
+      ".write": false
+    },
+    "birthday_gifts": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid"
+      },
+      ".write": false
+    },
     "xlsData": {
       ".read": true,
       ".write": true

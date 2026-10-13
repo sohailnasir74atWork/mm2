@@ -40,7 +40,8 @@ export default function BirthdayHomeCard({ userId, userName }) {
   const [claiming, setClaiming] = useState(false);
 
   useFocusEffect(useCallback(() => {
-    if (!userId) { setOwn(null); setMine(null); setTodayCount(0); return undefined; }
+    // Signed-out __DEV__ builds show the mock (birthdayMock.js), as on Blox.
+    if (!userId && !__DEV__) { setOwn(null); setMine(null); setTodayCount(0); return undefined; }
     let live = true;
     setBirthdayUser(userId);
     Promise.all([getOwnBirthday(appdatabase), getTodayCount(appdatabase)])
@@ -84,7 +85,7 @@ export default function BirthdayHomeCard({ userId, userName }) {
     }
   }, [claiming, t]);
 
-  if (!userId) return null;
+  if (!userId && !__DEV__) return null;
   const days = own?.month ? daysUntilBirthday(own.month, own.day) : null;
 
   // 1. Your birthday. Each variant has its own key, so a card never changes

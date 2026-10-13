@@ -219,7 +219,8 @@ onEmailPrefsChange((uid, next) => {
  */
 export async function getOwnBirthday(db, { force = false } = {}) {
   if (mock) return shapeOwn(mock.ownBirthday());
-  if (!currentUid) return null;
+  // Signed out: __DEV__ previews the mock (like call() below); release shows nothing.
+  if (!currentUid) return __DEV__ ? shapeOwn(require('./birthdayMock').default.ownBirthday()) : null;
   if (!force && ownCache && (ownCache.dob || ownCache.day === localDay())) return shapeOwn(ownCache);
   if (!db) return shapeOwn(ownCache);
   const uid = currentUid;
@@ -287,6 +288,7 @@ export async function getTodayCount(db) {
     countCache = saved;
     return saved.n;
   }
+  if (!currentUid && __DEV__) return require('./birthdayMock').default.todayCount();
   if (!db || !currentUid) return 0;
   const counts = await Promise.all(localDayKeys().map((k) => get(ref(db, `birthday_counts/${k}`)).then((s) => Number(s.val()) || 0)));
   countCache = { day, n: counts.reduce((a, b) => a + b, 0) };

@@ -137,3 +137,21 @@ for (const [name, fn] of Object.entries(emailPrivacy)) exports[name] = fn;
 // Set the secret before the first deploy; rotate the password only after old
 // builds have aged out — docs/BUNNY_UPLOAD_ROLLOUT_2026-10-11.md.
 exports.uploadImage = require('./uploadImage').uploadImage;
+
+// ── Birthdays (2026-10-13, BIRTHDAYS_PLAN.md) ──────────────────────────
+// Firebase port of Blox Fruit's birthdays. Index triggers, seven HTTPS
+// endpoints the app calls with an ID token, and two daily schedules. All
+// additive: new nodes only (rules in database.rules.json), except that
+// claimBirthdayGift adds 15 to users/{uid}/dailyStars and updateMyBirthday
+// rewrites users_private/{uid}/dateOfBirth once. Deploy by name:
+//   firebase deploy --only functions:birthdayIndexOnDob,functions:birthdayIndexOnEmailDob,functions:birthdayIndexOnShow,functions:birthdayTop,functions:sendBirthdayWish,functions:wishAllBirthdays,functions:thankBirthdayWishers,functions:claimBirthdayGift,functions:updateMyBirthday,functions:myBirthday,functions:refreshBirthdayAges,functions:notifyBirthdays --project mm2vlaues-ed80c
+// Then once: node scripts/birthdays/backfillIndex.js --prod (dry run), then --prod --apply.
+const birthdays = require('./birthdays');
+for (const name of [
+  'birthdayIndexOnDob', 'birthdayIndexOnEmailDob', 'birthdayIndexOnShow',
+  'birthdayTop', 'sendBirthdayWish', 'wishAllBirthdays', 'thankBirthdayWishers',
+  'claimBirthdayGift', 'updateMyBirthday', 'myBirthday',
+  'refreshBirthdayAges', 'notifyBirthdays',
+]) {
+  exports[name] = birthdays[name];
+}

@@ -1,0 +1,12 @@
+{
+  "database": { "rules": "database.rules.json" },
+  "emulators": {
+    "database": { "host": "127.0.0.1", "port": 9400 },
+    "firestore": { "host": "127.0.0.1", "port": 8480 },
+    "auth": { "host": "127.0.0.1", "port": 9499 },
+    "hub": { "host": "127.0.0.1", "port": 4480 },
+    "logging": { "host": "127.0.0.1", "port": 4580 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
+  }
+}

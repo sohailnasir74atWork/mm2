@@ -5,6 +5,7 @@
     "app_settings": "APPLI",
     "haptic_feedback": "Vibrations",
     "chat_notifications": "Notifications du chat",
+    "value_update_notifications": "Notifications de mise à jour des valeurs",
     "theme": "Thème",
     "theme_system": "SYSTÈME",
     "theme_light": "CLAIR",

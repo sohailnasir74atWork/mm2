@@ -11,9 +11,31 @@
 // first, then initialize(). Every ad loader awaits it before calling load(), so
 // no ad is ever requested before the config lands. Safe to call any number of
 // times from anywhere — the work runs once.
-import { MobileAds, MaxAdContentRating } from 'react-native-google-mobile-ads';
+import { Platform } from 'react-native';
+import { AdsConsent, MobileAds, MaxAdContentRating } from 'react-native-google-mobile-ads';
+import { getTrackingStatus } from 'react-native-tracking-transparency';
 
 let initPromise = null;
+
+// Consent the user gave in an earlier session is kept on the device by UMP and
+// is enough to request ads right away: Google's UMP sample initialises the SDK
+// in parallel with the new session's consent refresh whenever canRequestAds()
+// is already true. App.js uses this to start the App Open manager without
+// waiting for its consent chain (ATT, then the UMP refresh — a network round
+// trip), which is what made the launch ad miss its splash window. First
+// launches, anyone whose consent is still incomplete, and iOS users with the
+// ATT prompt still to come keep waiting for that chain (whenAdsReady).
+// getConsentInfo() reads the stored state; it makes no network call.
+export async function canRequestAdsFromLastSession() {
+  try {
+    const info = await AdsConsent.getConsentInfo();
+    if (!info?.canRequestAds) return false;
+    if (Platform.OS === 'ios' && (await getTrackingStatus()) === 'not-determined') return false;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
 
 export function ensureAdsInitialized() {
   if (!initPromise) {

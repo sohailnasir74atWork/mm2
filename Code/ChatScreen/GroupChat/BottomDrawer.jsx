@@ -1276,7 +1276,7 @@ const ProfileBottomDrawer = ({
           backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : config.colors.dividerLight,
         }}
       >
-        <Image
+        <Image resizeMethod="resize"
           source={{ uri: item.imageUrl || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
           style={{ width: '100%', height: '100%' }}
         />
@@ -1434,7 +1434,7 @@ const ProfileBottomDrawer = ({
                   <View key={idx} style={{ width: '22%', height: 40, margin: 1, alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: 10 }}>
                     {tradeItem ? (
                       <>
-                        <Image
+                        <Image resizeMethod="resize"
                           source={{ uri: getTradeItemImageUrl(tradeItem) || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
                           style={{ width: 30, height: 30, borderRadius: 6 }}
                           resizeMode="contain"
@@ -1487,7 +1487,7 @@ const ProfileBottomDrawer = ({
           
           {/* Transfer Icon */}
           <View style={{ justifyContent: 'center', alignItems: 'center' }}>
-            <Image source={require('../../../assets/left-right.png')} style={{ width: 20, height: 20, borderRadius: 5 }} />
+            <Image resizeMethod="resize" source={require('../../../assets/left-right.png')} style={{ width: 20, height: 20, borderRadius: 5 }} />
           </View>
           
           {/* Wants Items Grid */}
@@ -1501,7 +1501,7 @@ const ProfileBottomDrawer = ({
                   <View key={idx} style={{ width: '22%', height: 40, margin: 1, alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: 10 }}>
                     {tradeItem ? (
                       <>
-                        <Image
+                        <Image resizeMethod="resize"
                           source={{ uri: getTradeItemImageUrl(tradeItem) || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
                           style={{ width: 30, height: 30, borderRadius: 6 }}
                           resizeMode="contain"
@@ -1672,7 +1672,7 @@ const ProfileBottomDrawer = ({
       >
         {/* Post Image */}
         {images.length > 0 && (
-          <Image
+          <Image resizeMethod="resize"
             source={{ uri: images[0] }}
             style={{ width: '100%', height: 140, borderTopLeftRadius: 12, borderTopRightRadius: 12 }}
             resizeMode="cover"
@@ -1782,7 +1782,7 @@ const ProfileBottomDrawer = ({
               borderBottomWidth: 1, borderBottomColor: isDarkMode ? config.colors.surfaceDark : '#e5e7eb',
             }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <Image
+                <Image resizeMethod="resize"
                   source={{ uri: post.avatar || avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
                   style={{ width: 36, height: 36, borderRadius: 18, marginRight: 10 }}
                 />
@@ -1802,7 +1802,7 @@ const ProfileBottomDrawer = ({
             {images.length > 0 && (
               <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
                 {images.map((img, idx) => (
-                  <Image
+                  <Image resizeMethod="resize"
                     key={idx}
                     source={{ uri: img }}
                     style={{ width: screenWidth, height: 300 }}
@@ -2044,6 +2044,21 @@ const ProfileBottomDrawer = ({
                     <Text style={{ fontSize: 12, color: c.textSecondary, fontWeight: '600' }}>
                       {mergedUser.robloxUsername}
                     </Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* User ID (copyable) — what the user search accepts, as in Adopt Me */}
+                {selectedUserId && (
+                  <TouchableOpacity
+                    onPress={() => copyToClipboard(selectedUserId)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}
+                    activeOpacity={0.7}
+                  >
+                    <Icon name="finger-print-outline" size={12} color={c.textMuted} />
+                    <Text style={{ fontSize: 11, color: c.textMuted, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                      {selectedUserId}
+                    </Text>
+                    <Icon name="copy-outline" size={11} color={c.textMuted} />
                   </TouchableOpacity>
                 )}
               </View>

@@ -19,51 +19,8 @@ import { useLocalState } from '../../LocalGlobelStats';
 import { validateContent } from '../../Helper/ContentModeration';
 
 import { pickImages } from '../../Helper/imagePicker';
+import { uploadImage, UPLOAD_KIND } from '../../Helper/imageUpload';
 import RNFS from 'react-native-fs';
-
-const BUNNY_STORAGE_HOST = 'storage.bunnycdn.com';
-const BUNNY_STORAGE_ZONE = 'post-gag';
-const BUNNY_ACCESS_KEY   = '1b7e1a85-dff7-4a98-ba701fc7f9b9-6542-46e2';
-const BUNNY_CDN_BASE     = 'https://pull-gag.b-cdn.net';
-
-// ✅ Move base64ToBytes outside component (pure function)
-const base64ToBytes = (base64) => {
-  if (!base64 || typeof base64 !== 'string') {
-    throw new Error('Invalid base64 input');
-  }
-
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-  let str = base64.replace(/[\r\n]+/g, '');
-  let output = [];
-
-  let i = 0;
-  while (i < str.length) {
-    const enc1 = chars.indexOf(str.charAt(i++));
-    const enc2 = chars.indexOf(str.charAt(i++));
-    const enc3 = chars.indexOf(str.charAt(i++));
-    const enc4 = chars.indexOf(str.charAt(i++));
-
-    // ✅ Safety check for invalid characters
-    if (enc1 === -1 || enc2 === -1 || enc3 === -1 || enc4 === -1) {
-      throw new Error('Invalid base64 character');
-    }
-
-    const chr1 = (enc1 << 2) | (enc2 >> 4);
-    const chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
-    const chr3 = ((enc3 & 3) << 6) | enc4;
-
-    if (enc3 !== 64) {
-      output.push(chr1, chr2);
-    } else {
-      output.push(chr1);
-    }
-    if (enc4 !== 64 && enc3 !== 64) {
-      output.push(chr3);
-    }
-  }
-
-  return Uint8Array.from(output);
-};
 
 const PrivateMessageInput = ({
   onSend,
@@ -83,7 +40,7 @@ const PrivateMessageInput = ({
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
 
   const { localState } = useLocalState();
-  const { theme, user } = useGlobalState();
+  const { theme } = useGlobalState();
   const isDark = theme === 'dark';
   const { t } = useTranslation();
   // ✅ Memoize styles
@@ -177,50 +134,15 @@ const PrivateMessageInput = ({
     async uri => {
       if (!uri) return null;
 
-      const userId = user?.id ?? 'anon';
-
       try {
-        const filename   = `${Date.now()}-${Math.floor(Math.random() * 1e6)}.jpg`;
-        const remotePath = `uploads/${encodeURIComponent(userId)}/${encodeURIComponent(filename)}`;
-        const uploadUrl  = `https://${BUNNY_STORAGE_HOST}/${BUNNY_STORAGE_ZONE}/${remotePath}`;
-
-        // read file as base64
-        const base64 = await RNFS.readFile(uri.replace('file://', ''), 'base64');
-
-        // convert to bytes without atob
-        let binary;
-        try {
-          binary = base64ToBytes(base64);
-        } catch (error) {
-          console.error('Error converting base64 to bytes:', error);
-          Alert.alert(t('home.alert.error'), t('private_chat.image_process_failed'));
-          return null;
-        }
-
-        const res = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers: {
-            AccessKey: BUNNY_ACCESS_KEY,
-            'Content-Type': 'application/octet-stream',
-          },
-          body: binary,
-        });
-
-        const txt = await res.text().catch(() => '');
-        if (!res.ok) {
-          console.warn('Bunny upload failed', res.status, txt);
-          Alert.alert(t('home.alert.error'), t('private_chat.image_upload_failed'));
-          return null;
-        }
-
-        return `${BUNNY_CDN_BASE}/${decodeURIComponent(remotePath)}`;
+        return await uploadImage(uri, UPLOAD_KIND.dm);
       } catch (e) {
         console.warn('[Bunny ERROR]', e?.message || e);
         Alert.alert(t('home.alert.error'), t('private_chat.image_upload_failed'));
         return null;
       }
     },
-    [user?.id],
+    [t],
   );
 
   // ✅ Memoize handleSend

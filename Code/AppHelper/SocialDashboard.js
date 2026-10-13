@@ -19,6 +19,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import ProfileBottomDrawer from '../ChatScreen/GroupChat/BottomDrawer';
 import config from '../Helper/Environment';
 import { useTranslation } from 'react-i18next';
+import { looksLikeUserId } from '../ChatScreen/utils/userSearch';
 
 // ✅ Constants for optimization
 const FRIEND_PAGE_SIZE = 15;
@@ -28,6 +29,27 @@ const FIRESTORE_IN_BATCH_SIZE = 10; // Smaller batch for better cost efficiency
 // ✅ Sanitize search query — strip chars invalid in Firebase RTDB queries
 const sanitizeSearchQuery = (q) => q.replace(/[.#$\[\]\/\\]/g, '');
 
+// A pasted user ID (the one shown on profiles) is a direct key read of
+// users/{id}; the displayName prefix queries below can never match it.
+const findSearchRowById = async (db, raw) => {
+    if (!looksLikeUserId(raw)) return null;
+    try {
+        const snap = await get(ref(db, `users/${raw}`));
+        if (!snap.exists()) return null;
+        const u = snap.val();
+        if (!u || (!u.displayName && !u.avatar)) return null;
+        return {
+            id: raw,
+            displayName: u.displayName || u.userName || 'Unknown',
+            avatar: u.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
+            robloxUsername: u.robloxUsername,
+            robloxUsernameVerified: u.robloxUsernameVerified,
+        };
+    } catch (_) {
+        return null;
+    }
+};
+
 // ✅ Memoized User Card to prevent re-renders
 const UserCard = memo(({ item, isDark, isFollowing, onPress }) => (
     <TouchableOpacity
@@ -35,7 +57,7 @@ const UserCard = memo(({ item, isDark, isFollowing, onPress }) => (
         onPress={onPress}
         style={[styles.card, { backgroundColor: isDark ? config.colors.surfaceDark : '#FFFFFF', borderColor: isDark ? config.colors.borderDark : '#F2F2F7' }]}
     >
-        <Image source={{ uri: item.avatar }} style={styles.avatar} />
+        <Image resizeMethod="resize" source={{ uri: item.avatar }} style={styles.avatar} />
         <View style={styles.cardContent}>
             <Text style={[styles.name, { color: isDark ? '#FFF' : '#000' }]} numberOfLines={1}>
                 {item.displayName}
@@ -280,6 +302,10 @@ const SocialDashboard = () => {
             const seen = new Set();
             const results = [];
 
+            const byId = await findSearchRowById(db, raw);
+            if (!isMounted.current) return;
+            if (byId && friendIdSet.has(byId.id)) { seen.add(byId.id); results.push(byId); }
+
             for (const v of variants) {
                 if (seen.size >= 50) break;
                 try {
@@ -350,6 +376,10 @@ const SocialDashboard = () => {
             const seen = new Set();
             const results = [];
             const limitSize = 50;
+
+            const byId = await findSearchRowById(db, raw);
+            if (!isMounted.current) return;
+            if (byId && byId.id !== currentUser?.id) { seen.add(byId.id); results.push(byId); }
 
             for (const v of variants) {
                 if (seen.size >= 50) break;
@@ -493,7 +523,7 @@ const SocialDashboard = () => {
                                     setIsFriendSearchActive(false); // Reset to pagination when empty
                                 }
                             }}
-                            placeholder="Search friends..."
+                            placeholder="Search friends by name or ID..."
                             placeholderTextColor={isDark ? '#666' : '#999'}
                             style={[styles.searchInput, { backgroundColor: isDark ? config.colors.surfaceDark : '#FFF', color: isDark ? '#FFF' : '#000' }]}
                             returnKeyType="search"
@@ -538,7 +568,7 @@ const SocialDashboard = () => {
                         <TextInput
                             value={searchQuery}
                             onChangeText={setSearchQuery}
-                            placeholder="Search users..."
+                            placeholder="Search users by name or ID..."
                             placeholderTextColor={isDark ? '#666' : '#999'}
                             style={[styles.searchInput, { backgroundColor: isDark ? config.colors.surfaceDark : '#FFF', color: isDark ? '#FFF' : '#000' }]}
                             returnKeyType="search"

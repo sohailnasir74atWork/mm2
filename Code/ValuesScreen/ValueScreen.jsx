@@ -451,7 +451,7 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
                 contentContainerStyle={styles.selectedPetsList}
                 renderItem={({ item, index }) => (
                   <TouchableOpacity style={styles.selectedPetCard} onPress={() => handleRemoveSelected(index)}>
-                    <Image
+                    <Image resizeMethod="resize"
                       source={{ uri: item.imageUrl }}
                       style={styles.selectedPetImage}
                     />
@@ -635,7 +635,7 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
       </GestureHandlerRootView>
       {!localState.isPro && !fromChat && (
         <View style={{ position: 'absolute', bottom: bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
-          <BannerAdComponent />
+          <BannerAdComponent collapsible />
         </View>
       )}
     </>

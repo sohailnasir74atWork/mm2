@@ -52,7 +52,7 @@ const MemberRow = React.memo(({ member, onPress, isDarkMode, c }) => (
     activeOpacity={0.7}
     style={[styles.card, { backgroundColor: c.bgAlt, borderColor: c.border }]}
   >
-    <Image
+    <Image resizeMethod="resize"
       source={{ uri: member.avatar || DEFAULT_AVATAR }}
       style={styles.avatar}
     />

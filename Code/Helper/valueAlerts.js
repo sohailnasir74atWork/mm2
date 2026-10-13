@@ -10,6 +10,7 @@
  */
 import messaging from '@react-native-firebase/messaging';
 import notifee, { AndroidImportance } from '@notifee/react-native';
+import { isValueUpdatesEnabled } from './valueUpdateNotifications';
 
 let mmkv = null;
 try {
@@ -42,7 +43,13 @@ export const slugItem = (name) =>
 export function initValueAlertForegroundHandler() {
   return messaging().onMessage(async (msg) => {
     try {
-      if (msg?.data?.kind !== 'value_change') return;
+      const data = msg?.data || {};
+      // The "values updated" broadcast (valueUpdateNotifications.js) also
+      // sends kind 'value_change'; type alone is accepted too.
+      const isBroadcast = data.type === 'values_update';
+      if (data.kind !== 'value_change' && !isBroadcast) return;
+      // Switched off in Settings while the unsubscribe was still in flight.
+      if (isBroadcast && !isValueUpdatesEnabled()) return;
       const title = msg?.notification?.title;
       const body = msg?.notification?.body;
       if (!title && !body) return;
@@ -52,9 +59,14 @@ export function initValueAlertForegroundHandler() {
         importance: AndroidImportance.HIGH,
       });
       await notifee.displayNotification({
+        // One slot for the broadcast, like the server's Android tag and APNs
+        // collapse id: a newer update replaces the older one.
+        ...(isBroadcast ? { id: 'values_update' } : {}),
         title,
         body,
-        data: msg?.data || {},
+        // Read back on press to pick the screen to open
+        // (routeForNotificationData in valueUpdateNotifications.js).
+        data,
         android: {
           channelId: 'value_alerts',
           smallIcon: 'ic_launcher',

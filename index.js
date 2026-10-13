@@ -32,6 +32,13 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
 // auto-display, but foreground ones are dropped unless shown manually.
 import { initValueAlertForegroundHandler } from './Code/Helper/valueAlerts';
 initValueAlertForegroundHandler();
+
+// ✅ Presses on those app-shown alerts while the app is in the background.
+// notifee keeps ONE background handler and wants it registered here, before
+// the app renders. Taps on system-shown pushes are wired up in GlobelStats.
+import notifee from '@notifee/react-native';
+import { handleNotifeeBackgroundEvent } from './Code/Helper/valueUpdateNotifications';
+notifee.onBackgroundEvent(handleNotifeeBackgroundEvent);
 class ErrorBoundary extends React.Component {
   state = { hasError: false };
   static getDerivedStateFromError(error) {

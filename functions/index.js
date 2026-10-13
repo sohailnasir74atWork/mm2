@@ -130,3 +130,10 @@ exports.privateEmailOnSignup = require('./privateEmailOnSignup').privateEmailOnS
 
 const emailPrivacy = require('./emailPrivacy');
 for (const [name, fn] of Object.entries(emailPrivacy)) exports[name] = fn;
+
+// ── Image uploads, server-side (2026-10-11) ────────────────────────────
+// The app used to PUT to Bunny with the post-gag storage password in the
+// bundle. uploadImage holds it in Secret Manager (BUNNY_STORAGE_KEY) instead.
+// Set the secret before the first deploy; rotate the password only after old
+// builds have aged out — docs/BUNNY_UPLOAD_ROLLOUT_2026-10-11.md.
+exports.uploadImage = require('./uploadImage').uploadImage;

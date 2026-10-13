@@ -54,7 +54,7 @@ import AppOpenAdManager from './Code/Ads/openApp';
 // sign in meanwhile).
 const SPLASH_LOGIN_CAP_MS = 3000;
 const JS_STARTED_AT = Date.now();
-import { ensureAdsInitialized } from './Code/Ads/init';
+import { ensureAdsInitialized, canRequestAdsFromLastSession } from './Code/Ads/init';
 import { markAdsReady, whenAdsReady } from './Code/Ads/adsGate';
 import RNBootSplash from "react-native-bootsplash";
 import SystemNavigationBar from 'react-native-system-navigation-bar';
@@ -179,7 +179,7 @@ function App() {
 
 
   return (
-    <SafeAreaView edges={LEGACY_SAFE_AREA_EDGES} style={{ flex: 1, backgroundColor: selectedTheme.colors.background }}>
+    <SafeAreaView edges={LEGACY_SAFE_AREA_EDGES} style={{ flex: 1, backgroundColor: selectedTheme.colors.background }} onTouchStartCapture={AppOpenAdManager.noteUserTouch}>
       <SafeAreaProvider initialMetrics={NAV_INITIAL_METRICS}>
         <NavigationContainer ref={navigationRef} theme={selectedTheme}>
           <StatusBar
@@ -334,11 +334,13 @@ export default function AppWrapper() {
   // re-read from MMKV on every show, so a purchase mid-session immediately
   // stops App Open ads.
   //
-  // The manager itself starts only once consent has run (whenAdsReady).
-  // Cold-start App Open ad: decided once per launch, shown FROM the splash or
-  // not at all (budget, first-launch and 4 h rules live in Code/Ads/adPolicy.js
-  // and Code/Ads/openApp.js — the same flow as Adopt Me / Blox / Fisch).
-  const [splashAdGateOpen, setSplashAdGateOpen] = useState(false);
+  // The manager starts once consent allows ads: at once when consent from an
+  // earlier session still stands, otherwise after this session's consent
+  // flow (whenAdsReady).
+  // Launch App Open ad: decided once per launch. The splash no longer waits
+  // for it; it shows when it loads, over the splash or Home, under the window
+  // and no-touch rules in Code/Ads/openApp.js / adPolicy.js (same flow as
+  // Adopt Me / Blox).
   const coldStartPrepared = useRef(false);
   useEffect(() => {
     if (!coldStartPrepared.current) {
@@ -348,14 +350,14 @@ export default function AppWrapper() {
       } else {
         AppOpenAdManager.prepareColdStart();
       }
-      AppOpenAdManager.splashGate.then(() => setSplashAdGateOpen(true));
-      // Belt and braces: whatever the ad SDK does, the splash never stays
-      // more than 6 s.
-      setTimeout(() => setSplashAdGateOpen(true), 6000);
     }
     if (localState.showOnBoardingScreen || localState.isPro) return undefined;
     let cancelled = false;
-    whenAdsReady().then(() => { if (!cancelled) AppOpenAdManager.start(); });
+    // Consent from an earlier session lets the launch ad's request go out now,
+    // inside the splash window; otherwise wait for this session's consent.
+    canRequestAdsFromLastSession()
+      .then((alreadyConsented) => (alreadyConsented ? undefined : whenAdsReady()))
+      .then(() => { if (!cancelled) AppOpenAdManager.start(); });
     return () => { cancelled = true; };
   }, [localState.isPro, localState.showOnBoardingScreen]);
 
@@ -368,17 +370,21 @@ export default function AppWrapper() {
 
   // ✅ Hide splash once login is done (or the cap passed).
   useEffect(() => {
-    if ((localState.isAppReady || splashCapReached) && splashAdGateOpen) {
+    if (localState.isAppReady || splashCapReached) {
       // Was InteractionManager.runAfterInteractions (deprecated in RN 0.83).
       // rAF defers to after the next frame commits, which is what this needed
       // — and unlike requestIdleCallback it cannot be starved, so the splash
       // can never get stuck on screen.
       const raf = requestAnimationFrame(() => {
-        RNBootSplash.hide({ fade: true });
+        // Once the splash has faded, Home is on screen: that starts the launch
+        // ad's no-touch rule (Code/Ads/openApp.js).
+        Promise.resolve(RNBootSplash.hide({ fade: true }))
+          .catch(() => {})
+          .then(() => AppOpenAdManager.noteHomeVisible());
       });
       return () => cancelAnimationFrame(raf);
     }
-  }, [localState.isAppReady, splashCapReached, splashAdGateOpen]);
+  }, [localState.isAppReady, splashCapReached]);
 
   const selectedTheme = useMemo(() => {
     return theme === 'dark' ? MyDarkTheme : MyLightTheme;

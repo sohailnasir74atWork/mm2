@@ -86,7 +86,7 @@ const EventRow = React.memo(({ item, valueSource, C }) => {
   return (
     <View style={[styles.row, { backgroundColor: C.surface, borderColor: C.border }]}>
       {uri ? (
-        <Image source={{ uri }} style={styles.thumb} />
+        <Image resizeMethod="resize" source={{ uri }} style={styles.thumb} />
       ) : (
         <View style={[styles.thumb, { backgroundColor: C.border }]} />
       )}
@@ -181,7 +181,7 @@ const EventCard = ({ isDarkMode = false }) => {
         </View>
         <View style={styles.previewRow}>
           {preview.map((uri, i) => (
-            <Image key={uri + i} source={{ uri }} style={styles.previewThumb} />
+            <Image resizeMethod="resize" key={uri + i} source={{ uri }} style={styles.previewThumb} />
           ))}
         </View>
         <Icon name="chevron-forward" size={18} color={C.sub} />

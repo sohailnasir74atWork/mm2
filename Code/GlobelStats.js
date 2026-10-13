@@ -6,6 +6,7 @@ import { getAuth, onAuthStateChanged } from '@react-native-firebase/auth';
 import { ref, set, update, get, onDisconnect, getDatabase, onValue, remove, query, orderByValue, equalTo } from '@react-native-firebase/database';
 import { getFirestore, doc, onSnapshot, getDoc } from '@react-native-firebase/firestore';
 import { syncValueAlertTopics } from './Helper/valueAlerts';
+import { initValueNotificationTapHandlers, initValueUpdatesOnStartup } from './Helper/valueUpdateNotifications';
 import { createNewUser, registerForNotifications } from './Globelhelper';
 import { useLocalState } from './LocalGlobelStats';
 import { requestPermission } from './Helper/PermissionCheck';
@@ -200,6 +201,15 @@ export const GlobalStateProvider = ({ children }) => {
       })
       .catch(() => {});
   }, [user?.id]);
+
+  // ✅ "Values updated" broadcast push (topic value-updates): every install,
+  // guest or signed in, unless switched off in Settings. Also makes a tap on
+  // any value push open the Values screen. Both are fire-and-forget and
+  // swallow their own errors, so they can never hold up or break startup.
+  useEffect(() => {
+    initValueNotificationTapHandlers();
+    initValueUpdatesOnStartup();
+  }, []);
 
   // ✅ Handle flag setting based on user preference (saves Firebase data costs)
   useEffect(() => {

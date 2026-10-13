@@ -33,6 +33,10 @@ const BannerAdComponent = ({
   // under-reserves on tall phones (content ends up behind the ad) and
   // over-reserves on short ones (the dead gap comes back).
   onHeightChange,
+  // Collapsible banner, Android only: pass it on main screens, never on chat
+  // screens (their input bar sits right above the banner, and the expanded
+  // first impression would cover it). See requestOptions below.
+  collapsible = false,
 }) => {
   const [isAdLoaded, setIsAdLoaded] = useState(false);
   const { localState } = useLocalState();
@@ -83,14 +87,20 @@ const BannerAdComponent = ({
   // BannerAd component below doesn't see a new object reference on every
   // render (which would otherwise force a fresh ad request).
   //
-  // No collapsible networkExtras any more: 2026-09-27 the owner chose a fixed
-  // standard banner over the collapsible format (higher eCPM, but it opened as
-  // a large expanded ad over the content).
+  // Collapsible banners are back on Android main screens (owner decision,
+  // 2026-10-07). Removing them on 2026-09-27 (shipped in 1.5.0) cut what an
+  // Android banner earned by more than half (AdMob, same days, 1.4.5 vs 1.5.0:
+  // US $0.99 → $0.42 eCPM). The first request of a session expands over the
+  // content above the banner until the user collapses it; refreshes are
+  // ordinary banners. iOS banners earned the same without it, so iOS stays a
+  // plain strip.
+  const isCollapsible = collapsible && Platform.OS === 'android';
   const requestOptions = useMemo(
     () => ({
       requestNonPersonalizedAdsOnly: npaRequiredFor(localState?.consentStatus),
+      ...(isCollapsible ? { networkExtras: { collapsible: 'bottom' } } : {}),
     }),
-    [localState?.consentStatus],
+    [localState?.consentStatus, isCollapsible],
   );
 
   // Every reason this slot renders nothing at all: Pro users and an explicitly
@@ -144,9 +154,9 @@ const BannerAdComponent = ({
         key={reloadKey}
         unitId={unitId}
         // Fixed 320x50 on every screen (owner decision 2026-09-27). Adaptive
-        // banners change height per device, and the collapsible format opened
-        // as a large expanded ad over the content; both read as the banner
-        // "stretching". A standard banner is the same small strip everywhere.
+        // banners change height per device and read as the banner
+        // "stretching"; a standard banner is the same small strip everywhere.
+        // (The collapsible format, see requestOptions, expands on its own.)
         size={BannerAdSize.BANNER}
         requestOptions={requestOptions}
         onAdLoaded={handleAdLoaded}

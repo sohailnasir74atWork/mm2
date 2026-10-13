@@ -15,24 +15,24 @@
 // written against planTypeOf() (the product's billing period), so adding or
 // dropping a plan in RevenueCat needs no edit here.
 //
-// Two walls, same as before the port: offering 'default' first, and when the
-// caller passes `showoffer`, closing it without buying opens 'paywallrc' as a
-// second chance. `oneWallOnly` (Firebase flag single_offer_wall) shows only
-// 'paywallrc'. Each falls back to the other if its offering is missing.
+// ONE wall, one offering ('default'). Owner's call (2026-10-11): no second
+// "discount" wall after closing this one. Callers still pass `showoffer` and
+// `oneWallOnly`; both are ignored.
 //
-// The surface FOLLOWS THE APP THEME and is built from the app's own palette:
-// the deep-ocean dark background, the #6A5ACD brand, and the gold of the Pro
-// badge (assets/pro.png) for the plan you are buying.
+// It LOOKS LIKE ONBOARDING, on purpose. The first-run flow is welcome → sign
+// in → this wall, and a dark storefront at step three read as leaving the app.
+// So it follows the app theme on onboarding's own background, shows the same
+// logo, and its button is onboarding's Continue button: same colour
+// (config.colors.hasBlockGreen), same corners, same word. The Blox Fruit and
+// Adopt Me walls are this same screen in their own brand colour.
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, Modal, TouchableOpacity, Image,
   StyleSheet, StatusBar, Platform, ActivityIndicator,
   Dimensions, Linking, Animated, Easing, ScrollView, Alert,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, {
-  Defs, LinearGradient as SvgLinear, RadialGradient as SvgRadial, Stop, Rect, Circle,
-} from 'react-native-svg';
+import { useSafeAreaInsets, initialWindowMetrics } from 'react-native-safe-area-context';
+import Svg, { Defs, RadialGradient as SvgRadial, Stop, Rect, Circle } from 'react-native-svg';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Purchases from 'react-native-purchases';
 import { useTranslation } from 'react-i18next';
@@ -41,6 +41,7 @@ import { useLocalState } from '../LocalGlobelStats';
 import { useGlobalState } from '../GlobelStats';
 import { useHaptic } from '../Helper/HepticFeedBack';
 import AppOpenAdManager from '../Ads/openApp';
+import { paywallPlacement, trackPaywallView, trackPaywallClose } from '../Helper/growthAnalytics';
 
 const { width, height } = Dimensions.get('window');
 const SMALL = height < 700;
@@ -51,110 +52,69 @@ const FONT_REGULAR = 'Lato-Regular';
 const TERMS_URL = 'https://mm2values.app/terms';
 const PRIVACY_URL = 'https://mm2values.app/privacy';
 
-// RevenueCat offering identifiers.
-const FIRST_WALL = 'default';
-const SECOND_WALL = 'paywallrc';
+// RevenueCat offering shown on the wall.
+const OFFERING = 'default';
 
-const LOGO = require('../../assets/MM2logo.webp');
+const LOGO = require('../../assets/MM2logo.webp'); // the logo onboarding shows
 const PRO_BADGE = require('../../assets/pro.png');
 
+// Seconds before the × appears. Nothing is shown in its place while it waits;
+// it simply appears. Owner's call (2026-10-11): 7 s on the first-run wall at
+// the end of onboarding, 5 s everywhere else.
+const CLOSE_DELAY_ONBOARDING = 7;
+const CLOSE_DELAY = 5;
+
 // ── Palette ──
-// GOLD is the Pro badge's own colour (#E1A900). GOLD_TEXT exists because gold
-// as a surface and gold as text need different values: bright gold reads on
-// the dark sea, but as TEXT on a white tile it is unreadable, so light mode
-// uses a dark amber instead.
+const BRAND = '#6A5ACD';   // config.colors.hasBlockGreen — onboarding's Continue button
+const ACCENT = '#3E8BFC';  // config.colors.accent
+const GOLD = '#E1A900';    // the Pro badge (assets/pro.png)
+
+// '#RRGGBB' + alpha → '#RRGGBBAA'
+const tint = (hex, a) => hex + Math.round(a * 255).toString(16).padStart(2, '0');
+
 const makePalette = (isDark) => (isDark
   ? {
-    BG: '#040d1a',                            // config.colors.backgroundDark
-    DOCK_BG: 'rgba(4,13,26,0.92)',
-    DOCK_LINE: 'rgba(255,255,255,0.08)',
-    NAV: '#040d1a',
+    BG: '#040d1a',          // config.colors.backgroundDark — onboarding's dark background
     NAV_STYLE: 'light',
     STATUS_STYLE: 'light-content',
-
-    GLOW_A: '#6A5ACD', GLOW_A_OP: '0.55',     // brand primary
-    GLOW_B: '#3E8BFC', GLOW_B_OP: '0.26',     // config.colors.accent
-
-    ACCENT_A: '#8B7FD9',                      // config.colors.secondary
-    ACCENT_B: '#6A5ACD',
-    GOLD: '#F5C21B',
-    GOLD_DEEP: '#E1A900',
-    GOLD_TEXT: '#F5C21B',
-    ON_GOLD: '#1B1340',
-
-    TEXT: '#FFFFFF',
-    TEXT_SUB: 'rgba(255,255,255,0.72)',
-    TEXT_MUTE: 'rgba(255,255,255,0.46)',
-
+    GLOW: 0.30,
+    BRAND_TEXT: '#9D93E6',  // brand lifted so it reads on the dark sea
+    TEXT: '#FFFFFF',        // onboarding title
+    TEXT_SUB: '#CCCCCC',    // onboarding body text
+    TEXT_MUTE: 'rgba(255,255,255,0.5)',
     CARD: 'rgba(255,255,255,0.06)',
     CARD_LINE: 'rgba(255,255,255,0.10)',
     DIVIDER: 'rgba(255,255,255,0.07)',
-    RING_BG: 'rgba(255,255,255,0.07)',
-    RING_LINE: 'rgba(255,255,255,0.12)',
-
+    TILE_ON: tint(BRAND, 0.22),
+    SAVINGS_LINE: tint(BRAND, 0.45),
     CLOSE_BG: 'rgba(255,255,255,0.10)',
-    CLOSE_LINE: 'rgba(255,255,255,0.14)',
     CLOSE_ICON: 'rgba(255,255,255,0.85)',
-    TIMER: 'rgba(255,255,255,0.7)',
-
-    TILE_BG: 'rgba(255,255,255,0.05)',
-    TILE_LINE: 'rgba(255,255,255,0.13)',
-    // Must be OPAQUE: the selected tile has an Android elevation shadow in
-    // gold, and a translucent fill lets it show through everywhere except
-    // behind the text — a dark box around the price. Dark amber, gold's hue.
-    TILE_ON_BG: '#3D3210',
-    SAVINGS_BG: 'rgba(245,194,27,0.14)',
-    SAVINGS_LINE: 'rgba(245,194,27,0.30)',
-
-    FOOTER: 'rgba(255,255,255,0.4)',
-    FOOTER_DOT: 'rgba(255,255,255,0.22)',
+    DOCK_BG: 'rgba(4,13,26,0.94)',
+    DOCK_LINE: 'rgba(255,255,255,0.08)',
+    FOOTER: 'rgba(255,255,255,0.45)',
+    FOOTER_DOT: 'rgba(255,255,255,0.25)',
   }
   : {
-    BG: '#F8F9FA',                            // config.colors.backgroundLight
-    DOCK_BG: 'rgba(255,255,255,0.94)',
-    DOCK_LINE: '#E6E3F5',
-    NAV: '#F8F9FA',
+    BG: '#f2f2f7',          // onboarding's light background
     NAV_STYLE: 'dark',
     STATUS_STYLE: 'dark-content',
-
-    GLOW_A: '#6A5ACD', GLOW_A_OP: '0.16',     // far softer: a glow that reads on
-    GLOW_B: '#E1A900', GLOW_B_OP: '0.10',     // near-black would be a stain here
-
-    ACCENT_A: '#6A5ACD',
-    ACCENT_B: '#4B3FA6',                      // HomeTabScreen HEADER_BG
-    GOLD: '#F5C21B',
-    GOLD_DEEP: '#E1A900',
-    GOLD_TEXT: '#8A6400',                     // amber readable on white tiles
-    ON_GOLD: '#1B1340',
-
-    TEXT: '#15122B',
-    TEXT_SUB: '#5B5775',
-    TEXT_MUTE: '#8C88A6',
-
+    GLOW: 0.14,
+    BRAND_TEXT: '#5A4BC0',
+    TEXT: '#000000',
+    TEXT_SUB: '#666666',
+    TEXT_MUTE: '#8E8E93',
     CARD: '#FFFFFF',
-    CARD_LINE: '#E6E3F5',
-    DIVIDER: '#EFEDF8',
-    RING_BG: '#FFFFFF',
-    RING_LINE: '#E6E3F5',
-
-    CLOSE_BG: 'rgba(21,18,43,0.06)',
-    CLOSE_LINE: '#E6E3F5',
-    CLOSE_ICON: '#5B5775',
-    TIMER: '#5B5775',
-
-    TILE_BG: '#FFFFFF',
-    TILE_LINE: '#E6E3F5',
-    TILE_ON_BG: '#FFF6D6',
-    SAVINGS_BG: '#FFF6D6',
-    SAVINGS_LINE: '#F0D27A',
-
-    FOOTER: '#8C88A6',
-    FOOTER_DOT: '#C9C6DA',
+    CARD_LINE: '#E5E5EA',
+    DIVIDER: '#EFEFF4',
+    TILE_ON: tint(BRAND, 0.10),
+    SAVINGS_LINE: tint(BRAND, 0.30),
+    CLOSE_BG: 'rgba(0,0,0,0.06)',
+    CLOSE_ICON: '#3C3C43',
+    DOCK_BG: 'rgba(242,242,247,0.96)',
+    DOCK_LINE: '#E5E5EA',
+    FOOTER: '#8E8E93',
+    FOOTER_DOT: '#C7C7CC',
   });
-
-// Seconds before the × appears; a countdown shows in its place until then.
-// Owner's call (2026-09-28): 5. Set to 0 to show it at once.
-const CLOSE_TIMER_SECONDS = 5;
 
 // ── What Pro actually unlocks ──
 // Every line is a real gate in this codebase, not a marketing claim:
@@ -164,11 +124,11 @@ const CLOSE_TIMER_SECONDS = 5;
 //             12 hours each, no rewarded video (free users get 1, with a video)
 //   badge   → assets/pro.png renders beside the name in trades, chat and posts
 //   extra_translate → MessagesList / PrivateMessageList skip the 5-a-day cap
-const benefitsFor = (P) => ([
-  { key: 'noads', icon: 'close-circle', tint: P.ACCENT_A },
-  { key: 'boost', icon: 'rocket', tint: P.ACCENT_B },
-  { key: 'badge', image: PRO_BADGE, tint: P.GOLD },
-]);
+const BENEFITS = [
+  { key: 'noads', icon: 'close-circle', tint: BRAND },
+  { key: 'boost', icon: 'rocket', tint: ACCENT },
+  { key: 'badge', image: PRO_BADGE, tint: GOLD },
+];
 
 // A plan's REAL length comes from the store product's billing period, not from
 // the RevenueCat package slot it was filed under (Fisch had a 3-month product
@@ -195,12 +155,6 @@ const BILLED_KEY = {
   WEEKLY: 'billed_weekly', MONTHLY: 'billed_monthly', TWO_MONTH: 'billed_2months',
   THREE_MONTH: 'billed_3months', SIX_MONTH: 'billed_6months', ANNUAL: 'billed_yearly',
 };
-
-// Two package lists sell the same thing when they hold the same products. The
-// second wall only makes sense when it offers something the first did not —
-// otherwise closing the paywall would just reopen an identical one.
-const productSet = (list) =>
-  (list || []).map(p => p?.product?.identifier).filter(Boolean).sort().join('|');
 
 // Rebuild a price string at a different amount, keeping the store's currency
 // symbol and its position (prefix "$4.99" vs suffix "4,99 €"). The STORE's own
@@ -247,29 +201,27 @@ const formatMoney = (pkg, amount) => {
 // when no digit follows, so "Rs 1,006.00" keeps its "1,006".
 const trimZeroDecimals = (s) => (typeof s === 'string' ? s.replace(/([.,])00(?!\d)/, '') : s);
 
-// ── Background: two soft colour glows ──
-// Drawn once in SVG rather than stacked translucent Views, so it costs a single
-// layer on Android instead of a pile of overdrawn rectangles.
+// ── Background: onboarding's flat colour, one soft brand glow at the top ──
 const Backdrop = ({ P }) => (
   <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
     <Defs>
       <SvgRadial id="glowTop" cx="50%" cy="50%" r="50%">
-        <Stop offset="0" stopColor={P.GLOW_A} stopOpacity={P.GLOW_A_OP} />
-        <Stop offset="1" stopColor={P.GLOW_A} stopOpacity="0" />
-      </SvgRadial>
-      <SvgRadial id="glowBottom" cx="50%" cy="50%" r="50%">
-        <Stop offset="0" stopColor={P.GLOW_B} stopOpacity={P.GLOW_B_OP} />
-        <Stop offset="1" stopColor={P.GLOW_B} stopOpacity="0" />
+        <Stop offset="0" stopColor={BRAND} stopOpacity={P.GLOW} />
+        <Stop offset="1" stopColor={BRAND} stopOpacity="0" />
       </SvgRadial>
     </Defs>
     <Rect x="0" y="0" width="100%" height="100%" fill={P.BG} />
-    <Circle cx={width * 0.5} cy={height * 0.05} r={width * 0.85} fill="url(#glowTop)" />
-    <Circle cx={width * 0.1} cy={height * 0.62} r={width * 0.7} fill="url(#glowBottom)" />
+    <Circle cx={width * 0.5} cy={height * 0.04} r={width * 0.8} fill="url(#glowTop)" />
   </Svg>
 );
 
-const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly }) => {
-  const insets = useSafeAreaInsets();
+const SubscriptionScreen = ({ visible, onClose, track }) => {
+  // App.js nests a SafeAreaProvider inside its padded root SafeAreaView, so on
+  // iOS useSafeAreaInsets() reads 0 anywhere inside the app. This Modal covers
+  // the whole window, so it needs the window's own insets — otherwise the logo
+  // and × sit under the status bar and the footer under the home indicator.
+  const contextInsets = useSafeAreaInsets();
+  const insets = (Platform.OS === 'ios' && initialWindowMetrics?.insets) || contextInsets;
   const { packages, purchaseProduct, restorePurchases, localState } = useLocalState();
   const { theme } = useGlobalState();
   const { triggerHapticFeedback } = useHaptic();
@@ -278,21 +230,19 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
   const isDark = theme === 'dark';
   const P = useMemo(() => makePalette(isDark), [isDark]);
   const s = useMemo(() => makeStyles(P), [P]);
-  const BENEFITS = useMemo(() => benefitsFor(P), [P]);
+
+  const closeDelay = paywallPlacement(track) === 'onboarding' ? CLOSE_DELAY_ONBOARDING : CLOSE_DELAY;
 
   // Callers pass inline arrows, so a fresh onClose arrives every render. The
   // async effects below must call the latest one without re-running for it.
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  const firstWall = oneWallOnly ? SECOND_WALL : FIRST_WALL;
-  const [wallId, setWallId] = useState(firstWall);
   const [offerings, setOfferings] = useState(null); // offerings.all; null while loading
   const [selectedPkg, setSelectedPkg] = useState(null);
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
-  const [closeTimer, setCloseTimer] = useState(CLOSE_TIMER_SECONDS);
-  const canClose = closeTimer <= 0;
+  const [canClose, setCanClose] = useState(false);
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -305,7 +255,6 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
   // entirely rather than show plans that can never be bought.
   useEffect(() => {
     if (!visible) return;
-    setWallId(firstWall);
     setOfferings(null);
     let cancelled = false;
     (async () => {
@@ -322,22 +271,14 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
       }
     })();
     return () => { cancelled = true; };
-  }, [visible, firstWall]);
+  }, [visible]);
 
-  const packagesOf = useCallback(
-    (id) => offerings?.[id]?.availablePackages || [],
-    [offerings]
-  );
-
-  // The wall's own offering, else the other wall's, else the current offering
-  // LocalGlobelStats already loaded — the same fallback order as before.
+  // The wall's offering, else the current offering LocalGlobelStats loaded.
   const wallPackages = useMemo(() => {
     if (!offerings) return [];
-    const own = packagesOf(wallId);
-    if (own.length) return own;
-    const other = packagesOf(wallId === FIRST_WALL ? SECOND_WALL : FIRST_WALL);
-    return other.length ? other : (packages || []);
-  }, [offerings, wallId, packagesOf, packages]);
+    const own = offerings[OFFERING]?.availablePackages || [];
+    return own.length ? own : (packages || []);
+  }, [offerings, packages]);
 
   // ── Pricing: every plan measured against the priciest per-month rate ──
   // The anchor is what the same stretch of time would cost on the most
@@ -410,6 +351,11 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
 
   const trial = trialLabel(getTrial(selectedPkg));
 
+  // ── Analytics: one view per open ──
+  useEffect(() => {
+    if (visible) trackPaywallView(track);
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Close once Pro arrives (purchase or restore) ──
   // Watching the state instead of checking it after `await purchaseProduct()`:
   // a callback would read localState from before the purchase and never close.
@@ -423,42 +369,31 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
     if (visible && localState?.isPro && !proAtOpenRef.current) onCloseRef.current?.();
   }, [visible, localState?.isPro]);
 
-  // ── Close button countdown — restarts when the second wall takes over ──
+  // ── The × stays hidden for closeDelay seconds, then appears ──
   useEffect(() => {
     if (!visible) return;
-    if (CLOSE_TIMER_SECONDS <= 0) {
-      setCloseTimer(0);
-      closeFade.setValue(1);
-      return;
-    }
-    setCloseTimer(CLOSE_TIMER_SECONDS);
+    setCanClose(false);
     closeFade.setValue(0);
-    const interval = setInterval(() => {
-      setCloseTimer(prev => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          Animated.timing(closeFade, { toValue: 1, duration: 250, useNativeDriver: true }).start();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [visible, wallId, closeFade]);
+    const timer = setTimeout(() => {
+      setCanClose(true);
+      Animated.timing(closeFade, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    }, closeDelay * 1000);
+    return () => clearTimeout(timer);
+  }, [visible, closeDelay, closeFade]);
 
-  // ── Android system nav bar: match the storefront, restore the app on exit ──
+  // ── Android system nav bar: match the wall, restore the app on exit ──
   // The restore repeats App.js's own two calls, so leaving the wall puts the
   // bar back exactly as the app had it.
   useEffect(() => {
     if (Platform.OS !== 'android' || !visible) return;
-    SystemNavigationBar.setNavigationColor(P.NAV, P.NAV_STYLE, 'navigation');
+    SystemNavigationBar.setNavigationColor(P.BG, P.NAV_STYLE, 'navigation');
     return () => {
       SystemNavigationBar.setNavigationColor(isDark ? '#000000' : '#FFFFFF', !isDark);
       SystemNavigationBar.setBarMode(isDark ? 'dark' : 'light');
     };
-  }, [visible, isDark, P.NAV, P.NAV_STYLE]);
+  }, [visible, isDark, P.BG, P.NAV_STYLE]);
 
-  // ── Entrance — replayed for the second wall so the change is visible ──
+  // ── Entrance ──
   useEffect(() => {
     if (!visible) return;
     fadeAnim.setValue(0);
@@ -467,7 +402,7 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
       Animated.timing(fadeAnim, { toValue: 1, duration: 420, useNativeDriver: true }),
       Animated.timing(riseAnim, { toValue: 0, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
-  }, [visible, wallId, fadeAnim, riseAnim]);
+  }, [visible, fadeAnim, riseAnim]);
 
   // ── CTA breathing ──
   useEffect(() => {
@@ -482,10 +417,14 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
     return () => pulse.stop();
   }, [visible, pulseAnim]);
 
-  // Preselect the best-value plan (again after a wall switch clears it).
+  // Preselect the best-value plan — again if a fresh load replaces the list
+  // the current pick came from.
   useEffect(() => {
-    if (visible && recommended && !selectedPkg) setSelectedPkg(recommended);
-  }, [visible, recommended, selectedPkg]);
+    if (!visible || !recommended) return;
+    if (!selectedPkg || !plans.some(p => p.pkg.identifier === selectedPkg.identifier)) {
+      setSelectedPkg(recommended);
+    }
+  }, [visible, recommended, selectedPkg, plans]);
 
   // Reset on close
   useEffect(() => {
@@ -495,20 +434,10 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
     }
   }, [visible]);
 
-  // ── Close: first wall → second wall (when it sells something different) ──
   const handleClose = useCallback(() => {
-    const second = packagesOf(SECOND_WALL);
-    const offerSecond = showoffer && !oneWallOnly && wallId === FIRST_WALL
-      && !localState?.isPro
-      && second.length > 0
-      && productSet(second) !== productSet(wallPackages);
-    if (offerSecond) {
-      setSelectedPkg(null);
-      setWallId(SECOND_WALL);
-      return;
-    }
+    trackPaywallClose(track);
     onCloseRef.current?.();
-  }, [showoffer, oneWallOnly, wallId, localState?.isPro, packagesOf, wallPackages]);
+  }, [track]);
 
   const handleSelect = useCallback((pkg) => {
     triggerHapticFeedback('impactLight');
@@ -521,6 +450,7 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
     // The Play sheet backgrounds the app; coming back must not open an ad.
     AppOpenAdManager.skipNextForeground();
     // Success flips localState.isPro, and the effect above closes the wall.
+    // purchaseProduct logs pro_purchase with `track`.
     await purchaseProduct(selectedPkg, setLoading, track);
   }, [selectedPkg, loading, purchaseProduct, track, triggerHapticFeedback]);
 
@@ -539,12 +469,11 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
     }
   }, [restoring, restorePurchases, t]);
 
-  // ── The button says "Continue" and never repeats the price. ──
-  // The selected tile already shows it in gold, and the line under the button
-  // states exactly what gets charged — including any free trial.
+  // ── The button says "Continue", like every onboarding step before it. ──
+  // It never repeats the price: the selected tile shows it, and the line under
+  // the button states exactly what gets charged — including any free trial.
   const ctaLabel = t('paywall.cta');
 
-  // ── And the line under it says exactly what is charged, and when. ──
   const ctaSubtitle = (() => {
     if (!selectedPkg) return null;
     const price = trimZeroDecimals(selectedPkg.product?.priceString);
@@ -566,15 +495,13 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
         {/* ══ TOP: what you get ══ */}
         <ScrollView
           style={s.scroll}
-          contentContainerStyle={[s.scrollContent, { paddingTop: insets.top + 14 }]}
+          contentContainerStyle={[s.scrollContent, { paddingTop: insets.top + 18 }]}
           showsVerticalScrollIndicator={false}
           bounces
         >
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: riseAnim }] }}>
             <View style={s.hero}>
-              <View style={s.logoRing}>
-                <Image source={LOGO} style={s.logo} resizeMode="contain" />
-              </View>
+              <Image resizeMethod="resize" source={LOGO} style={s.logo} resizeMode="contain" />
               <Text style={s.title}>{t('paywall.title')}</Text>
               <Text style={s.subtitle}>{t('paywall.subtitle')}</Text>
             </View>
@@ -583,9 +510,9 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
             <View style={s.card}>
               {BENEFITS.map((b, i) => (
                 <View key={b.key} style={[s.benefit, i > 0 && s.benefitDivider]}>
-                  <View style={[s.benefitIcon, { backgroundColor: b.tint + '26' }]}>
+                  <View style={[s.benefitIcon, { backgroundColor: tint(b.tint, 0.15) }]}>
                     {b.image
-                      ? <Image source={b.image} style={s.benefitBadge} resizeMode="contain" />
+                      ? <Image resizeMethod="resize" source={b.image} style={s.benefitBadge} resizeMode="contain" />
                       : <Icon name={b.icon} size={19} color={b.tint} />}
                   </View>
                   <View style={s.benefitText}>
@@ -605,9 +532,9 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
           </Animated.View>
         </ScrollView>
 
-        {/* ── Close / countdown — pinned, never scrolls away ── */}
-        <View style={[s.closeWrap, { top: insets.top + 10 }]} pointerEvents="box-none">
-          {canClose ? (
+        {/* ── Close — pinned, never scrolls away; absent until the delay ends ── */}
+        {canClose && (
+          <View style={[s.closeWrap, { top: insets.top + 10 }]} pointerEvents="box-none">
             <Animated.View style={{ opacity: closeFade }}>
               <TouchableOpacity
                 onPress={handleClose}
@@ -617,12 +544,8 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
                 <Icon name="close" size={19} color={P.CLOSE_ICON} />
               </TouchableOpacity>
             </Animated.View>
-          ) : (
-            <View style={s.closeBtn}>
-              <Text style={s.timerText}>{closeTimer}</Text>
-            </View>
-          )}
-        </View>
+          </View>
+        )}
 
         {/* ══ BOTTOM: the offers, side by side, then one button ══ */}
         <View style={[s.dock, { paddingBottom: DOCK_PAD + insets.bottom }]}>
@@ -644,10 +567,8 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
                       style={[s.tile, isSelected && s.tileOn]}
                     >
                       {savings > 0 && (
-                        <View style={[s.saveTag, isSelected && s.saveTagOn]}>
-                          <Text style={[s.saveTagText, isSelected && s.saveTagTextOn]}>
-                            {t('paywall.save', { percent: savings })}
-                          </Text>
+                        <View style={s.saveTag}>
+                          <Text style={s.saveTagText}>{t('paywall.save', { percent: savings })}</Text>
                         </View>
                       )}
 
@@ -696,7 +617,7 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
             <View style={s.loadingWrap}>
               {offerings === null ? (
                 <>
-                  <ActivityIndicator size="small" color={P.GOLD} />
+                  <ActivityIndicator size="small" color={BRAND} />
                   <Text style={s.loadingText}>{t('paywall.loading')}</Text>
                 </>
               ) : (
@@ -712,23 +633,14 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
               disabled={loading || !selectedPkg}
               activeOpacity={0.9}
             >
-              <Svg style={StyleSheet.absoluteFill}>
-                <Defs>
-                  <SvgLinear id="ctaGrad" x1="0" y1="0" x2="1" y2="1">
-                    <Stop offset="0" stopColor={P.GOLD} />
-                    <Stop offset="1" stopColor={P.GOLD_DEEP} />
-                  </SvgLinear>
-                </Defs>
-                <Rect x="0" y="0" width="100%" height="100%" fill="url(#ctaGrad)" />
-              </Svg>
               {loading ? (
-                <ActivityIndicator size="small" color={P.ON_GOLD} />
+                <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <View style={s.ctaInner}>
                   <Text style={s.ctaText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
                     {ctaLabel}
                   </Text>
-                  <Icon name="arrow-forward" size={19} color={P.ON_GOLD} style={s.ctaArrow} />
+                  <Icon name="arrow-forward" size={19} color="#FFFFFF" style={s.ctaArrow} />
                 </View>
               )}
             </TouchableOpacity>
@@ -739,7 +651,7 @@ const SubscriptionScreen = ({ visible, onClose, track, showoffer, oneWallOnly })
           <View style={s.footer}>
             <TouchableOpacity onPress={handleRestore} disabled={restoring} hitSlop={FOOTER_SLOP}>
               {restoring
-                ? <ActivityIndicator size="small" color={P.GOLD} />
+                ? <ActivityIndicator size="small" color={BRAND} />
                 : <Text style={s.footerLink}>{t('paywall.restore')}</Text>}
             </TouchableOpacity>
             <Text style={s.footerDot}>·</Text>
@@ -776,29 +688,19 @@ const makeStyles = (P) => StyleSheet.create({
   hero: {
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingBottom: SMALL ? 10 : 14,
-  },
-  logoRing: {
-    width: SMALL ? 96 : 112,
-    height: SMALL ? 96 : 112,
-    borderRadius: 999,
-    backgroundColor: P.RING_BG,
-    borderWidth: 1,
-    borderColor: P.RING_LINE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+    paddingBottom: SMALL ? 12 : 16,
   },
   logo: {
-    width: SMALL ? 74 : 88,
-    height: SMALL ? 74 : 88,
+    width: SMALL ? 88 : 104,
+    height: SMALL ? 88 : 104,
+    borderRadius: 18,
   },
   title: {
     color: P.TEXT,
-    fontSize: SMALL ? 30 : 34,
+    fontSize: SMALL ? 26 : 28,
     fontFamily: FONT_BOLD,
-    letterSpacing: -0.8,
-    marginTop: 10,
+    letterSpacing: -0.5,
+    marginTop: 12,
     textAlign: 'center',
   },
   subtitle: {
@@ -814,7 +716,7 @@ const makeStyles = (P) => StyleSheet.create({
   card: {
     marginHorizontal: 18,
     backgroundColor: P.CARD,
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: P.CARD_LINE,
     paddingHorizontal: 14,
@@ -832,7 +734,7 @@ const makeStyles = (P) => StyleSheet.create({
   benefitIcon: {
     width: 38,
     height: 38,
-    borderRadius: 13,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 13,
@@ -880,15 +782,8 @@ const makeStyles = (P) => StyleSheet.create({
     height: 32,
     borderRadius: 16,
     backgroundColor: P.CLOSE_BG,
-    borderWidth: 1,
-    borderColor: P.CLOSE_LINE,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  timerText: {
-    color: P.TIMER,
-    fontSize: 13,
-    fontFamily: FONT_BOLD,
   },
 
   // ══ Dock ══
@@ -909,47 +804,38 @@ const makeStyles = (P) => StyleSheet.create({
   tile: {
     flex: 1,
     minWidth: 0,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 2,
-    borderColor: P.TILE_LINE,
-    backgroundColor: P.TILE_BG,
+    borderColor: P.CARD_LINE,
+    backgroundColor: P.CARD,
     paddingTop: 13,
     paddingBottom: 11,
     paddingHorizontal: 6,
     alignItems: 'center',
   },
+  // No elevation: a translucent fill with an Android shadow shows the shadow
+  // through as a dark box. The brand border carries the selection.
   tileOn: {
-    borderColor: P.GOLD,
-    backgroundColor: P.TILE_ON_BG,
-    shadowColor: P.GOLD,
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    borderColor: BRAND,
+    backgroundColor: P.TILE_ON,
   },
   saveTag: {
     position: 'absolute',
     top: -9,
     alignSelf: 'center',
-    backgroundColor: P.ACCENT_B,
+    backgroundColor: BRAND,
     paddingHorizontal: 8,
     paddingVertical: 2.5,
     borderRadius: 999,
   },
-  saveTagOn: {
-    backgroundColor: P.GOLD,
-  },
   saveTagText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 9.5,
     fontFamily: FONT_BOLD,
     letterSpacing: 0.3,
   },
-  saveTagTextOn: {
-    color: P.ON_GOLD,
-  },
   bestLabel: {
-    color: P.GOLD_TEXT,
+    color: P.BRAND_TEXT,
     fontSize: 8.5,
     fontFamily: FONT_BOLD,
     letterSpacing: 0.7,
@@ -969,7 +855,7 @@ const makeStyles = (P) => StyleSheet.create({
     letterSpacing: -0.5,
     marginTop: 3,
   },
-  tilePriceOn: { color: P.GOLD_TEXT },
+  tilePriceOn: { color: P.BRAND_TEXT },
   tilePerMonth: {
     color: P.TEXT_MUTE,
     fontSize: 10.5,
@@ -982,7 +868,7 @@ const makeStyles = (P) => StyleSheet.create({
   savingsBar: {
     marginTop: 9,
     alignSelf: 'center',
-    backgroundColor: P.SAVINGS_BG,
+    backgroundColor: P.TILE_ON,
     borderWidth: 1,
     borderColor: P.SAVINGS_LINE,
     borderRadius: 999,
@@ -991,7 +877,7 @@ const makeStyles = (P) => StyleSheet.create({
     maxWidth: '100%',
   },
   savingsText: {
-    color: P.GOLD_TEXT,
+    color: P.BRAND_TEXT,
     fontSize: 12,
     fontFamily: FONT_BOLD,
     textAlign: 'center',
@@ -1001,19 +887,19 @@ const makeStyles = (P) => StyleSheet.create({
   loadingWrap: { alignItems: 'center', paddingVertical: 26, paddingHorizontal: 12 },
   loadingText: { color: P.TEXT_MUTE, fontSize: 12, fontFamily: FONT_REGULAR, marginTop: 8, textAlign: 'center' },
 
-  // ── CTA ──
+  // ── CTA: onboarding's Continue button, a little taller ──
   cta: {
-    height: 58,
-    borderRadius: 19,
+    height: 54,
+    borderRadius: 12,
+    backgroundColor: BRAND,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
     marginTop: 11,
-    shadowColor: P.GOLD_DEEP,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 14,
-    elevation: 9,
+    shadowColor: BRAND,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 4,
   },
   ctaOff: { opacity: 0.55 },
   ctaInner: {
@@ -1022,10 +908,9 @@ const makeStyles = (P) => StyleSheet.create({
     paddingHorizontal: 18,
   },
   ctaText: {
-    color: P.ON_GOLD,
-    fontSize: 18,
+    color: '#FFFFFF',
+    fontSize: 17,
     fontFamily: FONT_BOLD,
-    letterSpacing: -0.2,
     flexShrink: 1,
   },
   ctaArrow: { marginLeft: 8 },

@@ -72,7 +72,7 @@ const MainTabs = React.memo(({ selectedTheme, chatFocused, setChatFocused, modal
     <>
       {canOpenModeration && (
         <TouchableOpacity onPress={() => navigation.navigate('Admin')}>
-          <Image
+          <Image resizeMethod="resize"
             source={require('../../assets/trophy.webp')}
             style={{ width: 20, height: 20, marginRight: 16 }}
           />

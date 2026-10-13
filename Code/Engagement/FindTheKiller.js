@@ -536,7 +536,7 @@ const FindTheKiller = ({ visible, onClose, screenMode = false }) => {
           }}
         >
           {currentLevel.imageUrl ? (
-            <Image
+            <Image resizeMethod="resize"
               source={{ uri: currentLevel.imageUrl }}
               style={styles.sceneImage}
               resizeMode="cover"

@@ -479,7 +479,7 @@ const MessagesList = ({
             <Text style={item.senderId === user?.id ? styles.userNameTextMy : styles.userNameText}>{item.sender}</Text>
 
   {item?.isPro && (
-    <Image
+    <Image resizeMethod="resize"
       source={require('../../../assets/pro.png')}
       style={styles.icon}
     />
@@ -516,14 +516,14 @@ const MessagesList = ({
   })()}
 
   {item?.robloxUsernameVerified && (
-    <Image
+    <Image resizeMethod="resize"
       source={require('../../../assets/verification.png')}
       style={styles.icon}
     />
   )}
 
   {hasRecentWin && (
-    <Image
+    <Image resizeMethod="resize"
       source={require('../../../assets/trophy.webp')}
       style={{  width: 10,
         height: 10,
@@ -550,7 +550,7 @@ const MessagesList = ({
                   
                       {item.gif && (
                         <View>
-                          <Image 
+                          <Image resizeMethod="resize" 
                             source={{ uri: item.gif }} 
                             style={{ height: 50, width: 50, resizeMode: 'contain' }} 
                           />
@@ -599,7 +599,7 @@ const MessagesList = ({
           key={`${fruit.id || fruit.name}-${index}`}
           style={fruitStyles.fruitCard}
         >
-          <Image
+          <Image resizeMethod="resize"
             source={{ uri: fruit.imageUrl }}
             style={fruitStyles.fruitImage}
           />

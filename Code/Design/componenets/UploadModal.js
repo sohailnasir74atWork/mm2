@@ -13,6 +13,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { pickImages } from '../../Helper/imagePicker';
+import { uploadImage, UPLOAD_KIND } from '../../Helper/imageUpload';
 import { Image as CompressorImage } from 'react-native-compressor';
 import config from '../../Helper/Environment';
 import { useGlobalState } from '../../GlobelStats';
@@ -30,11 +31,6 @@ import { useTranslation } from 'react-i18next';
 const CLOUD_NAME = 'djtqw0jb5';
 const UPLOAD_PRESET = 'my_upload';
 const MAX_IMAGES = 4;
-
-const BUNNY_STORAGE_HOST = 'storage.bunnycdn.com';     // or your regional host
-const BUNNY_STORAGE_ZONE = 'post-gag';
-const BUNNY_ACCESS_KEY   = '1b7e1a85-dff7-4a98-ba701fc7f9b9-6542-46e2'; // ← rotate this later
-const BUNNY_CDN_BASE     = 'https://pull-gag.b-cdn.net';
 
 
 const UploadModal = ({ visible, onClose, onUpload, user }) => {
@@ -155,38 +151,10 @@ const pickAndCompress = useCallback(async () => {
 
   const uploadToBunny = useCallback(async () => {
     const urls = [];
-    const userId = user?.id ?? 'anon';
-  
+
     for (const uri of imageUris) {
       try {
-        const filename   = `${Date.now()}-${Math.floor(Math.random() * 1e6)}.jpg`;
-        const remotePath = `uploads/${encodeURIComponent(userId)}/${encodeURIComponent(filename)}`;
-        const uploadUrl  = `https://${BUNNY_STORAGE_HOST}/${BUNNY_STORAGE_ZONE}/${remotePath}`;
-  
-        // Read file as base64 then convert to raw bytes
-        const base64 = await RNFS.readFile(uri.replace('file://', ''), 'base64');
-  
-        // base64 -> Uint8Array (works reliably on RN 0.77)
-        const binary = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-  
-        // PUT raw bytes
-        const res = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers: {
-            'AccessKey': BUNNY_ACCESS_KEY,
-            'Content-Type': 'application/octet-stream',
-          },
-          body: binary,
-        });
-  
-        const txt = await res.text().catch(() => '');
-  
-        if (!res.ok) {
-          throw new Error(`Bunny upload failed ${res.status}: ${txt}`);
-        }
-  
-        // Public CDN URL to display
-        urls.push(`${BUNNY_CDN_BASE}/${decodeURIComponent(remotePath)}`);
+        urls.push(await uploadImage(uri, UPLOAD_KIND.post));
       } catch (e) {
         console.warn('[Bunny ERROR]', e?.message || e);
         throw e; // bubble up so your Alert shows
@@ -194,7 +162,7 @@ const pickAndCompress = useCallback(async () => {
     }
   
     return urls;
-  }, [imageUris, user?.id]);
+  }, [imageUris]);
   
 
   const handleSubmit = useCallback(() => {
@@ -391,7 +359,7 @@ const pickAndCompress = useCallback(async () => {
                 <View style={themedStyles.imageGrid}>
                   {imageUris.map((uri, idx) => (
                     <View key={idx} style={themedStyles.imagePreviewContainer}>
-                      <Image source={{ uri }} style={themedStyles.previewImage} />
+                      <Image resizeMethod="resize" source={{ uri }} style={themedStyles.previewImage} />
                       <View style={themedStyles.imageCountBadge}>
                         <Text style={themedStyles.imageCountText}>{idx + 1}</Text>
                       </View>

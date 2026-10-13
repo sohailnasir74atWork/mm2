@@ -5,6 +5,7 @@
     "app_settings": "APP-EINSTELLUNGEN",
     "haptic_feedback": "Vibration",
     "chat_notifications": "Chat-Benachrichtigungen",
+    "value_update_notifications": "Benachrichtigungen bei Wertänderungen",
     "theme": "Design",
     "theme_system": "SYSTEM",
     "theme_light": "HELL",

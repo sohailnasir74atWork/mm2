@@ -266,7 +266,7 @@ const MessageInput = ({
                       onPress={() => selectEmoji(emojiUrl)}
                       style={modalStyles.emojiContainer}
                     >
-                      <Image
+                      <Image resizeMethod="resize"
                         source={{ uri: emojiUrl }}
                         style={modalStyles.emojiImage}
                       />

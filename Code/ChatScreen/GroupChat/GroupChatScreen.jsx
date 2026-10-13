@@ -1163,7 +1163,7 @@ const GroupChatScreen = () => {
                   const inviteData = item.inviteData;
                   return (
                     <View style={{ flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB' }}>
-                      <Image
+                      <Image resizeMethod="resize"
                         source={{ uri: inviteData.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
                         style={{ width: 50, height: 50, borderRadius: 25, marginRight: 12, opacity: 0.6 }}
                       />
@@ -1190,7 +1190,7 @@ const GroupChatScreen = () => {
 
                 return (
                   <View style={{ flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: isDarkMode ? config.colors.surfaceElevatedDark : '#E5E7EB' }}>
-                    <Image
+                    <Image resizeMethod="resize"
                       source={{ uri: member.avatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
                       style={{ width: 50, height: 50, borderRadius: 25, marginRight: 12 }}
                     />

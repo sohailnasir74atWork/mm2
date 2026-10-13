@@ -254,7 +254,7 @@ const GroupMessageList = ({
 
                 {/* Pro badge */}
                 {item?.isPro && (
-                  <Image
+                  <Image resizeMethod="resize"
                     source={require('../../../assets/pro.png')}
                     style={{ width: 16, height: 16, marginLeft: 4 }}
                   />
@@ -262,7 +262,7 @@ const GroupMessageList = ({
 
                 {/* Verified badge */}
                 {item?.robloxUsernameVerified && (
-                  <Image
+                  <Image resizeMethod="resize"
                     source={require('../../../assets/verification.png')}
                     style={{ width: 16, height: 16, marginLeft: 4 }}
                   />
@@ -299,7 +299,7 @@ const GroupMessageList = ({
 
                 {/* Trophy badge (recent win) */}
                 {hasRecentWin && (
-                  <Image
+                  <Image resizeMethod="resize"
                     source={require('../../../assets/trophy.webp')}
                     style={{ width: 10, height: 10, marginLeft: 4 }}
                   />
@@ -349,7 +349,7 @@ const GroupMessageList = ({
                                 })
                               }
                             >
-                              <Image 
+                              <Image resizeMethod="resize" 
                                 source={{ uri: imageUri }} 
                                 style={{ 
                                   width: imageSize,
@@ -377,7 +377,7 @@ const GroupMessageList = ({
                             key={`${fruit.id || fruit.name}-${index}`}
                             style={fruitStyles.fruitCard}
                           >
-                            <Image
+                            <Image resizeMethod="resize"
                               source={{ uri: fruit.imageUrl }}
                               style={fruitStyles.fruitImage}
                             />

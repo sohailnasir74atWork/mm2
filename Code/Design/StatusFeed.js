@@ -29,8 +29,8 @@ import {
   addDoc, serverTimestamp, Timestamp, doc, updateDoc, arrayUnion, deleteDoc,
 } from '@react-native-firebase/firestore';
 import { pickImages } from '../Helper/imagePicker';
+import { uploadImage, UPLOAD_KIND } from '../Helper/imageUpload';
 import { Image as CompressorImage } from 'react-native-compressor';
-import RNFS from 'react-native-fs';
 import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 import { useTranslation } from 'react-i18next';
 import { addXP, XP_ACTIONS } from '../Engagement/xpUtils';
@@ -97,33 +97,6 @@ const setCacheTimestamp = (key) => {
 
 // Ring colors
 const RING_SEEN = '#94A3B8';
-
-// Bunny CDN config (same creds as rest of app)
-const BUNNY_STORAGE_HOST = 'storage.bunnycdn.com';
-const BUNNY_STORAGE_ZONE = 'post-gag';
-const BUNNY_ACCESS_KEY = '1b7e1a85-dff7-4a98-ba701fc7f9b9-6542-46e2';
-const BUNNY_CDN_BASE = 'https://pull-gag.b-cdn.net';
-
-// Base64 decoder (no atob in RN)
-const base64ToBytes = (base64) => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-  let str = base64.replace(/[\r\n]+/g, '');
-  let output = [];
-  let i = 0;
-  while (i < str.length) {
-    const enc1 = chars.indexOf(str.charAt(i++));
-    const enc2 = chars.indexOf(str.charAt(i++));
-    const enc3 = chars.indexOf(str.charAt(i++));
-    const enc4 = chars.indexOf(str.charAt(i++));
-    const chr1 = (enc1 << 2) | (enc2 >> 4);
-    const chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
-    const chr3 = ((enc3 & 3) << 6) | enc4;
-    output.push(chr1);
-    if (enc3 !== 64) output.push(chr2);
-    if (enc4 !== 64) output.push(chr3);
-  }
-  return Uint8Array.from(output);
-};
 
 // ── Helper: group raw status docs by userId ──
 const groupStatuses = (rawStatuses, myId) => {
@@ -209,7 +182,7 @@ const LoadingImage = ({ source, style, resizeMode = 'cover', borderRadius, fallb
           style={[StyleSheet.absoluteFill, { borderRadius: borderRadius || style?.borderRadius || 0 }]}
         />
       )}
-      <Image
+      <Image resizeMethod="resize"
         source={shown}
         style={[style, { position: loaded ? 'relative' : 'absolute', opacity: loaded ? 1 : 0 }]}
         resizeMode={resizeMode}
@@ -308,20 +281,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
   // ── Upload to Bunny CDN ──
   const uploadToBunny = useCallback(async (imagePath) => {
     try {
-      const localPath = imagePath.startsWith('file://') ? imagePath.replace('file://', '') : imagePath;
-      const base64 = await RNFS.readFile(localPath, 'base64');
-      const bytes = base64ToBytes(base64);
-      const fileName = `status_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
-      const remotePath = `statuses/${fileName}`;
-
-      const response = await fetch(`https://${BUNNY_STORAGE_HOST}/${BUNNY_STORAGE_ZONE}/${remotePath}`, {
-        method: 'PUT',
-        headers: { AccessKey: BUNNY_ACCESS_KEY, 'Content-Type': 'image/jpeg' },
-        body: bytes,
-      });
-
-      if (!response.ok) throw new Error('Upload failed');
-      return `${BUNNY_CDN_BASE}/${remotePath}`;
+      return await uploadImage(imagePath, UPLOAD_KIND.status);
     } catch (err) {
       console.warn('[StatusFeed] Upload error:', err?.message);
       return null;
@@ -998,7 +958,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
 
               {/* Header */}
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8, zIndex: 20 }}>
-                <Image
+                <Image resizeMethod="resize"
                   source={{ uri: viewingStatus.userAvatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
                   style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)' }}
                 />
@@ -1182,7 +1142,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
 
             {selectedImage?.uri && (
               <View style={styles.imagePreviewWrap}>
-                <Image source={{ uri: selectedImage.uri }} style={styles.imagePreview} resizeMode="cover" />
+                <Image resizeMethod="resize" source={{ uri: selectedImage.uri }} style={styles.imagePreview} resizeMode="cover" />
                 <TouchableOpacity style={styles.removeImageBtn} onPress={() => setSelectedImage(null)}>
                   <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700' }}>✕</Text>
                 </TouchableOpacity>

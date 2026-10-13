@@ -256,10 +256,10 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
             <Text style={s.name} numberOfLines={1}>{item.displayName}</Text>
             {item.isPro && (
-              <Image source={require('../../../assets/pro.png')} style={s.badge} />
+              <Image resizeMethod="resize" source={require('../../../assets/pro.png')} style={s.badge} />
             )}
             {item.robloxUsernameVerified && (
-              <Image source={require('../../../assets/verification.png')} style={s.badge} />
+              <Image resizeMethod="resize" source={require('../../../assets/verification.png')} style={s.badge} />
             )}
 
             {/* Role pills from the roster (Code/Helper/roleRoster.js), never
@@ -285,7 +285,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
                 (typeof item?.lastGameWinAt === 'number' &&
                   Date.now() - item.lastGameWinAt <= 24 * 60 * 60 * 1000);
               return hasRecentWin ? (
-                <Image source={require('../../../assets/trophy.webp')} style={s.badge} />
+                <Image resizeMethod="resize" source={require('../../../assets/trophy.webp')} style={s.badge} />
               ) : null;
             })()}
           </View>
@@ -412,7 +412,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
                 activeOpacity={0.95}
                 onPress={() => navigation.navigate('ImageViewerScreen', { images: item.imageUrl, initialIndex: 0 })}
               >
-                <Image source={{ uri: item.imageUrl[0] }} style={s.singleImage} />
+                <Image resizeMethod="resize" source={{ uri: item.imageUrl[0] }} style={s.singleImage} />
               </TouchableOpacity>
             ) : (
               <View style={s.multiGrid}>
@@ -426,7 +426,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
                     activeOpacity={0.9}
                     onPress={() => navigation.navigate('ImageViewerScreen', { images: item.imageUrl, initialIndex: idx })}
                   >
-                    <Image source={{ uri: url }} style={s.gridImage} />
+                    <Image resizeMethod="resize" source={{ uri: url }} style={s.gridImage} />
                     {idx === 3 && item.imageUrl.length > 4 && (
                       <View style={s.moreOverlay}>
                         <Text style={s.moreText}>+{item.imageUrl.length - 4}</Text>

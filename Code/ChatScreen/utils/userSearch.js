@@ -1,5 +1,6 @@
 /**
- * userSearch.js — find users by display name, for the group member picker.
+ * userSearch.js — find users by display name or ID, for the group member picker
+ * and the Social search screen.
  *
  * Until now the picker (OnlineUsersList in 'select' mode) could only offer
  * people who happened to be online at that moment, because it reads
@@ -81,7 +82,34 @@ const toUser = (id, record) => ({
 });
 
 /**
- * Users whose displayName starts with `text`.
+ * Firebase uids are 28 letters/digits; anything 15+ of only those is treated
+ * as an ID, the same test Adopt Me and MM2's AdminDashboard use.
+ */
+export const looksLikeUserId = (text) => {
+  const val = (text || '').trim();
+  return val.length >= 15 && /^[a-zA-Z0-9]+$/.test(val);
+};
+
+/**
+ * One user by uid (the ID shown on profiles), or null. A direct key read:
+ * users/$userId is readable by anyone signed in and needs no index.
+ */
+export const findUserById = async (appdatabase, id) => {
+  const uid = (id || '').trim();
+  if (!appdatabase || !looksLikeUserId(uid)) return null;
+  try {
+    const snap = await get(ref(appdatabase, `users/${uid}`));
+    if (!snap.exists()) return null;
+    const record = snap.val();
+    if (!record || (!record.displayName && !record.avatar)) return null;
+    return toUser(uid, record);
+  } catch (_) {
+    return null;
+  }
+};
+
+/**
+ * Users whose displayName starts with `text`, or the user whose ID is `text`.
  *
  * @param appdatabase RTDB instance
  * @param text        what the user typed
@@ -99,6 +127,13 @@ export const searchUsersByName = async (appdatabase, text, options = {}) => {
 
   const skip = new Set(excludeIds.filter(Boolean));
   const found = new Map();
+
+  // A pasted ID resolves to that one user. A long one-word name can look
+  // like an ID too, so the name search below still runs and is merged.
+  if (looksLikeUserId(text)) {
+    const byId = await findUserById(appdatabase, text);
+    if (byId && !skip.has(byId.id)) found.set(byId.id, byId);
+  }
 
   const results = await Promise.allSettled(
     variants.map((v) =>
@@ -126,9 +161,12 @@ export const searchUsersByName = async (appdatabase, text, options = {}) => {
     });
   }
 
-  return [...found.values()]
-    .sort((a, b) => a.displayName.localeCompare(b.displayName))
-    .slice(0, limit);
+  const idMatch = looksLikeUserId(text) ? found.get((text || '').trim()) : null;
+  const byName = [...found.values()]
+    .filter((u) => u !== idMatch)
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  // The exact ID match goes first so it is never cut by the limit.
+  return (idMatch ? [idMatch, ...byName] : byName).slice(0, limit);
 };
 
 export default searchUsersByName;

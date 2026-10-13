@@ -1604,10 +1604,10 @@ const TradeList = ({ route }) => {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                 <Text style={styles.cardName} numberOfLines={1}>{item.traderName}</Text>
                 {item.isPro && (
-                  <Image source={require('../../assets/pro.png')} style={{ width: 11, height: 11 }} />
+                  <Image resizeMethod="resize" source={require('../../assets/pro.png')} style={{ width: 11, height: 11 }} />
                 )}
                 {item.robloxUsernameVerified && (
-                  <Image source={require('../../assets/verification.png')} style={{ width: 11, height: 11 }} />
+                  <Image resizeMethod="resize" source={require('../../assets/verification.png')} style={{ width: 11, height: 11 }} />
                 )}
 
             {/* Role pills from the roster (Code/Helper/roleRoster.js), never
@@ -1633,7 +1633,7 @@ const TradeList = ({ route }) => {
                     (typeof item?.lastGameWinAt === 'number' &&
                       Date.now() - item.lastGameWinAt <= 24 * 60 * 60 * 1000);
                   return hasRecentWin ? (
-                    <Image source={require('../../assets/trophy.webp')} style={{ width: 11, height: 11 }} />
+                    <Image resizeMethod="resize" source={require('../../assets/trophy.webp')} style={{ width: 11, height: 11 }} />
                   ) : null;
                 })()}
                 {item.rating ? (
@@ -1717,7 +1717,7 @@ const TradeList = ({ route }) => {
                             anyway, so draw the same-sized empty cell instead —
                             the grid keeps its layout either way. */}
                         {tradeItemImage ? (
-                          <Image
+                          <Image resizeMethod="resize"
                             source={{ uri: tradeItemImage }}
                             style={styles.gridItemImage}
                             onError={() => {
@@ -1767,7 +1767,7 @@ const TradeList = ({ route }) => {
           )}
           {/* Transfer Icon */}
           <View style={styles.transfer}>
-            <Image source={require('../../assets/left-right.png')} style={styles.transferImage} />
+            <Image resizeMethod="resize" source={require('../../assets/left-right.png')} style={styles.transferImage} />
           </View>
           {/* Wants Items Grid or Give Offer */}
           {item.wantsItems && item.wantsItems.length > 0 ? (
@@ -1786,7 +1786,7 @@ const TradeList = ({ route }) => {
                             anyway, so draw the same-sized empty cell instead —
                             the grid keeps its layout either way. */}
                         {tradeItemImage ? (
-                          <Image
+                          <Image resizeMethod="resize"
                             source={{ uri: tradeItemImage }}
                             style={styles.gridItemImage}
                             onError={() => {
@@ -2163,7 +2163,7 @@ const TradeList = ({ route }) => {
           alignItems: 'center',
           zIndex: 5,
         }}>
-          <BannerAdComponent />
+          <BannerAdComponent collapsible />
         </View>
       )}
 

@@ -126,7 +126,7 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
       case 0:
         return (
           <View style={styles.slide}>
-            <Image source={icon} style={styles.iconmain} />
+            <Image resizeMethod="resize" source={icon} style={styles.iconmain} />
             {/* <View>
               <View style={styles.sliderContainer}>{renderSlider(translateX1, firstSliderImages)}</View>
               <View style={styles.sliderContainer}>{renderSlider(translateX2, secondSliderImages)}</View>
@@ -149,7 +149,7 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
       case 1:
         return (
           <View style={styles.slide}>
-            <Image source={icon} style={styles.iconmain} />
+            <Image resizeMethod="resize" source={icon} style={styles.iconmain} />
             {/* <View>
               <View style={styles.sliderContainer}>{renderSlider(translateX1, firstSliderImages)}</View>
               <View style={styles.sliderContainer}>{renderSlider(translateX2, secondSliderImages)}</View>

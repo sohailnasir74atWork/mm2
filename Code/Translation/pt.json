@@ -5,6 +5,7 @@
         "app_settings": "CONFIGURAÇÕES DO APLICATIVO",
         "haptic_feedback": "Feedback Tátil",
         "chat_notifications": "Notificações de Chat",
+        "value_update_notifications": "Notificações de Atualização de Valores",
         "theme": "Tema",
         "theme_system": "SISTEMA",
         "theme_light": "CLARO",

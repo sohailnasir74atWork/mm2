@@ -39,7 +39,7 @@ const ValueCard = ({
       activeOpacity={0.8}
     >
       <View style={[s.well, { backgroundColor: c.well }]}>
-        <Image source={{ uri: imageUrl }} style={s.image} resizeMode="contain" />
+        <Image resizeMethod="resize" source={{ uri: imageUrl }} style={s.image} resizeMode="contain" />
         {!!item.tier && (
           <View style={s.tier}>
             <Text style={s.tierText}>{String(item.tier).replace(/^tier\s*/i, 'T')}</Text>

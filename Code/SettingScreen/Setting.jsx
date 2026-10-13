@@ -30,6 +30,7 @@ import { useHaptic } from '../Helper/HepticFeedBack';
 import { useLocalState } from '../LocalGlobelStats';
 import config from '../Helper/Environment';
 import notifee from '@notifee/react-native';
+import { setValueUpdatesEnabled } from '../Helper/valueUpdateNotifications';
 import SubscriptionScreen from './OfferWall';
 import { ref, remove, get, update, set } from '@react-native-firebase/database';
 import { Menu, MenuOption, MenuOptions, MenuTrigger } from 'react-native-popup-menu';
@@ -66,14 +67,10 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 dayjs.extend(relativeTime);
 import PetModal from '../ChatScreen/PrivateChat/PetsModel';
 import { pickImages } from '../Helper/imagePicker';
+import { uploadImage, UPLOAD_KIND } from '../Helper/imageUpload';
 import FramedAvatar from '../ChatScreen/GroupChat/FramedAvatar';
 import { getMyCosmetics, syncMyCosmetics } from '../Helper/cosmeticsCache';
 import { usePrivacyOptionsRequired, showPrivacyOptionsForm } from '../Ads/consentOptions';
-// Bunny avatar upload (same zone/keys as your post uploader)
-const BUNNY_STORAGE_HOST = 'storage.bunnycdn.com';
-const BUNNY_STORAGE_ZONE = 'post-gag';
-const BUNNY_ACCESS_KEY   = '1b7e1a85-dff7-4a98-ba701fc7f9b9-6542-46e2';
-const BUNNY_CDN_BASE     = 'https://pull-gag.b-cdn.net';
 
 // ~500 KB max for avatar (small, DP-friendly)
 const MAX_AVATAR_SIZE_BYTES = 500 * 1024;
@@ -350,7 +347,7 @@ const EditProfileDrawerContent = ({
                 padding: selectedImage === item.url ? 2 : 0,
               }}
             >
-              <Image
+              <Image resizeMethod="resize"
                 source={{ uri: item.url }}
                 style={{ width: 40, height: 40, borderRadius: 20, opacity: selectedImage === item.url ? 1 : 0.6 }}
               />
@@ -618,33 +615,15 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
         return;
       }
 
-      const userId = user?.id ?? 'anon';
-      const filename = `${Date.now()}-${Math.floor(Math.random() * 1e6)}.jpg`;
-      const remotePath = `avatars/${encodeURIComponent(userId)}/${encodeURIComponent(filename)}`;
-      const uploadUrl = `https://${BUNNY_STORAGE_HOST}/${BUNNY_STORAGE_ZONE}/${remotePath}`;
-
-      const base64 = await RNFS.readFile(filePath, 'base64');
-      const binary = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-
-      const res = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: {
-          AccessKey: BUNNY_ACCESS_KEY,
-          'Content-Type': 'application/octet-stream',
-        },
-        body: binary,
-      });
-
-      const txt = await res.text().catch(() => '');
-
-      if (!res.ok) {
-        console.warn('[Bunny avatar ERROR]', res.status, txt?.slice(0, 200));
+      let publicUrl;
+      try {
+        publicUrl = await uploadImage(filePath, UPLOAD_KIND.avatar);
+      } catch (err) {
+        console.warn('[Avatar upload ERROR]', err?.code || err?.message);
         Alert.alert('Upload failed', 'Could not upload image. Please try again.');
         setUploadingAvatar(false);
         return;
       }
-
-      const publicUrl = `${BUNNY_CDN_BASE}/${decodeURIComponent(remotePath)}`;
 
       // ✅ Set as current selected profile image
       setSelectedImage(publicUrl);
@@ -654,7 +633,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
     } finally {
       setUploadingAvatar(false);
     }
-  }, [user?.id]);
+  }, []);
 
 
 
@@ -1186,6 +1165,16 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
       setIsPermissionGranted(false);
     }
   };
+
+  // "Value Update Notifications": the value-updates push topic. Saved locally
+  // and (un)subscribed in the background, for guests too.
+  const handleToggleValueUpdates = (value) => {
+    updateLocalState('valueUpdateNotifications', value);
+    setValueUpdatesEnabled(value);
+    // Turning it on is the moment to ask; if notifications are blocked this
+    // points the user to the system settings.
+    if (value) requestPermission();
+  };
   const USERNAME_REGEX = /^[A-Za-z0-9_-]+$/;
 
   const handleSaveChanges = async () => {
@@ -1327,7 +1316,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
             backgroundColor: isDarkMode ? config.colors.backgroundDark : '#e5e7eb',
           }}
         >
-          <Image
+          <Image resizeMethod="resize"
             source={{ uri: pet.imageUrl || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
             style={{ width: '100%', height: '100%' }}
           />
@@ -1855,7 +1844,7 @@ const renderTradeItem = useCallback((trade) => {
                 <View key={idx} style={{ width: '22%', height: 40, margin: 1, alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: 10 }}>
                   {tradeItem ? (
                     <>
-                      <Image
+                      <Image resizeMethod="resize"
                         source={{ uri: getTradeItemImageUrl(tradeItem) || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
                         style={{ width: 30, height: 30, borderRadius: 6 }}
                         resizeMode="contain"
@@ -1908,7 +1897,7 @@ const renderTradeItem = useCallback((trade) => {
         
         {/* Transfer Icon */}
         <View style={{ justifyContent: 'center', alignItems: 'center' }}>
-          <Image source={require('../../assets/left-right.png')} style={{ width: 20, height: 20, borderRadius: 5 }} />
+          <Image resizeMethod="resize" source={require('../../assets/left-right.png')} style={{ width: 20, height: 20, borderRadius: 5 }} />
         </View>
         
         {/* Wants Items Grid */}
@@ -1922,7 +1911,7 @@ const renderTradeItem = useCallback((trade) => {
                 <View key={idx} style={{ width: '22%', height: 40, margin: 1, alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: 10 }}>
                   {tradeItem ? (
                     <>
-                      <Image
+                      <Image resizeMethod="resize"
                         source={{ uri: getTradeItemImageUrl(tradeItem) || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
                         style={{ width: 30, height: 30, borderRadius: 6 }}
                         resizeMode="contain"
@@ -2539,7 +2528,7 @@ const formatPlanName = (plan) => {
                   </Text>
                 )}
                 {user?.isPro &&  
-        <Image
+        <Image resizeMethod="resize"
         source={require('../../assets/pro.png')} 
                     style={{ width: 14, height: 14, marginLeft: 4 }} 
                   />
@@ -2998,6 +2987,23 @@ const formatPlanName = (plan) => {
 
           </View>
 
+          {/* Value-change push (topic value-updates), guests included. */}
+          <View style={styles.option}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center' }}
+                onPress={() => handleToggleValueUpdates(!(localState.valueUpdateNotifications ?? true))}
+              >
+                <Icon name="trending-up-outline" size={18} color={'white'} style={{backgroundColor:'#F59E0B', padding:5, borderRadius:5}}/>
+                <Text style={styles.optionText}>{t('settings.value_update_notifications', { defaultValue: 'Value Update Notifications' })}</Text>
+              </TouchableOpacity>
+              <Switch
+                value={localState.valueUpdateNotifications ?? true}
+                onValueChange={handleToggleValueUpdates}
+              />
+            </View>
+          </View>
+
           <View style={styles.optionLast} onPress={() => {
             handleShareApp(); triggerHapticFeedback('impactLight');
           }}>
@@ -3199,7 +3205,7 @@ const formatPlanName = (plan) => {
 <TouchableOpacity style={styles.option} onPress={() => {
  handleBloxFruit(); triggerHapticFeedback('impactLight');
 }}>
-<Image 
+<Image resizeMethod="resize" 
  source={require('../../assets/logo.webp')} 
  style={{ width: 40, height: 40,   borderRadius: 5 }} 
 />
@@ -3209,7 +3215,7 @@ const formatPlanName = (plan) => {
 <TouchableOpacity style={styles.optionLast} onPress={() => {
   handleadoptme(); triggerHapticFeedback('impactLight');
 }}>
- <Image 
+ <Image resizeMethod="resize" 
   source={require('../../assets/adoptme.png')}
   style={{ width: 40, height: 40,   borderRadius: 5 }} 
 />

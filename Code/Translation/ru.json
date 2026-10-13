@@ -5,6 +5,7 @@
     "app_settings": "НАСТРОЙКИ ПРИЛОЖЕНИЯ",
     "haptic_feedback": "Виброотклик",
     "chat_notifications": "Уведомления из чатов",
+    "value_update_notifications": "Уведомления об изменении ценностей",
     "theme": "Тема",
     "theme_system": "СИСТЕМНАЯ",
     "theme_light": "СВЕТЛАЯ",

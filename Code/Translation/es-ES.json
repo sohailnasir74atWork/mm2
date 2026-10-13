@@ -4,6 +4,7 @@
     "app_settings": "AJUSTES DE LA APP",
     "haptic_feedback": "Vibración",
     "chat_notifications": "Notificaciones del chat",
+    "value_update_notifications": "Notificaciones de cambios de valores",
     "theme": "Tema",
     "theme_system": "SISTEMA",
     "theme_light": "CLARO",

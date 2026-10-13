@@ -384,7 +384,7 @@ const MyStuffScreen = ({ selectedTheme }) => {
             <FontAwesome name="xmark" size={9} color="#fff" />
           </TouchableOpacity>
         )}
-        <Image
+        <Image resizeMethod="resize"
           source={{ uri: item.imageUrl || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
           style={$.cardImage}
           resizeMode="contain"
@@ -452,7 +452,7 @@ const MyStuffScreen = ({ selectedTheme }) => {
       }]}>
         {/* Row: Image + Info + Delete */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Image
+          <Image resizeMethod="resize"
             source={{ uri: item.imageUrl || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
             style={$.goalImage}
             resizeMode="contain"

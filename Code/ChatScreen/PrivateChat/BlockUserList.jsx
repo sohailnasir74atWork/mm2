@@ -146,7 +146,7 @@ const BlockedUsersScreen = () => {
 
     return (
       <View style={styles.userContainer}>
-        <Image source={{ uri: avatar }} style={styles.avatar} />
+        <Image resizeMethod="resize" source={{ uri: avatar }} style={styles.avatar} />
         <View style={styles.textContainer}>
           <Text style={styles.userName}>{displayName}</Text>
           <TouchableOpacity

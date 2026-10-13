@@ -282,13 +282,13 @@ const PrivateChatHeader = React.memo(({ selectedUser, selectedTheme, bannedUsers
             {userName}
           </Text>
           {mergedUser?.isPro && (
-            <Image source={require('../../../assets/pro.png')} style={styles.inlineIcon} />
+            <Image resizeMethod="resize" source={require('../../../assets/pro.png')} style={styles.inlineIcon} />
           )}
           {mergedUser?.robloxUsernameVerified && (
-            <Image source={require('../../../assets/verification.png')} style={styles.inlineIcon} />
+            <Image resizeMethod="resize" source={require('../../../assets/verification.png')} style={styles.inlineIcon} />
           )}
           {hasRecentWin && (
-            <Image source={require('../../../assets/trophy.webp')} style={styles.trophyIcon} />
+            <Image resizeMethod="resize" source={require('../../../assets/trophy.webp')} style={styles.trophyIcon} />
           )}
           <TouchableOpacity
             onPress={() => copyToClipboard(userName)}

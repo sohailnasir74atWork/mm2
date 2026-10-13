@@ -572,7 +572,7 @@ const HomeScreen = ({ selectedTheme }) => {
         >
           <View style={styles.favoriteImageContainer}>
             {imageUrl ? (
-              <Image source={{ uri: imageUrl }} style={styles.favoriteItemImage} />
+              <Image resizeMethod="resize" source={{ uri: imageUrl }} style={styles.favoriteItemImage} />
             ) : (
               <View style={[styles.favoriteItemImage, { backgroundColor: isDarkMode ? config.colors.surfaceElevatedDark : config.colors.dividerLight, justifyContent: 'center', alignItems: 'center' }]}>
                 <Icon name="image-outline" size={18} color={isDarkMode ? config.colors.textTertiaryDark : config.colors.textTertiaryLight} />
@@ -627,7 +627,7 @@ const HomeScreen = ({ selectedTheme }) => {
         }}
       >
         {imageUrl ? (
-          <Image
+          <Image resizeMethod="resize"
             source={{ uri: imageUrl }}
             style={styles.gridItemImage}
           />
@@ -1207,7 +1207,7 @@ const HomeScreen = ({ selectedTheme }) => {
                         {formatValue(Math.abs(profitLoss))}
                       </Text>
                       <View style={[styles.divider, { position: 'absolute', right: 0, bottom: 0 }]}>
-                        <Image
+                        <Image resizeMethod="resize"
                           source={require('../../assets/reset.png')}
                           style={{ width: 18, height: 18, tintColor: 'white' }}
                           onTouchEnd={resetState}
@@ -1262,7 +1262,7 @@ const HomeScreen = ({ selectedTheme }) => {
                                 artwork made the whole grid look washed out on
                                 Supreme, where 62% of items are modeled or
                                 unpriced against MM2's 44%. */}
-                            <Image
+                            <Image resizeMethod="resize"
                               source={{ uri: getImageUrl(item) }}
                               style={styles.itemImageOverlay}
                             />
@@ -1309,7 +1309,7 @@ const HomeScreen = ({ selectedTheme }) => {
                                 artwork made the whole grid look washed out on
                                 Supreme, where 62% of items are modeled or
                                 unpriced against MM2's 44%. */}
-                            <Image
+                            <Image resizeMethod="resize"
                               source={{ uri: getImageUrl(item) }}
                               style={styles.itemImageOverlay}
                             />
@@ -1545,7 +1545,7 @@ const HomeScreen = ({ selectedTheme }) => {
       </GestureHandlerRootView>
       {!localState.isPro && (
         <View style={{ position: 'absolute', bottom: bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
-          <BannerAdComponent />
+          <BannerAdComponent collapsible />
         </View>
       )}
       <ShareTradeModal

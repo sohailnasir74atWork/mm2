@@ -1169,7 +1169,7 @@ const AdminDashboard = () => {
       <Text style={s.sectionLabel}>{label}</Text>
       {person[i] ? (
         <View style={s.card}>
-          <Image source={{ uri: avatarOf(person[i]) }} style={s.avatar} />
+          <Image resizeMethod="resize" source={{ uri: avatarOf(person[i]) }} style={s.avatar} />
           <View style={{ flex: 1, marginLeft: 10 }}>
             <Text style={s.name} numberOfLines={1}>{person[i].displayName}</Text>
             <Text style={s.sub} numberOfLines={1}>{person[i].email || person[i].id}</Text>
@@ -1191,7 +1191,7 @@ const AdminDashboard = () => {
           </View>
           {personResults[i].map((u) => (
             <TouchableOpacity key={u.id} style={s.card} onPress={() => { setSlot(setPerson, i, u); setSlot(setPersonResults, i, []); setChatRows(null); }}>
-              <Image source={{ uri: avatarOf(u) }} style={s.avatar} />
+              <Image resizeMethod="resize" source={{ uri: avatarOf(u) }} style={s.avatar} />
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={s.name} numberOfLines={1}>{u.displayName}</Text>
                 <Text style={s.sub} numberOfLines={1}>{u.email || u.id}</Text>
@@ -1288,7 +1288,7 @@ const AdminDashboard = () => {
             onEndReached={() => { if (!searching && bansHasMore && !bansMoreLoading && !bansLoading) loadBans(false); }}
             renderItem={({ item }) => (
               <TouchableOpacity style={s.card} onPress={() => openUser(item)} activeOpacity={0.7}>
-                <Image source={{ uri: avatarOf(item) }} style={s.avatar} />
+                <Image resizeMethod="resize" source={{ uri: avatarOf(item) }} style={s.avatar} />
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={s.name} numberOfLines={1}>{item.displayName}</Text>
                   <Text style={s.sub} numberOfLines={1}>{item.email}</Text>
@@ -1336,7 +1336,7 @@ const AdminDashboard = () => {
                   : (live === null || live?.isActive === false ? statusChip(HUE.success, 'ACTIVE') : null);
                 return (
                   <TouchableOpacity style={s.card} onPress={() => openUser(item)} activeOpacity={0.7}>
-                    <Image source={{ uri: avatarOf(item) }} style={s.avatar} />
+                    <Image resizeMethod="resize" source={{ uri: avatarOf(item) }} style={s.avatar} />
                     <View style={{ flex: 1, marginLeft: 10 }}>
                       <Text style={s.name} numberOfLines={1}>{item.displayName}</Text>
                       <Text style={s.sub} numberOfLines={1}>{item.email || item.id || '—'}</Text>
@@ -1526,7 +1526,7 @@ const AdminDashboard = () => {
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
                     onPress={() => openUser({ id: st.userId, displayName: st.userName || 'Unknown', avatar: avatarOf(st) })}>
-                    <Image source={{ uri: avatarOf(st) }} style={[s.avatar, { width: 34, height: 34, borderRadius: 17 }]} />
+                    <Image resizeMethod="resize" source={{ uri: avatarOf(st) }} style={[s.avatar, { width: 34, height: 34, borderRadius: 17 }]} />
                     <View style={{ marginLeft: 8, flex: 1 }}>
                       <Text style={s.name} numberOfLines={1}>{st.userName || 'Unknown'}</Text>
                       <Text style={s.sub}>{`${timeAgo(st.createdAt)}${expired ? ' · expired' : ''}`}</Text>
@@ -1541,7 +1541,7 @@ const AdminDashboard = () => {
                 {!!st.caption && <Text style={{ color: c.text, marginTop: 8, fontSize: 14, lineHeight: 19 }}>{st.caption}</Text>}
                 {!!st.imageUrl && (
                   <TouchableOpacity onPress={() => setPreviewImage(st.imageUrl)} activeOpacity={0.85}>
-                    <Image source={{ uri: st.imageUrl }} style={s.statusImage} resizeMode="cover" />
+                    <Image resizeMethod="resize" source={{ uri: st.imageUrl }} style={s.statusImage} resizeMode="cover" />
                   </TouchableOpacity>
                 )}
               </View>
@@ -1604,7 +1604,7 @@ const AdminDashboard = () => {
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
                         {imgs.map((url) => (
                           <TouchableOpacity key={url} onPress={() => setPreviewImage(url)} activeOpacity={0.85}>
-                            <Image source={{ uri: url }} style={{ width: imgs.length > 1 ? 90 : 180, height: imgs.length > 1 ? 90 : 180, borderRadius: 8, backgroundColor: c.border }} />
+                            <Image resizeMethod="resize" source={{ uri: url }} style={{ width: imgs.length > 1 ? 90 : 180, height: imgs.length > 1 ? 90 : 180, borderRadius: 8, backgroundColor: c.border }} />
                           </TouchableOpacity>
                         ))}
                       </View>
@@ -1624,7 +1624,7 @@ const AdminDashboard = () => {
         <View style={{ flex: 1 }}>
           {ucTarget ? (
             <View style={[s.card, { marginHorizontal: 12 }]}>
-              <Image source={{ uri: avatarOf(ucTarget) }} style={s.avatar} />
+              <Image resizeMethod="resize" source={{ uri: avatarOf(ucTarget) }} style={s.avatar} />
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={s.name} numberOfLines={1}>{ucTarget.displayName}</Text>
                 <Text style={s.sub} numberOfLines={1}>{ucTarget.email || ucTarget.id}</Text>
@@ -1646,7 +1646,7 @@ const AdminDashboard = () => {
               ListHeaderComponent={<Text style={[s.sectionLabel, { paddingHorizontal: 2 }]}>Which one?</Text>}
               renderItem={({ item: u }) => (
                 <TouchableOpacity style={s.card} onPress={() => pickUcTarget(u)}>
-                  <Image source={{ uri: avatarOf(u) }} style={s.avatar} />
+                  <Image resizeMethod="resize" source={{ uri: avatarOf(u) }} style={s.avatar} />
                   <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={s.name} numberOfLines={1}>{u.displayName}</Text>
                     <Text style={s.sub} numberOfLines={1}>{u.email || u.id}</Text>
@@ -1665,7 +1665,7 @@ const AdminDashboard = () => {
               ListHeaderComponent={<Text style={[s.sectionLabel, { paddingHorizontal: 2 }]}>{`Conversations · ${ucList.length}${ucHasMore ? '+' : ''}`}</Text>}
               renderItem={({ item: r }) => (
                 <TouchableOpacity style={s.card} onPress={() => openChatFromUserChats(r)} activeOpacity={0.7}>
-                  <Image source={{ uri: r.partnerAvatar }} style={s.avatar} />
+                  <Image resizeMethod="resize" source={{ uri: r.partnerAvatar }} style={s.avatar} />
                   <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={s.name} numberOfLines={1}>{r.partnerName}</Text>
                     <Text style={s.sub} numberOfLines={1}>{r.lastMessage || '—'}</Text>
@@ -1712,7 +1712,7 @@ const AdminDashboard = () => {
                 <Text style={[s.sectionLabel, { paddingHorizontal: 2 }]}>Matches</Text>
                 {grantResults.map((u) => (
                   <View key={u.id} style={s.card}>
-                    <Image source={{ uri: avatarOf(u) }} style={s.avatar} />
+                    <Image resizeMethod="resize" source={{ uri: avatarOf(u) }} style={s.avatar} />
                     <View style={{ flex: 1, marginLeft: 10 }}>
                       <Text style={s.name} numberOfLines={1}>{u.displayName}</Text>
                       <Text style={s.sub} numberOfLines={1}>{u.email || u.id}</Text>
@@ -1727,7 +1727,7 @@ const AdminDashboard = () => {
             ) : null}
             renderItem={({ item }) => (
               <View style={s.card}>
-                <Image source={{ uri: avatarOf(item) }} style={s.avatar} />
+                <Image resizeMethod="resize" source={{ uri: avatarOf(item) }} style={s.avatar} />
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={s.name} numberOfLines={1}>{item.displayName}</Text>
                   <Text style={s.sub} numberOfLines={1}>{item.grantedAt ? `Granted ${timeAgo(item.grantedAt)}` : item.id}</Text>
@@ -1754,7 +1754,7 @@ const AdminDashboard = () => {
               </View>
 
               <View style={{ alignItems: 'center', marginVertical: 12 }}>
-                <Image source={{ uri: avatarOf(merged) }} style={s.avatarLarge} />
+                <Image resizeMethod="resize" source={{ uri: avatarOf(merged) }} style={s.avatarLarge} />
                 <Text style={[s.title, { marginTop: 10 }]}>{merged.displayName}</Text>
                 <Text style={s.sub}>{merged.email || 'no email on record'}</Text>
                 <View style={s.pillWrap}>
@@ -2016,7 +2016,7 @@ const AdminDashboard = () => {
       {/* ── IMAGE PREVIEW ── */}
       <Modal visible={!!previewImage} transparent animationType="fade" onRequestClose={() => setPreviewImage(null)}>
         <TouchableOpacity activeOpacity={1} onPress={() => setPreviewImage(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center' }}>
-          {!!previewImage && <Image source={{ uri: previewImage }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />}
+          {!!previewImage && <Image resizeMethod="resize" source={{ uri: previewImage }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />}
           <TouchableOpacity onPress={() => setPreviewImage(null)} style={{ position: 'absolute', top: 16 + insets.top, right: 20, padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 }}>
             <Icon name="close" size={28} color="#fff" />
           </TouchableOpacity>

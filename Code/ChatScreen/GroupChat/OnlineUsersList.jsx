@@ -488,7 +488,7 @@ const OnlineUsersList = ({
           </View>
         )}
         <View style={styles.userItemLeft}>
-          <Image
+          <Image resizeMethod="resize"
             source={{ uri: item.avatar }}
             style={styles.avatar}
             defaultSource={{ uri: 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
@@ -503,7 +503,7 @@ const OnlineUsersList = ({
             
             {/* Pro badge */}
             {item?.isPro && (
-              <Image
+              <Image resizeMethod="resize"
                 source={require('../../../assets/pro.png')}
                 style={{ width: 12, height: 12, marginLeft: 4 }}
               />
@@ -511,7 +511,7 @@ const OnlineUsersList = ({
 
             {/* Verified badge */}
             {item?.robloxUsernameVerified && (
-              <Image
+              <Image resizeMethod="resize"
                 source={require('../../../assets/verification.png')}
                 style={{ width: 12, height: 12, marginLeft: 4 }}
               />
@@ -521,7 +521,7 @@ const OnlineUsersList = ({
             {(item?.hasRecentGameWin ||
               (typeof item?.lastGameWinAt === 'number' &&
                 Date.now() - item.lastGameWinAt <= 24 * 60 * 60 * 1000)) && (
-              <Image
+              <Image resizeMethod="resize"
                 source={require('../../../assets/trophy.webp')}
                 style={{ width: 10, height: 10, marginLeft: 4 }}
               />
@@ -719,7 +719,7 @@ const OnlineUsersList = ({
                 style={styles.searchInput}
                 value={searchText}
                 onChangeText={setSearchText}
-                placeholder="Search by name"
+                placeholder="Search by name or ID"
                 placeholderTextColor={isDarkMode ? '#6B7280' : '#9CA3AF'}
                 autoCorrect={false}
                 autoCapitalize="none"

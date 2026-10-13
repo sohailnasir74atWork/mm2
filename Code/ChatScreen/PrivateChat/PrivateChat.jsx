@@ -716,7 +716,7 @@ useEffect(() => {
                   <View style={{ width: '48%', flexWrap: 'wrap', flexDirection: 'row', gap: 4 }}>
                     {groupedHasItems?.map((hasItem, index) => (
                       <View key={`${hasItem.name}-${hasItem.type}`} style={{ width: '19%', alignItems: 'center' }}>
-                        <Image
+                        <Image resizeMethod="resize"
                           source={{ uri: getImageUrl(hasItem) || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
                           style={{ width: 30, height: 30}}
                         />
@@ -751,12 +751,12 @@ useEffect(() => {
                     ))}
                   </View>
                   <View style={{ width: '2%', justifyContent: 'center', alignItems: 'center' }}>
-                    <Image source={require('../../../assets/transfer.png')} style={{ width: 10, height: 10 }} />
+                    <Image resizeMethod="resize" source={require('../../../assets/transfer.png')} style={{ width: 10, height: 10 }} />
                   </View>
                   <View style={{ width: '48%', flexWrap: 'wrap', flexDirection: 'row', gap: 4 }}>
                     {groupedWantsItems?.map((wantitem, index) => (
                       <View key={`${wantitem.name}-${wantitem.type}`} style={{ width: '19%', alignItems: 'center' }}>
-                        <Image
+                        <Image resizeMethod="resize"
                           source={{ uri: getImageUrl(wantitem) || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
                           style={{ width: 35, height: 35 }}
                         />

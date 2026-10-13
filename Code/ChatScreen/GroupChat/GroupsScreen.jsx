@@ -31,49 +31,7 @@ import OnlineUsersList from './OnlineUsersList';
 import { ABOVE_TAB_BAR, FLOATING_BUTTON_RIGHT } from '../../Helper/floatingButtonLayout';
 import CreateGroupModal from './CreateGroupModal';
 import { pickImages } from '../../Helper/imagePicker';
-import RNFS from 'react-native-fs';
-
-const BUNNY_STORAGE_HOST = 'storage.bunnycdn.com';
-const BUNNY_STORAGE_ZONE = 'post-gag';
-const BUNNY_ACCESS_KEY = '1b7e1a85-dff7-4a98-ba701fc7f9b9-6542-46e2';
-const BUNNY_CDN_BASE = 'https://pull-gag.b-cdn.net';
-
-const base64ToBytes = (base64) => {
-  if (!base64 || typeof base64 !== 'string') {
-    throw new Error('Invalid base64 input');
-  }
-
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-  let str = base64.replace(/[\r\n]+/g, '');
-  let output = [];
-
-  let i = 0;
-  while (i < str.length) {
-    const enc1 = chars.indexOf(str.charAt(i++));
-    const enc2 = chars.indexOf(str.charAt(i++));
-    const enc3 = chars.indexOf(str.charAt(i++));
-    const enc4 = chars.indexOf(str.charAt(i++));
-
-    if (enc1 === -1 || enc2 === -1 || enc3 === -1 || enc4 === -1) {
-      throw new Error('Invalid base64 character');
-    }
-
-    const chr1 = (enc1 << 2) | (enc2 >> 4);
-    const chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
-    const chr3 = ((enc3 & 3) << 6) | enc4;
-
-    if (enc3 !== 64) {
-      output.push(chr1, chr2);
-    } else {
-      output.push(chr1);
-    }
-    if (enc4 !== 64 && enc3 !== 64) {
-      output.push(chr3);
-    }
-  }
-
-  return Uint8Array.from(output);
-};
+import { uploadImage, UPLOAD_KIND } from '../../Helper/imageUpload';
 
 // Helper function to truncate group names
 const truncateGroupName = (name, maxLength = 25) => {
@@ -425,25 +383,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
   // Upload image to BunnyCDN
   const uploadToBunny = useCallback(async (imagePath) => {
     try {
-      const base64 = await RNFS.readFile(imagePath.replace('file://', ''), 'base64');
-      const bytes = base64ToBytes(base64);
-      const fileName = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
-      const filePath = `groups/${fileName}`;
-
-      const response = await fetch(`https://${BUNNY_STORAGE_HOST}/${BUNNY_STORAGE_ZONE}/${filePath}`, {
-        method: 'PUT',
-        headers: {
-          AccessKey: BUNNY_ACCESS_KEY,
-          'Content-Type': 'image/jpeg',
-        },
-        body: bytes,
-      });
-
-      if (!response.ok) {
-        throw new Error('Upload failed');
-      }
-
-      return `${BUNNY_CDN_BASE}/${filePath}`;
+      return await uploadImage(imagePath, UPLOAD_KIND.group);
     } catch (error) {
       console.error('Error uploading to BunnyCDN:', error);
       throw error;
@@ -658,6 +598,9 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         mediaType: 'photo',
         selectionLimit: 1,
         quality: 0.8,
+        // Icons show small; keeps them well under uploadImage's 3 MB cap.
+        maxWidth: 1024,
+        maxHeight: 1024,
       },
       async (response) => {
         if (response.didCancel || response.errorCode) {
@@ -725,7 +668,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
           style={styles.chatItem}
           onPress={() => handleOpenGroup(groupId, groupName)}
         >
-          <Image 
+          <Image resizeMethod="resize" 
             source={{ uri: groupAvatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }} 
             style={styles.avatar} 
           />
@@ -1058,7 +1001,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
       }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
           <View style={{ position: 'relative', marginRight: 12 }}>
-            <Image
+            <Image resizeMethod="resize"
               source={{ uri: item.requesterAvatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
               style={{
                 width: 44,
@@ -1188,7 +1131,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-          <Image
+          <Image resizeMethod="resize"
             source={{ uri: groupAvatar || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
             style={{
               width: 40,
@@ -1819,7 +1762,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                 <View style={{ padding: 20 }}>
                   {/* Group Avatar */}
                   <View style={{ alignItems: 'center', marginBottom: 24 }}>
-                    <Image
+                    <Image resizeMethod="resize"
                       source={{
                         uri: selectedGroupInfo.avatar ||
                           'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',
@@ -1873,7 +1816,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
                       backgroundColor: isDarkMode ? config.colors.surfaceDark : '#F9FAFB',
                       borderRadius: 12,
                     }}>
-                      <Image
+                      <Image resizeMethod="resize"
                         source={{
                           uri: selectedGroupInfo.createdBy.avatar ||
                             'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png',

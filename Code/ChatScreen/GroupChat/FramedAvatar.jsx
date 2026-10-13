@@ -1051,7 +1051,7 @@ const FramedAvatar = ({
           alignItems: 'center', justifyContent: 'center',
         }}>
           {shownUri ? (
-            <Image
+            <Image resizeMethod="resize"
               source={{ uri: shownUri }}
               onError={markFailed}
               style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }}

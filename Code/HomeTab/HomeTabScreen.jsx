@@ -443,7 +443,7 @@ const HomeTabScreen = ({ selectedTheme }) => {
 
       {/* ── Banner Ad ── (tab bar is docked, so bottom: 0 sits flush above it) */}
       <View style={{ position: 'absolute', bottom: 0, width: '100%', alignItems: 'center' }}>
-        <BannerAdComponent />
+        <BannerAdComponent collapsible />
       </View>
 
       {/* ── Modals ── */}

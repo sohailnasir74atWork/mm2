@@ -299,7 +299,7 @@ const PrivateMessageList = ({
                       })
                     }
                   >
-                    <Image
+                    <Image resizeMethod="resize"
                       source={{ uri: imageUri }}
                       style={{
                         width: imageSize,
@@ -328,7 +328,7 @@ const PrivateMessageList = ({
                       key={`${fruit.id || fruit.name}-${index}`}
                       style={fruitStyles.fruitCard}
                     >
-                      <Image
+                      <Image resizeMethod="resize"
                         source={{ uri: getImageUrl(fruit) || fruit.imageUrl || 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png' }}
                         style={fruitStyles.fruitImage}
                       />

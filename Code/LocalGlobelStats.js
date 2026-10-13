@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import { Appearance } from 'react-native';
 import { createMMKV } from 'react-native-mmkv';
 import Purchases from 'react-native-purchases';
 import config from './Helper/Environment';
@@ -105,6 +104,9 @@ export const LocalStateProvider = ({ children }) => {
     valuesFetchedAt: storage.getString('valuesFetchedAt') || null,
     showFlag: storage.getBoolean('showFlag') ?? true, // ✅ Default true (show flag), user can hide to save data
     showOnlineStatus: storage.getBoolean('showOnlineStatus') ?? true, // ✅ Default true (show online), user can hide to save Firebase costs
+    // Settings "Value Update Notifications" (topic value-updates). Default ON;
+    // same key and default as Code/Helper/valueUpdateNotifications.js.
+    valueUpdateNotifications: storage.getBoolean('valueUpdateNotifications') ?? true,
 
   }));
 
@@ -117,15 +119,10 @@ export const LocalStateProvider = ({ children }) => {
   const { t } = useTranslation();
 
 
-  // Listen for system theme changes
-  useEffect(() => {
-    if (localState.theme === 'system') {
-      const listener = Appearance.addChangeListener(({ colorScheme }) => {
-        updateLocalState('theme', colorScheme);
-      });
-      return () => listener.remove(); // Correct cleanup
-    }
-  }, [localState.theme]);
+  // No Appearance listener here: 'system' must stay in storage. GlobelStats
+  // resolves it to 'light'/'dark' with useColorScheme(). The old listener
+  // wrote the resolved scheme back as the preference, so one device theme
+  // change pinned the app to that theme for good.
 
   // (The old "force store" effect for `data` is gone: updateLocalState already
   // persists every value, and re-stringifying here double-encoded it.)

@@ -712,7 +712,7 @@ const DesignFeedScreen = ({ route }) => {
       />
       {!localState.isPro && (
         <View style={{ position: 'absolute', bottom: bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
-          <BannerAdComponent />
+          <BannerAdComponent collapsible />
         </View>
       )}
 

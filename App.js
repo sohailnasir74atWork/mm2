@@ -225,6 +225,9 @@ function App() {
               getComponent={() => require('./Code/AppHelper/AdminDashboard').default}
             />
             <Stack.Screen name="MyCosmeticsScreen" options={{ headerShown: false }} getComponent={() => require('./Code/Engagement/MyCosmeticsScreen').default} />
+            {/* Birthdays (Home card, Settings, and birthday pushes with
+                route 'Birthdays'). Draws its own header. */}
+            <Stack.Screen name="Birthdays" options={{ headerShown: false }} getComponent={() => require('./Code/Birthdays/BirthdaysScreen').default} />
 
             <Stack.Screen
               name="SocialDashboard"

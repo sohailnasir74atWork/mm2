@@ -40,6 +40,7 @@ import SignInDrawer from '../Firebase/SigninDrawer';
 import StatusFeed from '../Design/StatusFeed';
 import FramedAvatar from '../ChatScreen/GroupChat/FramedAvatar';
 import { getMyCosmetics, syncMyCosmetics } from '../Helper/cosmeticsCache';
+import BirthdayHomeCard from '../Birthdays/BirthdayHomeCard';
 
 const LANGUAGES = [
   { code: 'en', name: 'English', flag: '🇺🇸' },
@@ -287,6 +288,10 @@ const HomeTabScreen = ({ selectedTheme }) => {
             </TouchableOpacity>
           )}
         </View>
+
+        {/* ── Birthdays ── your birthday, a countdown, "add your birthday",
+            or today's birthdays (renders nothing otherwise, or signed out). */}
+        <BirthdayHomeCard userId={user?.id || null} userName={user?.displayName} />
 
         {/* ── Tools: what the app is for ──
             A 2x2 grid, every tile visible at once, each with its own hue so the

@@ -21,6 +21,7 @@ import { useGlobalState } from '../GlobelStats';
 import { getStyles } from './settingstyle';
 import { handleGetSuggestions, handleOpenFacebook, handleOpenWebsite, handleRateApp, handleadoptme, handleShareApp, imageOptions, handleBloxFruit, handleRefresh, handleReport, handleOpenPrivacy, handleOpenChild} from './settinghelper';
 import EmailUpdatesRow from './EmailUpdatesRow';
+import BirthdayVisibilityRow from '../Birthdays/BirthdayVisibilityRow';
 import { logoutUser } from '../Firebase/UserLogics';
 import SignInDrawer from '../Firebase/SigninDrawer';
 import auth from '@react-native-firebase/auth';
@@ -2706,6 +2707,15 @@ const formatPlanName = (plan) => {
           <EmailUpdatesRow
             uid={user.id}
             appdatabase={appdatabase}
+            styles={styles}
+            onHaptic={() => triggerHapticFeedback('impactLight')}
+          />
+        )}
+
+        {/* "Show my birthday" + the one-time birthday correction. */}
+        {user?.id && (
+          <BirthdayVisibilityRow
+            uid={user.id}
             styles={styles}
             onHaptic={() => triggerHapticFeedback('impactLight')}
           />

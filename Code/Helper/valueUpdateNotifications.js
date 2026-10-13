@@ -18,7 +18,8 @@
  * 300-topic cap and is never unsubscribed by it. Keep it out of that list.
  *
  * Also handles TAPS on value pushes (this broadcast and the per-item alerts):
- * they open the Values screen.
+ * they open the Values screen; and on birthday pushes (functions/birthdays,
+ * data.route 'Birthdays'): they open the Birthdays screen.
  */
 import { Platform } from 'react-native';
 import {
@@ -160,13 +161,19 @@ export function setValueUpdatesEnabled(enabled) {
 
 // Screens a push may open. data.route comes from the server, so it is
 // matched against this list and never passed to navigate() unchecked.
-const ALLOWED_ROUTES = ['Values'];
+const ALLOWED_ROUTES = ['Values', 'Birthdays'];
+// Birthday pushes (functions/birthdays): the birthday itself, a first wish,
+// a thank-you. All carry route 'Birthdays'.
+const BIRTHDAY_TYPES = ['birthday', 'birthday_wish', 'birthday_thanks'];
 
 /** The root-stack screen a tapped push should open, or null to do nothing. */
 export function routeForNotificationData(data) {
   if (!data || typeof data !== 'object') return null;
   if (data.type === 'values_update') {
-    return ALLOWED_ROUTES.includes(data.route) ? data.route : null;
+    return data.route === 'Values' ? 'Values' : null;
+  }
+  if (BIRTHDAY_TYPES.includes(data.type)) {
+    return data.route === 'Birthdays' && ALLOWED_ROUTES.includes(data.route) ? 'Birthdays' : null;
   }
   // Per-item alerts from valueAlertsPoll: { kind, game, item }, no route.
   if (data.kind === 'value_change') return 'Values';

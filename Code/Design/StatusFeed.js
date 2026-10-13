@@ -45,6 +45,12 @@ import { SCREEN_GUTTER } from '../Helper/layout';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BUBBLE_SIZE = 58;
 const STATUS_EXPIRY_MS = 24 * 60 * 60 * 1000;
+// One status per minute, like design posts (UploadModal). Every status shows
+// a feed-post interstitial (PostAd.js) and that unit has no AdMob cap, so this
+// is the only thing between a status spammer and back-to-back ads. Module
+// level, so it survives the feed remounting; resets on app restart.
+const STATUS_COOLDOWN_MS = 60 * 1000;
+let lastStatusPostAt = 0;
 const STORY_DURATION = 5000;
 
 // ── Cache config ──
@@ -560,6 +566,13 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
     }
 
     // Core upload logic — called after ad (or directly if Pro)
+    const sinceLast = Date.now() - lastStatusPostAt;
+    if (sinceLast < STATUS_COOLDOWN_MS) {
+      const secondsLeft = Math.ceil((STATUS_COOLDOWN_MS - sinceLast) / 1000);
+      Alert.alert('Cooldown Active', `Please wait ${secondsLeft} second${secondsLeft === 1 ? '' : 's'} before posting another status.`);
+      return;
+    }
+
     // The feed-post ad (PostAd.js) shows only once the status is live —
     // never before it, never on a failed upload.
     let posted = false;
@@ -629,6 +642,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
         setSelectedImage(null);
         setShowCreator(false);
         posted = true;
+        lastStatusPostAt = Date.now();
       } catch (err) {
         Alert.alert('Error', 'Could not post status');
       }

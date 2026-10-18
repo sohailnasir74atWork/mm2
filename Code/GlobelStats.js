@@ -654,10 +654,13 @@ export const GlobalStateProvider = ({ children }) => {
   }, [user?.id, localState.isPro]);
 
 
+  // Once per sign-in, after the user loads: on mount user.id is still empty,
+  // so the RTDB write was skipped and no account had lastActivity
+  // (functions/birthdays ranks today's birthdays by it).
   useEffect(() => {
-    // console.log("🕓 Saving lastActivity:", new Date().toISOString());
+    if (!user?.id) return;
     updateLocalStateAndDatabase('lastActivity', new Date().toISOString());
-  }, []);
+  }, [user?.id]);
 
 
 

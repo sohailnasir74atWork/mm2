@@ -46,7 +46,7 @@ import {
 import {
   getFirestore, collection, addDoc, deleteDoc, updateDoc, doc as fsDoc, getDoc,
   getDocs, query as fsQuery, where as fsWhere, orderBy as fsOrderBy, limit as fsLimit,
-  startAfter as fsStartAfter, runTransaction, Timestamp,
+  startAfter as fsStartAfter, Timestamp,
 } from '@react-native-firebase/firestore';
 import { useGlobalState } from '../GlobelStats';
 import { getThemeColors } from '../Helper/themeColors';
@@ -57,6 +57,7 @@ import {
   encodeEmailForBan, getDeviceBanForUser, liftDeviceBan, applyBanToDevice,
 } from '../ChatScreen/utils';
 import { getOrFetchFullProfile, getOrFetchProfile, invalidateFullProfile } from '../Helper/profileCache';
+import { canRemoveReview, canDeleteReviews, deleteReviewAndSummary } from '../Helper/reviewModeration';
 import { getUserEmail, getUserEmails, findUidsByEmail } from '../Helper/privateProfile';
 import {
   logModAction, fetchUserModHistory, fetchUserModCounts, fetchModLeaderboard, fetchRecentModActions,
@@ -744,14 +745,9 @@ const AdminDashboard = () => {
   // that deletes the document, so the two can never disagree.
   const deleteReview = useCallback(async (review) => {
     if (!review?.id || !merged?.id || !canRemoveContent) return;
-    if (!isAdmin && review.fromUserId) {
-      try {
-        const rv = await getOrFetchFullProfile(db, review.fromUserId);
-        if (rv && (rv.admin || rv.isAdmin || rv.isModerator)) {
-          Alert.alert('Restricted', 'Moderators cannot delete reviews written by moderators or admins.');
-          return;
-        }
-      } catch { /* proceed */ }
+    if (!(await canRemoveReview(db, review.fromUserId, { isAdmin }))) {
+      Alert.alert('Restricted', 'Only admins can delete reviews.');
+      return;
     }
     const reviewer = strOr(review.userName, null) || strOr(review.reviewerName, null);
     const text = strOr(review.review, null) || strOr(review.comment, null) || strOr(review.text, null);
@@ -763,25 +759,7 @@ const AdminDashboard = () => {
     if (!ok) return;
     try {
       const ratingToRemove = Number(review.rating) || 0;
-      const reviewRef = fsDoc(fs, 'reviews', review.id);
-      const summaryRef = fsDoc(fs, 'user_ratings_summary', merged.id);
-      await runTransaction(fs, async (tx) => {
-        const [rSnap, sSnap] = await Promise.all([tx.get(reviewRef), tx.get(summaryRef)]);
-        if (!rSnap.exists()) return; // already gone
-        if (sSnap.exists()) {
-          const s = sSnap.data() || {};
-          const oldAvg = Number(s.averageRating) || 0;
-          const oldCount = Number(s.count) || 0;
-          if (oldCount <= 1 || ratingToRemove <= 0) {
-            tx.set(summaryRef, { averageRating: oldCount <= 1 ? 0 : oldAvg, count: Math.max(0, oldCount - 1), updatedAt: Timestamp.now() }, { merge: true });
-          } else {
-            const newCount = oldCount - 1;
-            const newAvg = Math.max(0, Math.min(5, ((oldAvg * oldCount) - ratingToRemove) / newCount));
-            tx.set(summaryRef, { averageRating: parseFloat(newAvg.toFixed(2)), count: newCount, updatedAt: Timestamp.now() }, { merge: true });
-          }
-        }
-        tx.delete(reviewRef);
-      });
+      await deleteReviewAndSummary(fs, { id: review.id, toUserId: merged.id, rating: ratingToRemove });
       logModAction({
         action: 'review_delete', targetUid: merged.id, targetEmail: merged.email, targetName: merged.displayName,
         reason: `Removed a ${ratingToRemove}-star review${reviewer ? ` by ${reviewer}` : ''}${text ? `: "${text.slice(0, 140)}"` : ''}`,
@@ -1872,7 +1850,7 @@ const AdminDashboard = () => {
                         <Text style={{ color: HUE.gold, fontSize: 13, fontWeight: '700' }}>{'★'.repeat(Math.max(0, Math.min(5, Math.round(rating))))}<Text style={{ color: c.textMuted }}>{'☆'.repeat(Math.max(0, 5 - Math.round(rating)))}</Text></Text>
                         <Text style={[s.sub, { marginLeft: 6 }]}>{rating}</Text>
                         <Text style={[s.sub, { marginLeft: 'auto', fontSize: 11 }]}>{fmtDate(rv.updatedAt) || fmtDate(rv.createdAt) || ''}</Text>
-                        {canRemoveContent && (
+                        {canRemoveContent && canDeleteReviews({ isAdmin }) && (
                           <TouchableOpacity onPress={() => deleteReview(rv)} style={{ marginLeft: 10, padding: 4 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                             <Icon name="trash-outline" size={17} color={HUE.danger} />
                           </TouchableOpacity>

@@ -30,6 +30,7 @@ import { useNavigation } from '@react-navigation/native';
 import config from '../../Helper/Environment';
 import { resolveItemImage } from '../../Helper/valueSources';
 import { sourceLabelForItems } from '../../Helper/valueSources';
+import { hideTranslateTip } from '../TranslateTip';
 
 
 
@@ -434,6 +435,7 @@ const PrivateMessageList = ({
       Alert.alert(t('home.alert.error'), t('private_chat.invalid_translate'));
       return;
     }
+    hideTranslateTip(); // they found Translate: the one-time tip is done
 
     const isUnlimited = freeTranslation || localState?.isPro;
   

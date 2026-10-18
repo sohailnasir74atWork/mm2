@@ -18,6 +18,12 @@
  * A claim reaches the device on its next ID-token refresh (hourly, or at
  * sign-in). No client change is needed, so it works for old builds too.
  *
+ * 📅 2026-10-18: admins (admin / isAdmin flag) also get an `admin` claim, so
+ * firestore.rules can let ONLY admins delete reviews (owner decision; review
+ * deletion used to be open to every moderator). staff_claims/{uid} holds
+ * 'admin' for admins and true for other staff, so a promotion or demotion
+ * between the two re-sets the claims too.
+ *
  * ⚠️ Each flag is an equalTo(true) query on /users and MUST be indexed — an
  * unindexed query makes the Admin SDK download all 81k user records. Flags
  * whose index is missing from the live rules are skipped with a warning (and
@@ -49,11 +55,15 @@ async function indexedUserFields() {
   }
 }
 
-async function setStaffClaim(uid, isStaff) {
+const ADMIN_FLAGS = ['admin', 'isAdmin'];
+
+async function setStaffClaim(uid, isStaff, isAdmin = false) {
   const user = await admin.auth().getUser(uid);
   const claims = { ...(user.customClaims || {}) };
   if (isStaff) claims.staff = true;
   else delete claims.staff;
+  if (isStaff && isAdmin) claims.admin = true;
+  else delete claims.admin;
   await admin.auth().setCustomUserClaims(uid, Object.keys(claims).length ? claims : null);
 }
 
@@ -67,24 +77,38 @@ exports.syncStaffClaims = onSchedule({
   if (!indexedList) return;   // try again next run; change nothing blind
   const indexed = new Set(indexedList);
   const staff = new Set();
+  const admins = new Set();
   let complete = true;
+  let adminsComplete = true;
 
   for (const flag of STAFF_FLAGS) {
     if (!indexed.has(flag)) {
       console.warn(`[syncStaffClaims] users/.indexOn lacks "${flag}" — skipped (an unindexed query downloads every user)`);
       complete = false;
+      if (ADMIN_FLAGS.includes(flag)) adminsComplete = false;
       continue;
     }
     const snap = await db().ref('users').orderByChild(flag).equalTo(true).once('value');
-    snap.forEach((child) => { staff.add(child.key); });
+    snap.forEach((child) => {
+      staff.add(child.key);
+      if (ADMIN_FLAGS.includes(flag)) admins.add(child.key);
+    });
   }
 
   // STAFF tests jmd_granters/{uid}.exists(), so any value counts.
   const granters = await db().ref('jmd_granters').once('value');
   granters.forEach((child) => { staff.add(child.key); });
 
-  const held = new Set(Object.keys((await db().ref('staff_claims').once('value')).val() || {}));
-  const grant = [...staff].filter((uid) => !held.has(uid));
+  const heldMap = (await db().ref('staff_claims').once('value')).val() || {};
+  const held = new Set(Object.keys(heldMap));
+  // 'admin' marks an admin claim; anything else (true) is staff only.
+  const wantsAdmin = (uid) => admins.has(uid);
+  const holdsAdmin = (uid) => heldMap[uid] === 'admin';
+  // New staff, plus staff whose admin status changed. With an admin flag's
+  // index missing, nobody is demoted from admin on a partial set.
+  const grant = [...staff].filter((uid) => !held.has(uid)
+    || (wantsAdmin(uid) && !holdsAdmin(uid))
+    || (adminsComplete && !wantsAdmin(uid) && holdsAdmin(uid)));
   // With a flag skipped the set is only partial, so nobody is revoked on it —
   // a missing index must not strip every moderator's Mod Log access.
   const revoke = complete ? [...held].filter((uid) => !staff.has(uid)) : [];
@@ -92,8 +116,9 @@ exports.syncStaffClaims = onSchedule({
   const updates = {};
   for (const uid of grant) {
     try {
-      await setStaffClaim(uid, true);
-      updates[`staff_claims/${uid}`] = true;
+      const asAdmin = wantsAdmin(uid) || (!adminsComplete && holdsAdmin(uid));
+      await setStaffClaim(uid, true, asAdmin);
+      updates[`staff_claims/${uid}`] = asAdmin ? 'admin' : true;
     } catch (err) {
       // A role flag on a record with no Auth account: nothing to claim.
       console.warn(`[syncStaffClaims] grant ${uid}:`, err.code || err.message);
@@ -110,5 +135,5 @@ exports.syncStaffClaims = onSchedule({
   }
   if (Object.keys(updates).length) await db().ref().update(updates);
 
-  console.log(`[syncStaffClaims] staff ${staff.size}; granted ${grant.length}; revoked ${revoke.length}`);
+  console.log(`[syncStaffClaims] staff ${staff.size} (admins ${admins.size}); granted/changed ${grant.length}; revoked ${revoke.length}`);
 });

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { createMMKV } from 'react-native-mmkv';
+import { AppState } from 'react-native';
 import Purchases from 'react-native-purchases';
 import config from './Helper/Environment';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +9,18 @@ import { showErrorMessage, showSuccessMessage } from './Helper/MessageHelper';
 import { trackProPurchase } from './Helper/growthAnalytics';
 
 const storage = createMMKV();
+
+// Store billing messages ("update your payment method") are shown by us, a few
+// seconds after start, not by RevenueCat inside configure: its automatic call
+// ran before the Activity had a window and crashed Adopt Me at startup
+// (Crashlytics 684f078f, 1.15.55, Android 14–16). Same RevenueCat setup here.
+const BILLING_MESSAGES_DELAY_MS = 5000;
+const showBillingMessagesLater = () => {
+  setTimeout(() => {
+    if (AppState.currentState !== 'active') return;
+    Purchases.showInAppMessages().catch(() => {});
+  }, BILLING_MESSAGES_DELAY_MS);
+};
 const LocalStateContext = createContext();
 
 export const useLocalState = () => useContext(LocalStateContext);
@@ -86,6 +99,10 @@ export const LocalStateProvider = ({ children }) => {
     isAppReady: false,
     lastActivity: storage.getString('lastActivity') || null,
     showOnBoardingScreen: storage.getBoolean('showOnBoardingScreen') ?? true,
+    // One-time "long-press a message to translate it" tip in the chats
+    // (2026-10-18: players asked for a translator that already exists).
+    // ChatScreen/TranslateTip clears it the first time it is on screen.
+    showTranslateTip: storage.getBoolean('showTranslateTip') ?? true,
     user_name: storage.getString('user_name') || 'Anonymous',
     translationUsage: safeParseJSON('translationUsage', { count: 0, date: new Date().toDateString() }),
     favorites: safeParseJSON('favorites', []),
@@ -103,6 +120,7 @@ export const LocalStateProvider = ({ children }) => {
     // undefined it reads as epoch 0 and every launch refetches both feeds.
     valuesFetchedAt: storage.getString('valuesFetchedAt') || null,
     showFlag: storage.getBoolean('showFlag') ?? true, // ✅ Default true (show flag), user can hide to save data
+    showReadReceipts: storage.getBoolean('showReadReceipts') ?? true, // ✅ Default true (show read ticks); Settings writes it, so read it back on start
     showOnlineStatus: storage.getBoolean('showOnlineStatus') ?? true, // ✅ Default true (show online), user can hide to save Firebase costs
     // Settings "Value Update Notifications" (topic value-updates). Default ON;
     // same key and default as Code/Helper/valueUpdateNotifications.js.
@@ -187,7 +205,12 @@ export const LocalStateProvider = ({ children }) => {
   // Initialize RevenueCat
   const initRevenueCat = async () => {
     try {
-      await Purchases.configure({ apiKey: config.apiKey, usesStoreKit2IfAvailable: false });
+      await Purchases.configure({
+        apiKey: config.apiKey,
+        usesStoreKit2IfAvailable: false,
+        shouldShowInAppMessagesAutomatically: false,
+      });
+      showBillingMessagesLater();
       const userID = await Purchases.getAppUserID();
       setCustomerId(userID);
 

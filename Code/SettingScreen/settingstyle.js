@@ -8,6 +8,8 @@ export const getStyles = (isDarkMode) =>
         backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f4f5f7',
         padding: 8,
       },
+      // Reviews I received: date over the report flag.
+      reviewSide: { alignItems: 'flex-end', gap: 8 },
       cardContainer: {
         backgroundColor: isDarkMode ? config.colors.surfaceDark : '#ffffff',
         borderRadius: 10,

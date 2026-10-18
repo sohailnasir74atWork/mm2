@@ -142,6 +142,10 @@
     "roblox_check_failed": "Impossible de vérifier ce pseudo. Réessaie.",
     "roblox_code_not_found": "Le code de vérification n'est pas dans la description de ton profil Roblox.",
     "roblox_verify_failed": "La vérification a échoué. Réessaie.",
+    "roblox_busy": "Roblox est occupé pour le moment. Attends une minute, puis touche à nouveau Vérifier.",
+    "roblox_copy_code": "Copier le code",
+    "roblox_code_copied_title": "Code copié",
+    "roblox_code_copied": "{{code}} est copié. Colle-le dans « À propos » de ton profil Roblox, enregistre, puis reviens et touche à nouveau Vérifier.",
     "login_first": "Connecte-toi d'abord.",
     "roblox_enter_username": "Entre un pseudo Roblox.",
     "roblox_invalid_username": "Pseudo invalide",
@@ -234,7 +238,8 @@
       "sign_in_required": "Connecte-toi pour créer un trade.",
       "missing_items_error": "Ajoute au moins un objet de chaque côté : ce que tu donnes et ce que tu veux.",
       "values_reloaded": "Valeurs mises à jour !",
-      "reload_error": "Actualisation impossible"
+      "reload_error": "Actualisation impossible",
+      "awards_not_tradable": "Les récompenses de classement et les objets non échangeables ne peuvent pas être échangés. Retire : {{items}}"
     },
     "my_inventory": "Mon inventaire",
     "add_to_inventory": "Ajouter des articles à inventaire",
@@ -306,7 +311,9 @@
     "ban_why_title": "Pourquoi je vois ça ?",
     "ban_device_linked_email": "Un autre compte sur cet appareil ({{email}}) a été banni, donc l'appareil reste bloqué jusqu'à la fin de ce ban. Te connecter avec un autre compte n'y change rien.",
     "ban_device_linked": "Un autre compte sur cet appareil a été banni, donc l'appareil reste bloqué jusqu'à la fin de ce ban. Te connecter avec un autre compte n'y change rien.",
-    "ban_reason_title": "Motif"
+    "ban_reason_title": "Motif",
+    "ban_appeal_question": "Tu penses que c'est une erreur ?",
+    "ban_appeal_button": "Faire appel"
   },
   "value": {
     "title": "Écran de Valeur",
@@ -633,7 +640,9 @@
     "translations_remaining_other": "{{count}} restantes",
     "unable_open_link": "Impossible d'ouvrir le lien.",
     "user_blocked_name": "{{name}} a été bloqué.",
-    "user_unblocked_name": "{{name}} a été débloqué."
+    "user_unblocked_name": "{{name}} a été débloqué.",
+    "translate_tip_long": "Astuce : appuie longuement sur un message pour le traduire.",
+    "translate_tip_tap": "Astuce : touche un message pour le traduire."
   },
   "first": {
     "try_values": "Essaie le calculateur de valeurs",
@@ -1010,7 +1019,8 @@
     "they_disabled_trade_chat": "Ce joueur a désactivé le chat des trades. Tu ne peux pas lui écrire depuis un trade.",
     "trade_safe_strip": "Trade prudent · Trop beau = arnaque · Ne donne jamais tes identifiants",
     "you_disabled_chat": "Tu as désactivé le chat. Réactive-le dans les Paramètres.",
-    "you_disabled_trade_chat": "Tu as désactivé le chat des trades. Réactive-le dans les Paramètres."
+    "you_disabled_trade_chat": "Tu as désactivé le chat des trades. Réactive-le dans les Paramètres.",
+    "report_review": "Signaler l'avis"
   },
   "inbox": {
     "delete_failed": "Impossible de supprimer la conversation. Réessaie.",
@@ -1692,7 +1702,8 @@
       "moderation": "Modération",
       "scam": "Arnaque ou échange",
       "bug": "Problème d'appli",
-      "other": "Autre chose"
+      "other": "Autre chose",
+      "ban_appeal": "Contester un bannissement"
     },
     "details": "Détails",
     "placeholder_complaint": "Raconte ce qui s'est passé. Pseudos, dates et captures d'écran aident beaucoup.",
@@ -1713,7 +1724,10 @@
     "sign_in": "Connecte-toi pour envoyer une plainte ou une idée.",
     "mine_title": "Tes signalements",
     "status_open": "Reçu",
-    "status_done": "Traité"
+    "status_done": "Traité",
+    "placeholder_ban_appeal": "Raconte ce qui s'est passé et pourquoi tu penses que le bannissement est une erreur. Les captures d'écran aident.",
+    "placeholder_false_review": "Pourquoi cet avis est-il faux ? Les captures de ta discussion aident.",
+    "reported_review": "Avis que tu signales"
   },
   "reward_center": {
     "close": "Fermer"

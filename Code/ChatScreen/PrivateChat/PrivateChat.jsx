@@ -35,6 +35,7 @@ import {
 } from '@react-native-firebase/firestore';
 import ProfileBottomDrawer from '../GroupChat/BottomDrawer';
 import { resolveItemImage } from '../../Helper/valueSources';
+import TranslateTip from '../TranslateTip';
 
 
 
@@ -809,6 +810,7 @@ useEffect(() => {
               )}
              
 
+             {messages.length > 0 && <TranslateTip gesture="tap" />}
              {messages.length === 0 ? (
   // No messages yet
   loading ? (

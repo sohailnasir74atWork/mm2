@@ -32,7 +32,8 @@ const BOOST_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 // limit window" is featuredUntil > now - (WINDOW - DURATION).
 const BOOST_WINDOW_START_OFFSET_MS = BOOST_LIMIT_WINDOW_MS - FEATURE_DURATION_MS;
 
-import { ABOVE_BANNER, bannerAware, FLOATING_BUTTON_ICON_SIZE, FLOATING_BUTTON_RIGHT } from '../Helper/floatingButtonLayout';
+import { ABOVE_BANNER, bannerAware, FLOATING_BUTTON_ICON_SIZE, FLOATING_BUTTON_RIGHT, aboveBanner } from '../Helper/floatingButtonLayout';
+import { useBannerHeight } from '../Ads/bannerHeight';
 import RewardedAdManager from '../Ads/RewardedAdManager';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,6 +43,7 @@ import SubscriptionScreen from '../SettingScreen/OfferWall';
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
 import FeedBannerAd from '../Ads/FeedBannerAd';
+import { useFeedAdGate, FEED_AD_VIEWABILITY } from '../Ads/feedAdGate';
 import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 import ProfileBottomDrawer from '../ChatScreen/GroupChat/BottomDrawer';
 import FramedAvatar from '../ChatScreen/GroupChat/FramedAvatar';
@@ -74,6 +76,8 @@ dayjs.extend(relativeTime);
 
 
 const TradeList = ({ route }) => {
+  // Floating buttons clear the real banner height (Ads/bannerHeight.js).
+  const bannerHeight = useBannerHeight();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInHas, setSearchInHas] = useState(true); // ✅ Search in "ME" side (hasItems)
   const [searchInWants, setSearchInWants] = useState(true); // ✅ Search in "YOU" side (wantsItems)
@@ -271,6 +275,8 @@ const TradeList = ({ route }) => {
     }
     return out;
   }, [filteredTrades, isProStatus]);
+  // Feed ad rows load only near the screen (Ads/feedAdGate.js).
+  const feedAdGate = useFeedAdGate(tradesWithAds);
 
   // const getTradeDeal = (hasTotal, wantsTotal) => {
   //   if (hasTotal.value <= 0) {
@@ -1545,7 +1551,7 @@ const TradeList = ({ route }) => {
   const renderTrade = ({ item, index }) => {
     // In-feed ad slot interleaved into the list (collapses when unfilled / Pro).
     if (item?.__type === 'ad') {
-      return <FeedBannerAd adKey={item.id} isDarkMode={isDarkMode} />;
+      return <FeedBannerAd adKey={item.id} isDarkMode={isDarkMode} gate={feedAdGate} />;
     }
 
     // ✅ Migration: Normalize totals to handle both old (object.value) and new (number) formats
@@ -2108,6 +2114,8 @@ const TradeList = ({ route }) => {
       <FlatList
         ref={flatListRef}
         data={tradesWithAds}
+        onViewableItemsChanged={feedAdGate.onViewableItemsChanged}
+        viewabilityConfig={FEED_AD_VIEWABILITY}
         renderItem={renderTrade}
         extraData={roleRosterVersion}
         // The `featured-` prefix exists ONLY to key the list. It is deliberately
@@ -2183,7 +2191,7 @@ const TradeList = ({ route }) => {
         <Animated.View
           style={[
             styles.scrollToTopButton,
-            { bottom: bannerAware(ABOVE_BANNER, !!localState?.isPro) },
+            { bottom: bannerAware(aboveBanner(bannerHeight), !!localState?.isPro, bannerHeight) },
             {
               opacity: scrollButtonOpacity,
               transform: [

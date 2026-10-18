@@ -308,8 +308,9 @@ test('birthdayTop: filters (self, blocks both ways, body.blocked, inactive, hidd
     uid: 'me',
     body: { localDate: '2026-10-13', limit: 50, blocked: ['localBlock', { id: 'localBlockObj' }, 'bad/path', 42] },
   });
-  assert.deepStrictEqual(top.rows.map((r) => r.uid), ['ok']);
-  assert.strictEqual(top.total, 1);
+  // No activity on record is listed, after the active ones; a stale one is not.
+  assert.deepStrictEqual(top.rows.map((r) => r.uid), ['ok', 'noActivity']);
+  assert.strictEqual(top.total, 2);
 });
 
 test('birthdayTop: limit default 6, clamped to 1..200; tomorrow count; local date clamp', async () => {

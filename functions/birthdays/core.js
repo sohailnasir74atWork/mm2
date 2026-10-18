@@ -276,8 +276,11 @@ async function rankedToday(caller, localDate, blocked) {
     if (blockedMe || iBlocked) return null;
     let active = activityMs(act);
     if (active == null) active = activityMs(await val(`users/${c.uid}/lastactivity`));
-    if (active == null || active < cutoff) return null;
-    return { ...c, active };
+    // No activity on record = listed, ranked last. The app wrote lastActivity
+    // only before the user loaded (2026-10-14: none of the indexed players had
+    // one), so requiring it emptied the list while Home counted them.
+    if (active != null && active < cutoff) return null;
+    return { ...c, active: active ?? 0 };
   });
   const live = checked.filter(Boolean);
   if (!live.length) return { today, year, rows: [] };

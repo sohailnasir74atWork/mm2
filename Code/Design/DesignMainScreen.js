@@ -40,11 +40,13 @@ import { getMyCosmetics } from '../Helper/cosmeticsCache';
 import { Platform } from 'react-native';
 import { showMessage } from 'react-native-flash-message';
 import FeedBannerAd from '../Ads/FeedBannerAd';
+import { useFeedAdGate, FEED_AD_VIEWABILITY } from '../Ads/feedAdGate';
 import PollCard from '../Engagement/PollCard';
 import EventCard from '../Engagement/EventScreen';
 import InterstitialAdManager from '../Ads/IntAd';
 import BannerAdComponent from '../Ads/bannerAds';
-import { ABOVE_BANNER, bannerAware, FLOATING_BUTTON_ICON_SIZE, FLOATING_BUTTON_RIGHT } from '../Helper/floatingButtonLayout';
+import { bannerAware, FLOATING_BUTTON_ICON_SIZE, FLOATING_BUTTON_RIGHT, aboveBanner } from '../Helper/floatingButtonLayout';
+import { useBannerHeight } from '../Ads/bannerHeight';
 import PostsHeader from './componenets/PostsHeader';
 import { useTranslation } from 'react-i18next';
 import { useRoleRosterVersion } from '../Helper/roleRoster';
@@ -67,6 +69,8 @@ function interleaveAds(items, showAds) {
 }
 
 const DesignFeedScreen = ({ route }) => {
+  // Floating buttons clear the real banner height (Ads/bannerHeight.js).
+  const bannerHeight = useBannerHeight();
   const { selectedTheme } = route.params;
   const { appdatabase, user, theme, firestoreDB } = useGlobalState();
   const roleRosterVersion = useRoleRosterVersion(appdatabase);
@@ -525,6 +529,8 @@ const DesignFeedScreen = ({ route }) => {
     }
   };
   
+  // Feed ad rows load only near the screen (Ads/feedAdGate.js).
+  const feedAdGate = useFeedAdGate();
   const renderItem = useCallback(({ item }) => {
     if (initialLoading) {
       return <View style={[styles.skeletonPost, isDarkMode && { backgroundColor: '#444' }]} />;
@@ -533,7 +539,7 @@ const DesignFeedScreen = ({ route }) => {
     // In-feed ad slot interleaved into the feed (collapses to nothing when
     // unfilled or for Pro users, so the feed never shows a blank gap).
     if (item?.__type === 'ad') {
-      return <FeedBannerAd adKey={item.id} isDarkMode={isDarkMode} />;
+      return <FeedBannerAd adKey={item.id} isDarkMode={isDarkMode} gate={feedAdGate} />;
     }
 
     // Seasonal event. Renders nothing when no event is running or near.
@@ -565,7 +571,7 @@ const DesignFeedScreen = ({ route }) => {
         onDeleteAll={deleteUsersLatestPosts}
       />
     );
-  }, [initialLoading, isDarkMode, user, firestoreDB, handleLike, localState,
+  }, [feedAdGate, initialLoading, isDarkMode, user, firestoreDB, handleLike, localState,
     appdatabase, roleRosterVersion, handleDeletePost, deleteUsersLatestPosts]);
 
   // const dataToRender = initialLoading
@@ -606,6 +612,7 @@ const DesignFeedScreen = ({ route }) => {
     ];
     return [...head, ...withAds];
   }, [initialLoading, filteredBase, localState?.isPro, skeletonArray, polls]);
+  feedAdGate.setData(dataToRender);
 
   // Stable keys: drop `index` from real-item keys so pagination/reorder doesn't
   // remount rows (which previously also forced native ad cards to reload).
@@ -623,6 +630,8 @@ const DesignFeedScreen = ({ route }) => {
     <View style={[styles.container, isDarkMode && styles.darkContainer]}>
       <FlatList removeClippedSubviews={false}
         data={dataToRender}
+        onViewableItemsChanged={feedAdGate.onViewableItemsChanged}
+        viewabilityConfig={FEED_AD_VIEWABILITY}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         extraData={roleRosterVersion}
@@ -689,7 +698,7 @@ const DesignFeedScreen = ({ route }) => {
         // edge, and zIndex 6 (> the ad's 5) guarantees the ad never renders on
         // top of the button (AdMob "accidental clicks: layout"). The trades and
         // chat buttons share the same constant so all three line up.
-        style={[styles.fab, { bottom: bannerBottomPos + bannerAware(ABOVE_BANNER, !!localState.isPro), zIndex: 6 }]}
+        style={[styles.fab, { bottom: bannerBottomPos + bannerAware(aboveBanner(bannerHeight), !!localState.isPro, bannerHeight), zIndex: 6 }]}
         onPress={() => user?.id ? setModalVisible(true) : setSigninDrawerVisible(true)}
       >
         <FontAwesome name="circle-plus" size={FLOATING_BUTTON_ICON_SIZE} color={config.colors.primary} />

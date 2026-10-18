@@ -36,6 +36,7 @@ import { CHANNELS } from '../chatChannels';
 import PetModal from '../PrivateChat/PetsModel';
 import { seedCurrentUser } from '../../Helper/profileCache';
 import { syncMyCosmetics } from '../../Helper/cosmeticsCache';
+import TranslateTip from '../TranslateTip';
 leoProfanity.add(['hell', 'shit']);
 leoProfanity.loadDictionary('en');
 
@@ -834,6 +835,7 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
           />
 
           <ConditionalKeyboardWrapper style={{ flex: 1 }} chatscreen={true}>
+            {!loading && messages.length > 0 && <TranslateTip gesture="tap" />}
             {loading ? (
               <ActivityIndicator size="large" color="#1E88E5" style={{ flex: 1 }} />
             ) : (

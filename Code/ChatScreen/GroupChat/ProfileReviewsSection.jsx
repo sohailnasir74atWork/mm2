@@ -22,6 +22,10 @@ const ProfileReviewsSection = ({
   formatCreatedAt,
   starFilter = null,
   setStarFilter,
+  // Signed-in viewers only: a flag on every review the viewer did not write;
+  // it opens Complaints & ideas with the review attached (2026-10-18).
+  onReportReview = null,
+  viewerId = null,
 }) => {
   const c = getThemeColors(isDarkMode);
   return (
@@ -171,6 +175,16 @@ const ProfileReviewsSection = ({
                       </Text>
                     )}
                     {renderStars(rev?.rating || 0)}
+                    {onReportReview && rev.fromUserId !== viewerId && (
+                      <TouchableOpacity
+                        onPress={() => onReportReview(rev)}
+                        hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('private_chat.report_review')}
+                      >
+                        <Icon name="flag-outline" size={13} color={c.textMuted} />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
                 {!!rev?.review && (

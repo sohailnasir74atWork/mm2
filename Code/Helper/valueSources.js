@@ -497,6 +497,24 @@ export const priceOf = (item, source = DEFAULT_VALUE_SOURCE) => {
   return priced;
 };
 
+// Leaderboard awards cannot change hands in the game, so a trade post must not
+// offer or ask for one (2026-10-18; players asked to keep award scythes out of
+// the feed). The calculator still values them. An award is a row in an award
+// tier (MM2 'Gold Trophies' / 'Top 100 Trophies', Supreme '… Place Awards' /
+// 'Top N Awards') or a row Supreme classifies as an award by name — that also
+// catches MM2's Silver/Bronze/colour award weapons, which sit in 'TIER 1'.
+// Supreme's "untradable" counts only for a Supreme-only row: five tradable MM2
+// items (Cursed, Ghosts, Pumpkin, Tree, Camo) share a name with an untradable
+// effect.
+const AWARD_TIER = /Trophies|Place Awards|Top \d+ Awards/i;
+export const isTradeBlocked = (item) => {
+  if (!item) return false;
+  if (AWARD_TIER.test(String(item.tier ?? item.Tier ?? ''))) return true;
+  const { reason } = priceOf(item, VALUE_SOURCE.SUPREME);
+  if (reason === UNPRICED_REASON.AWARD) return true;
+  return reason === UNPRICED_REASON.UNTRADABLE && item.inMM2 === false;
+};
+
 /**
  * Totals for one side of the calculator.
  *

@@ -293,7 +293,9 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
               return;
             }
 
-            // 1. Delete chat metadata for the current user
+            // Delete chat metadata for the current user only. The thread in
+            // private_messages and the partner's inbox row stay, so the other
+            // player still sees the chat (same as Adopt Me and Blox).
             const senderChatRef = database().ref(`chat_meta_data/${user.id}/${otherUserId}`);
             const snapshot = await senderChatRef.once('value');
 
@@ -301,11 +303,7 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
               await senderChatRef.remove();
             }
 
-            // 2. Delete full chat thread using chatId
-            const fullChatRef = database().ref(`private_messages/${chatId}`);
-            await fullChatRef.remove();
-
-            // 3. Update local state - ✅ Validate setChats callback
+            // Update local state - ✅ Validate setChats callback
             setLocalChats((prevChats) => {
               if (!Array.isArray(prevChats)) return [];
               return prevChats.filter((chat) => chat?.chatId !== chatId);

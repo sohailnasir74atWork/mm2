@@ -378,7 +378,9 @@ export const seedCurrentUser = async (user, localState, db) => {
     robloxUsernameVerified: !!user.robloxUsernameVerified,
     hasRecentGameWin: !!user.hasRecentGameWin || (user.lastGameWinAt && Date.now() - user.lastGameWinAt <= 24 * 60 * 60 * 1000) || false,
     lastGameWinAt: user.lastGameWinAt || null,
-    isAdmin: !!user.isAdmin,
+    // RTDB stores the owner flag as `admin` (see the record mapping above);
+    // reading only isAdmin seeded false and hid your own admin badge.
+    isAdmin: !!user.admin || !!user.isAdmin,
     isModerator: !!user.isModerator,
     isBabyMod: !!user.isBabyMod,
     isTrusted: !!user.isTrusted,

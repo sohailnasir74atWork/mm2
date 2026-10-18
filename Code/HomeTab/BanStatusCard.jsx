@@ -22,12 +22,13 @@
  * so it adds no database traffic.
  */
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 import { useGlobalState } from '../GlobelStats';
 import { serverNowMs } from '../Helper/serverTime';
 import { SCREEN_GUTTER } from '../Helper/layout';
+import { openReportForm } from '../Reports/openReportForm';
 
 const RED = '#EF4444';
 const FONT_BOLD = 'Lato-Bold';
@@ -135,6 +136,19 @@ export default function BanStatusCard() {
           <Text style={[$.body, { color: bodyColor }]}>{reason}</Text>
         </View>
       )}
+
+      {/* Appeal (bans only): opens More ▸ Complaints & ideas with "Ban appeal"
+          picked (2026-10-18; players had no way to appeal and filed appeals
+          under any category). */}
+      {!isMute && (
+        <View style={[$.appealRow, dark ? $.appealRowDark : $.appealRowLight]}>
+          <Text style={[$.appealQuestion, dark ? $.appealQuestionDark : $.appealQuestionLight]}>{t('home.ban_appeal_question')}</Text>
+          <TouchableOpacity onPress={() => openReportForm({ category: 'ban_appeal' })} activeOpacity={0.85} style={$.appealBtn}>
+            <Text style={$.appealBtnText}>{t('home.ban_appeal_button')}</Text>
+            <FontAwesome name="chevron-right" size={10} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -154,4 +168,15 @@ const $ = StyleSheet.create({
   section: { paddingHorizontal: 16, paddingVertical: 12 },
   label: { fontSize: 10, fontFamily: FONT_BOLD, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 },
   body: { fontSize: 13, fontFamily: FONT_REGULAR, lineHeight: 18 },
+  appealRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+    paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  appealRowLight: { borderTopColor: '#FCE4E4' },
+  appealRowDark: { borderTopColor: 'rgba(255,255,255,0.06)' },
+  appealQuestion: { flex: 1, fontSize: 12.5, fontFamily: FONT_REGULAR },
+  appealQuestionLight: { color: '#6B7280' },
+  appealQuestionDark: { color: '#bbb' },
+  appealBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#7C3AED', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
+  appealBtnText: { color: '#fff', fontSize: 12.5, fontFamily: FONT_BOLD },
 });

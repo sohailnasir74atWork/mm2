@@ -144,6 +144,10 @@
     "roblox_check_failed": "Der Benutzername konnte nicht geprüft werden. Versuch es noch mal.",
     "roblox_code_not_found": "Der Bestätigungscode steht nicht in deiner Roblox-Profilbeschreibung.",
     "roblox_verify_failed": "Verifizierung fehlgeschlagen. Versuch es noch mal.",
+    "roblox_busy": "Roblox ist gerade ausgelastet. Warte eine Minute und tippe dann noch mal auf Verifizieren.",
+    "roblox_copy_code": "Code kopieren",
+    "roblox_code_copied_title": "Code kopiert",
+    "roblox_code_copied": "{{code}} ist kopiert. Füge ihn bei „Über mich“ in deinem Roblox-Profil ein, speichere, komm zurück und tippe noch mal auf Verifizieren.",
     "login_first": "Bitte melde dich zuerst an.",
     "roblox_enter_username": "Bitte gib einen Roblox-Benutzernamen ein.",
     "roblox_invalid_username": "Ungültiger Benutzername",
@@ -235,7 +239,8 @@
       "sign_in_required": "Melde dich an, um einen Trade zu posten.",
       "missing_items_error": "Leg auf beiden Seiten mindestens ein Item rein.",
       "values_reloaded": "Werte aktualisiert!",
-      "reload_error": "Neu laden fehlgeschlagen"
+      "reload_error": "Neu laden fehlgeschlagen",
+      "awards_not_tradable": "Bestenlisten-Belohnungen und nicht handelbare Items können nicht getauscht werden. Entferne: {{items}}"
     },
     "my_inventory": "Mein Inventar",
     "add_to_inventory": "Gegenstände zum Inventar hinzufügen",
@@ -308,7 +313,9 @@
     "ban_why_title": "Warum sehe ich das?",
     "ban_device_linked_email": "Ein anderer Account auf diesem Gerät ({{email}}) wurde gesperrt. Deshalb ist das Gerät eingeschränkt, bis diese Sperre endet. Mit einem anderen Account anzumelden, hebt das nicht auf.",
     "ban_device_linked": "Ein anderer Account auf diesem Gerät wurde gesperrt. Deshalb ist das Gerät eingeschränkt, bis diese Sperre endet. Mit einem anderen Account anzumelden, hebt das nicht auf.",
-    "ban_reason_title": "Grund"
+    "ban_reason_title": "Grund",
+    "ban_appeal_question": "Denkst du, das ist ein Fehler?",
+    "ban_appeal_button": "Einspruch senden"
   },
   "value": {
     "title": "Wert-Bildschirm",
@@ -629,7 +636,9 @@
     "translations_remaining_other": "{{count}} übrig",
     "unable_open_link": "Der Link lässt sich nicht öffnen.",
     "user_blocked_name": "{{name}} wurde blockiert.",
-    "user_unblocked_name": "{{name}} ist nicht mehr blockiert."
+    "user_unblocked_name": "{{name}} ist nicht mehr blockiert.",
+    "translate_tip_long": "Tipp: Halte eine Nachricht gedrückt, um sie zu übersetzen.",
+    "translate_tip_tap": "Tipp: Tippe auf eine Nachricht, um sie zu übersetzen."
   },
   "first": {
     "try_values": "Probier den Werte-Rechner aus",
@@ -1003,7 +1012,8 @@
     "they_disabled_trade_chat": "Diese Person hat den Trade-Chat ausgeschaltet. Du kannst ihr nicht über einen Trade schreiben.",
     "trade_safe_strip": "Sicher traden · Zu gut = Betrug · Nie Login teilen",
     "you_disabled_chat": "Du hast den Chat ausgeschaltet. In den Einstellungen kannst du ihn wieder einschalten.",
-    "you_disabled_trade_chat": "Du hast den Trade-Chat ausgeschaltet. In den Einstellungen kannst du ihn wieder einschalten."
+    "you_disabled_trade_chat": "Du hast den Trade-Chat ausgeschaltet. In den Einstellungen kannst du ihn wieder einschalten.",
+    "report_review": "Bewertung melden"
   },
   "inbox": {
     "delete_failed": "Der Chat konnte nicht gelöscht werden. Bitte versuch es noch mal.",
@@ -1666,7 +1676,8 @@
       "moderation": "Moderation",
       "scam": "Betrug oder Trade",
       "bug": "Problem mit der App",
-      "other": "Etwas anderes"
+      "other": "Etwas anderes",
+      "ban_appeal": "Einspruch gegen Sperre"
     },
     "details": "Details",
     "placeholder_complaint": "Erzähl, was passiert ist. Nutzernamen, Daten und Screenshots helfen sehr.",
@@ -1687,7 +1698,10 @@
     "sign_in": "Melde dich an, um eine Beschwerde oder Idee zu senden.",
     "mine_title": "Deine Meldungen",
     "status_open": "Erhalten",
-    "status_done": "Geprüft"
+    "status_done": "Geprüft",
+    "placeholder_ban_appeal": "Erzähl, was passiert ist und warum du die Sperre für einen Fehler hältst. Screenshots helfen.",
+    "placeholder_false_review": "Warum ist diese Bewertung falsch? Screenshots von eurem Chat helfen.",
+    "reported_review": "Bewertung, die du meldest"
   },
   "reward_center": {
     "close": "Schließen"

@@ -99,8 +99,8 @@ android {
         applicationId "com.mm2tradesvalues"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 44
-        versionName "1.6.0"
+        versionCode 45
+        versionName "1.6.1"
    ndk {
             // x86_64 is required, not optional: without it SoLoader on an
             // x86_64 device (PC emulators, Google Play Games on PC, Chromebooks,
@@ -170,6 +170,7 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    implementation("androidx.collection:collection:1.4.4")
 
 
     if (hermesEnabled.toBoolean()) {

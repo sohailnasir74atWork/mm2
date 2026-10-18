@@ -23,6 +23,7 @@ import { useGlobalState } from '../../GlobelStats';
 import { useLocalState } from '../../LocalGlobelStats';
 import { FRUIT_KEYWORDS } from '../../Helper/filter';
 import { getDeviceLanguage } from '../../../i18n';
+import { hideTranslateTip } from '../TranslateTip';
 
 export const useGroupMessageTranslation = () => {
   const { t } = useTranslation();
@@ -77,6 +78,7 @@ export const useGroupMessageTranslation = () => {
         Alert.alert(t('chat.error'), t('private_chat.invalid_translate'));
         return;
       }
+      hideTranslateTip(); // they found Translate: the one-time tip is done
       const isUnlimited = freeTranslation || localState?.isPro;
 
       if (!isUnlimited && typeof canTranslate === 'function' && !canTranslate()) {

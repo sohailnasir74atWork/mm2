@@ -124,6 +124,10 @@
     "roblox_check_failed": "No se ha podido comprobar ese usuario. Inténtalo de nuevo.",
     "roblox_code_not_found": "El código de verificación no está en la descripción de tu perfil de Roblox.",
     "roblox_verify_failed": "No se ha podido verificar. Inténtalo de nuevo.",
+    "roblox_busy": "Roblox está ocupado ahora mismo. Espera un minuto y vuelve a tocar Verificar.",
+    "roblox_copy_code": "Copiar código",
+    "roblox_code_copied_title": "Código copiado",
+    "roblox_code_copied": "{{code}} está copiado. Pégalo en «Acerca de» de tu perfil de Roblox, guarda, vuelve y toca Verificar otra vez.",
     "login_first": "Primero inicia sesión.",
     "roblox_enter_username": "Escribe un usuario de Roblox.",
     "roblox_invalid_username": "Usuario no válido",
@@ -194,7 +198,8 @@
       "sign_in_required": "Para crear un tradeo tienes que iniciar sesión.",
       "missing_items_error": "Añade al menos un objeto a cada lado del tradeo (YO y TÚ).",
       "values_reloaded": "¡Valores actualizados!",
-      "reload_error": "No se ha podido actualizar"
+      "reload_error": "No se ha podido actualizar",
+      "awards_not_tradable": "Los premios de clasificación y los objetos no intercambiables no se pueden tradear. Quita: {{items}}"
     },
     "my_inventory": "Mi inventario",
     "fair": "JUSTO",
@@ -258,7 +263,9 @@
     "ban_why_title": "¿Por qué me sale esto?",
     "ban_device_linked_email": "Se ha baneado otra cuenta de este dispositivo ({{email}}), así que el dispositivo está restringido hasta que acabe ese baneo. Aunque entres con otra cuenta, sigue restringido.",
     "ban_device_linked": "Se ha baneado otra cuenta de este dispositivo, así que el dispositivo está restringido hasta que acabe ese baneo. Aunque entres con otra cuenta, sigue restringido.",
-    "ban_reason_title": "Motivo"
+    "ban_reason_title": "Motivo",
+    "ban_appeal_question": "¿Crees que es un error?",
+    "ban_appeal_button": "Enviar una apelación"
   },
   "value": {
     "search_placeholder": "Buscar",
@@ -517,7 +524,9 @@
     "translations_remaining_other": "quedan {{count}}",
     "unable_open_link": "No se ha podido abrir el enlace.",
     "user_blocked_name": "Has bloqueado a {{name}}.",
-    "user_unblocked_name": "Has desbloqueado a {{name}}."
+    "user_unblocked_name": "Has desbloqueado a {{name}}.",
+    "translate_tip_long": "Consejo: mantén pulsado cualquier mensaje para traducirlo.",
+    "translate_tip_tap": "Consejo: toca cualquier mensaje para traducirlo."
   },
   "first": {
     "try_values": "Prueba la calculadora de valores",
@@ -843,7 +852,8 @@
     "they_disabled_trade_chat": "Este usuario tiene desactivado el chat de tradeos. No puedes escribirle desde un tradeo.",
     "trade_safe_strip": "Tradea seguro · Demasiado chollo = estafa · Nunca compartas tu cuenta",
     "you_disabled_chat": "Tienes el chat desactivado. Vuelve a activarlo en Ajustes.",
-    "you_disabled_trade_chat": "Tienes el chat de tradeos desactivado. Vuelve a activarlo en Ajustes."
+    "you_disabled_trade_chat": "Tienes el chat de tradeos desactivado. Vuelve a activarlo en Ajustes.",
+    "report_review": "Denunciar reseña"
   },
   "inbox": {
     "delete_failed": "No se ha podido eliminar el chat. Inténtalo de nuevo.",
@@ -1525,7 +1535,8 @@
       "moderation": "Moderación",
       "scam": "Estafa o trade",
       "bug": "Problema con la app",
-      "other": "Otra cosa"
+      "other": "Otra cosa",
+      "ban_appeal": "Apelación de baneo"
     },
     "details": "Detalles",
     "placeholder_complaint": "Cuéntanos qué ha pasado. Los nombres de usuario, las fechas y las capturas ayudan mucho.",
@@ -1546,7 +1557,10 @@
     "sign_in": "Inicia sesión para enviar una queja o una idea.",
     "mine_title": "Tus avisos",
     "status_open": "Recibido",
-    "status_done": "Revisado"
+    "status_done": "Revisado",
+    "placeholder_ban_appeal": "Cuéntanos qué ha pasado y por qué crees que el baneo es un error. Las capturas ayudan.",
+    "placeholder_false_review": "¿Por qué esta reseña es falsa? Las capturas de vuestro chat ayudan.",
+    "reported_review": "Reseña que estás denunciando"
   },
   "news": {
     "updated_on": "Actualizado el {{date}}",

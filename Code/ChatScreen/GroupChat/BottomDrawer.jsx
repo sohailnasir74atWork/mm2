@@ -28,6 +28,7 @@ import { useHaptic } from '../../Helper/HepticFeedBack';
 import SwipeableBottomDrawer from '../../Helper/SwipeableBottomDrawer';
 import { useModalWindowInsets } from '../../Helper/useNavBarInset';
 import ProfileReviewsSection from './ProfileReviewsSection';
+import { openReportForm, reviewForReport } from '../../Reports/openReportForm';
 import ProfileTradesSection from './ProfileTradesSection';
 import ProfilePostsSection from './ProfilePostsSection';
 import CompactPortfolio from './CompactPortfolio';
@@ -181,6 +182,14 @@ const ProfileBottomDrawer = ({
   const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
 
   const selectedUserId = selectedUser?.senderId || selectedUser?.id || null;
+
+  // A review's flag: close the drawer, then open Complaints & ideas with the
+  // review attached (Reports/openReportForm).
+  const reportReview = useCallback((rev) => {
+    const payload = reviewForReport(rev, selectedUserId);
+    toggleModal?.();
+    setTimeout(() => openReportForm({ category: 'false_review', review: payload }), 300);
+  }, [toggleModal, selectedUserId]);
 
   // Staff = admin, moderator or Junior Mod. Declared up here because the
   // profile fetch below uses it: only staff look up another user's email.
@@ -2211,6 +2220,8 @@ const ProfileBottomDrawer = ({
                     formatCreatedAt={formatCreatedAt}
                     starFilter={starFilter}
                     setStarFilter={setStarFilter}
+                    onReportReview={user?.id ? reportReview : null}
+                    viewerId={user?.id || null}
                   />
                 </View>
               )}

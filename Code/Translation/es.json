@@ -144,6 +144,10 @@
     "roblox_check_failed": "No se pudo revisar ese usuario. Intenta de nuevo.",
     "roblox_code_not_found": "El código de verificación no está en la descripción de tu perfil de Roblox.",
     "roblox_verify_failed": "No se pudo verificar. Intenta de nuevo.",
+    "roblox_busy": "Roblox está ocupado ahora mismo. Espera un minuto y vuelve a tocar Verificar.",
+    "roblox_copy_code": "Copiar código",
+    "roblox_code_copied_title": "Código copiado",
+    "roblox_code_copied": "{{code}} está copiado. Pégalo en «Acerca de» de tu perfil de Roblox, guarda, vuelve y toca Verificar otra vez.",
     "login_first": "Primero inicia sesión.",
     "roblox_enter_username": "Escribe un usuario de Roblox.",
     "roblox_invalid_username": "Usuario no válido",
@@ -237,7 +241,8 @@
       "sign_in_required": "Para crear un tradeo, inicia sesión.",
       "missing_items_error": "Agrega al menos un objeto de cada lado del tradeo.",
       "values_reloaded": "¡Valores actualizados!",
-      "reload_error": "No se pudo actualizar"
+      "reload_error": "No se pudo actualizar",
+      "awards_not_tradable": "Los premios de clasificación y los objetos no intercambiables no se pueden tradear. Quita: {{items}}"
     },
     "my_inventory": "Mi inventario",
     "add_to_inventory": "Agregar elementos al inventario",
@@ -309,7 +314,9 @@
     "ban_why_title": "¿Por qué veo esto?",
     "ban_device_linked_email": "Otra cuenta de este dispositivo ({{email}}) fue baneada, así que el dispositivo queda restringido hasta que termine ese baneo. Entrar con otra cuenta no lo quita.",
     "ban_device_linked": "Otra cuenta de este dispositivo fue baneada, así que el dispositivo queda restringido hasta que termine ese baneo. Entrar con otra cuenta no lo quita.",
-    "ban_reason_title": "Motivo"
+    "ban_reason_title": "Motivo",
+    "ban_appeal_question": "¿Crees que es un error?",
+    "ban_appeal_button": "Enviar una apelación"
   },
   "value": {
     "title": "Pantalla de Valor",
@@ -638,7 +645,9 @@
     "translations_remaining_other": "te quedan {{count}}",
     "unable_open_link": "No se pudo abrir el enlace.",
     "user_blocked_name": "Bloqueaste a {{name}}.",
-    "user_unblocked_name": "Desbloqueaste a {{name}}."
+    "user_unblocked_name": "Desbloqueaste a {{name}}.",
+    "translate_tip_long": "Consejo: mantén pulsado cualquier mensaje para traducirlo.",
+    "translate_tip_tap": "Consejo: toca cualquier mensaje para traducirlo."
   },
   "first": {
     "try_values": "Prueba la calculadora de valores",
@@ -1015,7 +1024,8 @@
     "they_disabled_trade_chat": "Este usuario desactivó el chat de tradeos. No puedes escribirle desde un tradeo.",
     "trade_safe_strip": "Tradea seguro · Muy bueno = estafa · Nunca compartas tu contraseña",
     "you_disabled_chat": "Desactivaste el chat. Vuelve a activarlo en Ajustes.",
-    "you_disabled_trade_chat": "Desactivaste el chat de tradeos. Vuelve a activarlo en Ajustes."
+    "you_disabled_trade_chat": "Desactivaste el chat de tradeos. Vuelve a activarlo en Ajustes.",
+    "report_review": "Denunciar reseña"
   },
   "inbox": {
     "delete_failed": "No se pudo eliminar el chat. Intenta de nuevo.",
@@ -1697,7 +1707,8 @@
       "moderation": "Moderación",
       "scam": "Estafa o trade",
       "bug": "Problema con la app",
-      "other": "Otra cosa"
+      "other": "Otra cosa",
+      "ban_appeal": "Apelación de baneo"
     },
     "details": "Detalles",
     "placeholder_complaint": "Cuéntanos qué pasó. Los nombres de usuario, las fechas y las capturas de pantalla ayudan mucho.",
@@ -1718,7 +1729,10 @@
     "sign_in": "Inicia sesión para enviar una queja o una idea.",
     "mine_title": "Tus reportes",
     "status_open": "Recibido",
-    "status_done": "Revisado"
+    "status_done": "Revisado",
+    "placeholder_ban_appeal": "Cuéntanos qué pasó y por qué crees que el baneo es un error. Las capturas ayudan.",
+    "placeholder_false_review": "¿Por qué esta reseña es falsa? Las capturas de tu chat ayudan.",
+    "reported_review": "Reseña que estás denunciando"
   },
   "reward_center": {
     "close": "Cerrar"

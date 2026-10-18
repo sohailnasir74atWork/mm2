@@ -124,6 +124,10 @@
     "roblox_check_failed": "ユーザー名を確認できませんでした。もう一度お試しください。",
     "roblox_code_not_found": "Robloxのプロフィール説明に認証コードが見つかりません。",
     "roblox_verify_failed": "認証できませんでした。もう一度お試しください。",
+    "roblox_busy": "Robloxが混み合っています。1分待ってから、もう一度「認証」をタップしてください。",
+    "roblox_copy_code": "コードをコピー",
+    "roblox_code_copied_title": "コードをコピーしました",
+    "roblox_code_copied": "{{code}}をコピーしました。Robloxプロフィールの自己紹介に貼り付けて保存し、戻ってもう一度「認証」をタップしてください。",
     "login_first": "先にログインしてください。",
     "roblox_enter_username": "Robloxのユーザー名を入力してください。",
     "roblox_invalid_username": "無効なユーザー名です",
@@ -190,7 +194,8 @@
       "sign_in_required": "トレードを作成するにはログインが必要です。",
       "missing_items_error": "「自分」と「相手」の両方に、アイテムを1つ以上追加してください。",
       "values_reloaded": "価値を更新しました！",
-      "reload_error": "更新できませんでした"
+      "reload_error": "更新できませんでした",
+      "awards_not_tradable": "リーダーボードの報酬と取引できないアイテムはトレードに出せないよ。外してね：{{items}}"
     },
     "my_inventory": "所持アイテム",
     "fair": "フェア",
@@ -254,7 +259,9 @@
     "ban_why_title": "なぜこの表示が出ているの？",
     "ban_device_linked_email": "この端末で使われた別のアカウント（{{email}}）がBANされたため、そのBANが終わるまでこの端末は制限されます。別のアカウントでログインしても解除されません。",
     "ban_device_linked": "この端末で使われた別のアカウントがBANされたため、そのBANが終わるまでこの端末は制限されます。別のアカウントでログインしても解除されません。",
-    "ban_reason_title": "理由"
+    "ban_reason_title": "理由",
+    "ban_appeal_question": "まちがいだと思う？",
+    "ban_appeal_button": "異議を申し立てる"
   },
   "value": {
     "search_placeholder": "検索",
@@ -501,7 +508,9 @@
     "translations_remaining_other": "残り{{count}}回",
     "unable_open_link": "リンクを開けませんでした。",
     "user_blocked_name": "{{name}}さんをブロックしました。",
-    "user_unblocked_name": "{{name}}さんのブロックを解除しました。"
+    "user_unblocked_name": "{{name}}さんのブロックを解除しました。",
+    "translate_tip_long": "ヒント：メッセージを長押しすると翻訳できるよ。",
+    "translate_tip_tap": "ヒント：メッセージをタップすると翻訳できるよ。"
   },
   "first": {
     "try_values": "価値計算機を使ってみる",
@@ -823,7 +832,8 @@
     "they_disabled_trade_chat": "このユーザーはトレードチャットをオフにしています。トレードからはメッセージを送れません。",
     "trade_safe_strip": "安全にトレード · うますぎる話は詐欺 · ログイン情報は教えない",
     "you_disabled_chat": "チャットがオフになっています。設定からオンに戻せます。",
-    "you_disabled_trade_chat": "トレードチャットがオフになっています。設定からオンに戻せます。"
+    "you_disabled_trade_chat": "トレードチャットがオフになっています。設定からオンに戻せます。",
+    "report_review": "レビューを通報"
   },
   "inbox": {
     "delete_failed": "チャットを削除できませんでした。もう一度お試しください。",
@@ -1471,7 +1481,8 @@
       "moderation": "モデレーション",
       "scam": "詐欺・トレード",
       "bug": "アプリの不具合",
-      "other": "その他"
+      "other": "その他",
+      "ban_appeal": "BANへの異議"
     },
     "details": "詳しい内容",
     "placeholder_complaint": "何があったか書いてね。ユーザー名や日付、スクショがあるとすごく助かるよ。",
@@ -1492,7 +1503,10 @@
     "sign_in": "苦情やアイデアを送るにはログインしてね。",
     "mine_title": "送った内容",
     "status_open": "受付済み",
-    "status_done": "確認済み"
+    "status_done": "確認済み",
+    "placeholder_ban_appeal": "何があったか、なんでBANがまちがいだと思うか書いてね。スクショがあると助かるよ。",
+    "placeholder_false_review": "このレビューのどこがウソ？チャットのスクショがあると助かるよ。",
+    "reported_review": "通報するレビュー"
   },
   "news": {
     "updated_on": "{{date}}に更新",

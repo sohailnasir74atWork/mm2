@@ -36,6 +36,7 @@ import { banUserwithEmail, unbanUserWithEmail } from '../utils';
 import { getUserEmail } from '../../Helper/privateProfile';
 import { sourceLabelForItems } from '../../Helper/valueSources';
 import { getUserRoles, useRoleRosterVersion } from '../../Helper/roleRoster';
+import { hideTranslateTip } from '../TranslateTip';
 
 // Reply preview text for a quoted message. Module-level so the memoised row
 // can call it with its own `t`.
@@ -677,6 +678,7 @@ const MessagesList = ({
       Alert.alert(t('chat.error'), t('private_chat.invalid_translate'));
       return;
     }
+    hideTranslateTip(); // they found Translate: the one-time tip is done
     const isUnlimited = freeTranslation || localState.isPro;
 
     if (!isUnlimited && !canTranslate()) {

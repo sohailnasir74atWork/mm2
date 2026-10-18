@@ -147,6 +147,10 @@
     "roblox_check_failed": "Couldn't check that username. Please try again.",
     "roblox_code_not_found": "The verification code isn't in your Roblox profile description.",
     "roblox_verify_failed": "Couldn't verify. Please try again.",
+    "roblox_busy": "Roblox is busy right now. Wait a minute, then tap Verify again.",
+    "roblox_copy_code": "Copy code",
+    "roblox_code_copied_title": "Code copied",
+    "roblox_code_copied": "{{code}} is copied. Paste it into your Roblox profile About, save, then come back and tap Verify again.",
     "login_first": "Please sign in first.",
     "roblox_enter_username": "Please enter a Roblox username.",
     "roblox_invalid_username": "Invalid username",
@@ -238,7 +242,8 @@
       "sign_in_required": "To create a trade, you need to sign in.",
       "missing_items_error": "Please add at least one item to both sides of the trade.",
       "values_reloaded": "Values updated!",
-      "reload_error": "Failed to refresh"
+      "reload_error": "Failed to refresh",
+      "awards_not_tradable": "Leaderboard awards and untradable items can't be traded. Remove: {{items}}"
     },
     "my_inventory": "My Inventory",
     "add_to_inventory": "Add Items to Inventory",
@@ -313,7 +318,9 @@
     "ban_why_title": "Why am I seeing this?",
     "ban_device_linked_email": "Another account on this device ({{email}}) was banned, so the device is restricted until that ban ends. Signing in with a different account doesn't lift it.",
     "ban_device_linked": "Another account on this device was banned, so the device is restricted until that ban ends. Signing in with a different account doesn't lift it.",
-    "ban_reason_title": "Reason"
+    "ban_reason_title": "Reason",
+    "ban_appeal_question": "Think this is a mistake?",
+    "ban_appeal_button": "Send an appeal"
   },
   "value": {
     "title": "Value Screen",
@@ -639,7 +646,9 @@
     "translations_remaining_other": "{{count}} remaining",
     "unable_open_link": "Unable to open the link.",
     "user_blocked_name": "{{name}} has been blocked.",
-    "user_unblocked_name": "{{name}} has been unblocked."
+    "user_unblocked_name": "{{name}} has been unblocked.",
+    "translate_tip_long": "Tip: long-press any message to translate it.",
+    "translate_tip_tap": "Tip: tap any message to translate it."
   },
   "first": {
     "continue_guest": "Continue as Guest",
@@ -1165,7 +1174,8 @@
     "they_disabled_trade_chat": "This user has turned off trade chat. You can't message them from a trade.",
     "trade_safe_strip": "Trade safe · Too good = scam · Never share login",
     "you_disabled_chat": "You've turned off chat. Turn it back on in Settings.",
-    "you_disabled_trade_chat": "You've turned off trade chat. Turn it back on in Settings."
+    "you_disabled_trade_chat": "You've turned off trade chat. Turn it back on in Settings.",
+    "report_review": "Report review"
   },
   "inbox": {
     "delete_failed": "Failed to delete chat. Please try again.",
@@ -1894,7 +1904,8 @@
       "moderation": "Moderation",
       "scam": "Scam or trade",
       "bug": "App problem",
-      "other": "Something else"
+      "other": "Something else",
+      "ban_appeal": "Ban appeal"
     },
     "details": "Details",
     "placeholder_complaint": "Tell us what happened. Usernames, dates and screenshots help a lot.",
@@ -1915,7 +1926,10 @@
     "sign_in": "Sign in to send a complaint or an idea.",
     "mine_title": "Your reports",
     "status_open": "Received",
-    "status_done": "Reviewed"
+    "status_done": "Reviewed",
+    "placeholder_ban_appeal": "Tell us what happened and why you think the ban is a mistake. Screenshots help.",
+    "placeholder_false_review": "Why is this review false? Screenshots of your chat help.",
+    "reported_review": "Review you're reporting"
   },
   "time": {
     "just_now": "Just now",

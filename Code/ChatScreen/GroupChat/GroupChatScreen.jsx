@@ -37,6 +37,7 @@ import GroupPinnedBar, { MAX_GROUP_PINS } from './GroupPinnedBar';
 import { useGroupMessageTranslation } from './useGroupMessageTranslation';
 import { setViewingGroup, clearViewingGroup } from '../../Helper/groupNotifications';
 import { useModalWindowInsets } from '../../Helper/useNavBarInset';
+import TranslateTip from '../TranslateTip';
 
 const INITIAL_PAGE_SIZE = 10; // ✅ Initial load: 10 messages
 const PAGE_SIZE = 10; // ✅ Pagination: load 10 messages per batch
@@ -1261,6 +1262,7 @@ const GroupChatScreen = () => {
             onJump={jumpToPin}
             onUnpin={handleUnpin}
           />
+          {messages.length > 0 && <TranslateTip gesture="long" />}
           {messages.length === 0 && !loading ? (
             // No messages yet - show empty state but keep input visible
             <View style={styles.emptyContainer}>

@@ -45,6 +45,15 @@ service cloud.firestore {
             && request.auth.token.get('email', '') in ['thesolanalabs@gmail.com', 'sohailnasir74business@gmail.com', 'sohailnasir74@gmail.com'])
       );
     }
+    // Admin only (not moderators): `admin` claim from syncStaffClaims, or a
+    // founder email.
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.get('admin', false) == true
+        || (request.auth.token.get('email_verified', false) == true
+            && request.auth.token.get('email', '') in ['thesolanalabs@gmail.com', 'sohailnasir74business@gmail.com', 'sohailnasir74@gmail.com'])
+      );
+    }
 
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
     // A per-user map field (likes.{uid}, reactions.{uid}, voters.{uid},
@@ -190,7 +199,9 @@ service cloud.firestore {
             && request.resource.data.toUserId != me()
             && docId == request.resource.data.toUserId + '_' + me())
       ) || isStaff();
-      allow delete: if isStaff()
+      // Admins only (owner decision 2026-10-18; moderators could before); a
+      // player may still delete their own review or profile copy.
+      allow delete: if isAdmin()
         || (signedIn() && (docId == me() || resource.data.get('fromUserId', null) == me()));
     }
 

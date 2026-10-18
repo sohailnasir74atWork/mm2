@@ -11,7 +11,7 @@ import config from '../Helper/Environment';
 import {
   resolveItemImage, summarizeItems, buildItemPool, unwrapFeed, newestGeneratedAt,
   priceOf, displayValueText, isSummable, VALUE_SOURCE, DEFAULT_VALUE_SOURCE,
-  categoryKey,
+  categoryKey, isTradeBlocked,
 } from '../Helper/valueSources';
 import ConditionalKeyboardWrapper from '../Helper/keyboardAvoidingContainer';
 import useNavBarInset, { useModalWindowInsets } from '../Helper/useNavBarInset';
@@ -805,6 +805,16 @@ const HomeScreen = ({ selectedTheme }) => {
 
       if (hasItemsCount === 0 && wantsItemsCount === 0) {
         showErrorMessage(t("home.alert.error"), t("home.alert.missing_items_error"));
+        return;
+      }
+
+      // Leaderboard awards can't be traded in the game: name them and stop
+      // before the post sheet opens (the calculator itself still values them).
+      const blocked = [...new Set([...hasItems, ...wantsItems]
+        .filter((it) => it && isTradeBlocked(it))
+        .map((it) => it.name || it.Name))];
+      if (blocked.length) {
+        showErrorMessage(t("home.alert.error"), t("home.alert.awards_not_tradable", { items: blocked.join(', ') }));
         return;
       }
 

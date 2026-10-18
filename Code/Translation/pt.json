@@ -145,6 +145,10 @@
     "roblox_check_failed": "Não deu para checar esse usuário. Tente de novo.",
     "roblox_code_not_found": "O código de verificação não está na descrição do seu perfil do Roblox.",
     "roblox_verify_failed": "Não deu para verificar. Tente de novo.",
+    "roblox_busy": "O Roblox está ocupado agora. Espere um minuto e toque em Verificar de novo.",
+    "roblox_copy_code": "Copiar código",
+    "roblox_code_copied_title": "Código copiado",
+    "roblox_code_copied": "{{code}} foi copiado. Cole na seção Sobre do seu perfil do Roblox, salve, volte e toque em Verificar de novo.",
     "login_first": "Entre na sua conta primeiro.",
     "roblox_enter_username": "Digite um usuário do Roblox.",
     "roblox_invalid_username": "Usuário inválido",
@@ -238,7 +242,8 @@
       "sign_in_required": "Para criar uma troca, você precisa fazer login.",
       "missing_items_error": "Adicione pelo menos um item em ambas as seções 'Você' e 'Eles'.",
       "values_reloaded": "Valores atualizados!",
-      "reload_error": "Falha ao atualizar"
+      "reload_error": "Falha ao atualizar",
+      "awards_not_tradable": "Prêmios do ranking e itens não trocáveis não podem ser trocados. Remova: {{items}}"
     },
     "my_inventory": "Meu inventário",
     "fair": "JUSTO",
@@ -300,7 +305,9 @@
     "ban_why_title": "Por que estou vendo isso?",
     "ban_device_linked_email": "Outra conta neste aparelho ({{email}}) foi banida, então o aparelho fica bloqueado até esse ban acabar. Entrar com outra conta não resolve.",
     "ban_device_linked": "Outra conta neste aparelho foi banida, então o aparelho fica bloqueado até esse ban acabar. Entrar com outra conta não resolve.",
-    "ban_reason_title": "Motivo"
+    "ban_reason_title": "Motivo",
+    "ban_appeal_question": "Acha que isso é um engano?",
+    "ban_appeal_button": "Enviar um recurso"
   },
   "value": {
     "title": "Tela de Valor",
@@ -622,7 +629,9 @@
     "translations_remaining_other": "{{count}} restantes",
     "unable_open_link": "Não deu para abrir o link.",
     "user_blocked_name": "{{name}} foi bloqueado.",
-    "user_unblocked_name": "{{name}} foi desbloqueado."
+    "user_unblocked_name": "{{name}} foi desbloqueado.",
+    "translate_tip_long": "Dica: toque e segure qualquer mensagem para traduzi-la.",
+    "translate_tip_tap": "Dica: toque em qualquer mensagem para traduzi-la."
   },
   "first": {
     "welcome_title": "Bem-vindo ao Fruit Values",
@@ -1152,7 +1161,8 @@
     "they_disabled_trade_chat": "Este usuário desligou o chat de trocas. Você não pode mandar mensagem a partir de uma troca.",
     "trade_safe_strip": "Troque com segurança · Bom demais = golpe · Nunca passe seu login",
     "you_disabled_chat": "Você desligou o chat. Ligue de novo nas Configurações.",
-    "you_disabled_trade_chat": "Você desligou o chat de trocas. Ligue de novo nas Configurações."
+    "you_disabled_trade_chat": "Você desligou o chat de trocas. Ligue de novo nas Configurações.",
+    "report_review": "Denunciar avaliação"
   },
   "inbox": {
     "delete_failed": "Falha ao excluir o chat. Tente de novo.",
@@ -1561,7 +1571,8 @@
       "moderation": "Moderação",
       "scam": "Golpe ou troca",
       "bug": "Problema no app",
-      "other": "Outra coisa"
+      "other": "Outra coisa",
+      "ban_appeal": "Recurso de banimento"
     },
     "details": "Detalhes",
     "placeholder_complaint": "Conte o que aconteceu. Nomes de usuário, datas e prints ajudam muito.",
@@ -1582,7 +1593,10 @@
     "sign_in": "Entre para enviar uma reclamação ou ideia.",
     "mine_title": "Seus envios",
     "status_open": "Recebido",
-    "status_done": "Analisado"
+    "status_done": "Analisado",
+    "placeholder_ban_appeal": "Conte o que aconteceu e por que você acha que o banimento foi um engano. Prints ajudam.",
+    "placeholder_false_review": "Por que esta avaliação é falsa? Prints da conversa ajudam.",
+    "reported_review": "Avaliação que você está denunciando"
   },
   "time": {
     "just_now": "Agora mesmo",

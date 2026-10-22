@@ -50,6 +50,19 @@ const PROFILE_READ_TIMEOUT_MS = 10000;
 const PROFILE_RELOAD_TIMEOUT_MS = 20000;
 const PROFILE_RELOAD_DELAYS = [2000, 8000, 20000, 45000, 90000];
 
+// The profile's "Joined" date: when the Firebase Auth account was created,
+// not when this login ran. Stamping Date.now() gave every account whose record
+// was recreated the date of a later login (21,683 Adopt Me users corrected
+// 2026-10-21). In @react-native-firebase 25 metadata.creationTime is an ISO
+// string and the getter throws when absent.
+const authCreatedAtMs = (authUser) => {
+  try {
+    const ms = Date.parse(authUser?.metadata?.creationTime);
+    if (Number.isFinite(ms) && ms > 0) return ms;
+  } catch (_) {}
+  return Date.now();
+};
+
 // Grace before signing out an unverified email/password user (see the auth
 // listener). Long enough for SigninDrawer to send the verification email and
 // sign out by itself.
@@ -392,7 +405,7 @@ export const GlobalStateProvider = ({ children }) => {
         userData = {
           ...existing,
           id: userId,
-          createdAt: existing.createdAt || Date.now()   // fallback if missing (local only, never written)
+          createdAt: existing.createdAt || authCreatedAtMs(loggedInUser)   // fallback if missing (local only, never written)
         };
 
         // 🛡️ Fix: If displayName is empty/falsy, regenerate one and save it.
@@ -409,7 +422,7 @@ export const GlobalStateProvider = ({ children }) => {
         // 🆕 NEW USER → Set createdAt once
         userData = {
           ...createNewUser(userId, loggedInUser, robloxUsernameRef?.current),
-          createdAt: Date.now()
+          createdAt: authCreatedAtMs(loggedInUser)
         };
 
         // update() instead of set(): identical for a genuinely new node, but

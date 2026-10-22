@@ -28,6 +28,7 @@ import BannerAdComponent from '../Ads/bannerAds';
 import Share from 'react-native-share';
 import ShareTradeModal from '../Trades/ShareTradeModal';
 import TradeCompletion from '../Engagement/TradeCompletion';
+import { maybeAskForReview } from '../AppHelper/reviewPrompt';
 import { addDoc, collection, serverTimestamp, doc, getDoc, setDoc } from '@react-native-firebase/firestore';
 import SubscriptionScreen from '../SettingScreen/OfferWall';
 import { SCREEN_GUTTER } from '../Helper/layout';
@@ -265,6 +266,14 @@ const HomeScreen = ({ selectedTheme }) => {
     getTradeStatus(hasTotal, wantsTotal)
     , [hasTotal, wantsTotal]);
 
+  // Store review: a Win/Fair result with both sides filled, left unchanged
+  // for 3 s, counts as one finished check (the 5th in a session may ask).
+  useEffect(() => {
+    if (tradeStatus === 'lose' || !(hasTotal > 0 && wantsTotal > 0)) return undefined;
+    const id = setTimeout(() => maybeAskForReview('calculator'), 3000);
+    return () => clearTimeout(id);
+  }, [tradeStatus, hasTotal, wantsTotal]);
+
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -477,6 +486,7 @@ const HomeScreen = ({ selectedTheme }) => {
 
     updateLocalState('favorites', newFavorites);
     triggerHapticFeedback('impactLight');
+    if (!isFavorite) maybeAskForReview('collection');
   }, [localState.favorites, updateLocalState, triggerHapticFeedback]);
 
   // ✅ MM2: Simplified filteredData (no value types/modifiers needed)

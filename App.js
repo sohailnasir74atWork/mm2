@@ -40,8 +40,8 @@ import { getTrackingStatus, requestTrackingPermission } from 'react-native-track
 import {
   MyDarkTheme,
   MyLightTheme,
-  requestReview,
 } from './Code/AppHelper/AppHelperFunction';
+import { noteReviewActiveDay } from './Code/AppHelper/reviewPrompt';
 import getAdUnitId from './Code/Ads/ads';
 import OnboardingScreen from './Code/AppHelper/OnBoardingScreen';
 import { useTranslation } from 'react-i18next';
@@ -105,17 +105,15 @@ function App() {
     return isDark ? MyDarkTheme : MyLightTheme;
   }, [isDark]);
 
-  const { localState, updateLocalState } = useLocalState();
+  const { updateLocalState } = useLocalState();
   const [chatFocused, setChatFocused] = useState(true);
   const [modalVisibleChatinfo, setModalVisibleChatinfo] = useState(false);
 
   // ✅ Moved before conditional return to satisfy Rules of Hooks
+  // Store review: count active days here; the prompt itself is asked at
+  // success moments (Code/AppHelper/reviewPrompt.js), never at launch.
   useEffect(() => {
-    const { reviewCount } = localState;
-    if (reviewCount % 6 === 0 && reviewCount > 0) {
-      requestReview();
-    }
-    updateLocalState('reviewCount', Number(reviewCount) + 1);
+    noteReviewActiveDay();
   }, []);
 
 

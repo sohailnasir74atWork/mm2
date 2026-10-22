@@ -44,6 +44,7 @@ import {
   buildItemPool, unwrapFeed, priceOf, resolveItemImage, DEFAULT_VALUE_SOURCE,
 } from '../Helper/valueSources';
 import ScreenBottomBanner from '../Ads/ScreenBottomBanner';
+import { maybeAskForReview } from '../AppHelper/reviewPrompt';
 import SignInDrawer from '../Firebase/SigninDrawer';
 import ProfileBottomDrawer from '../ChatScreen/GroupChat/BottomDrawer';
 import { MyDarkTheme, MyLightTheme } from '../AppHelper/AppHelperFunction';
@@ -455,6 +456,7 @@ export default function TradeMatchScreen() {
         name: got.name || got.Name,
         image: catalog.get(dreamKey)?.image || got.imageUrl || null,
       });
+      maybeAskForReview('wishlist_got_it');
     } catch (e) {
       console.warn('[TradeMatch] got-it failed:', e?.message);
       showErrorMessage(t('home.alert.error'), t('trade_match.error_save'));

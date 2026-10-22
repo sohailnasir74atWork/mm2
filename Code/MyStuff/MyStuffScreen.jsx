@@ -20,6 +20,7 @@ import {
   buildItemPool, unwrapFeed, priceOf, isSummable, DEFAULT_VALUE_SOURCE, categoryKey,
 } from '../Helper/valueSources';
 import config from '../Helper/Environment';
+import { maybeAskForReview } from '../AppHelper/reviewPrompt';
 import PetModal from '../ChatScreen/PrivateChat/PetsModel';
 import SignInDrawer from '../Firebase/SigninDrawer';
 import { useTranslation } from 'react-i18next';
@@ -327,11 +328,14 @@ const MyStuffScreen = ({ selectedTheme }) => {
     syncValueAlertTopics(names);
   }, [ownedPets, wishlistPets]);
 
+  // Item count when the add modal opened; more on close = items were added.
+  const countAtModalOpenRef = useRef(0);
   const handleAddItems = useCallback((forOwned) => {
     if (!user?.id) { setSigninVisible(true); return; }
+    countAtModalOpenRef.current = ownedPets.length + wishlistPets.length;
     setPetModalOwned(forOwned);
     setPetModalVisible(true);
-  }, [user?.id]);
+  }, [user?.id, ownedPets.length, wishlistPets.length]);
 
   const removeOwnedPet = useCallback((index) => {
     const newOwned = ownedPets.filter((_, i) => i !== index);
@@ -1237,6 +1241,9 @@ const MyStuffScreen = ({ selectedTheme }) => {
         onClose={async () => {
           setPetModalVisible(false);
           await savePetsToReviews(ownedPets, wishlistPets);
+          if (ownedPets.length + wishlistPets.length > countAtModalOpenRef.current) {
+            maybeAskForReview('collection');
+          }
         }}
         visible={petModalVisible}
         owned={petModalOwned}

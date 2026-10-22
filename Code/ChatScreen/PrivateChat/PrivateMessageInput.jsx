@@ -158,6 +158,7 @@ const PrivateMessageInput = ({
     const textToSend = trimmedInput;
     const imagesToSend = Array.isArray(imageUris) && imageUris.length > 0 ? [...imageUris] : [];
     const fruitsToSend = Array.isArray(selectedFruits) ? [...selectedFruits] : [];
+    const replyToSend = replyTo || null;
 
     // clear UI
     setInput('');
@@ -193,7 +194,7 @@ const PrivateMessageInput = ({
       const imageUrlToSend = imageUrls.length === 1 ? imageUrls[0] : (imageUrls.length > 1 ? imageUrls : null);
 
       // 🔺 onSend: text, imageUrl (single or array), fruits
-      await onSend(textToSend, imageUrlToSend, fruitsToSend);
+      await onSend(textToSend, imageUrlToSend, fruitsToSend, replyToSend);
 
       if (onCancelReply && typeof onCancelReply === 'function') {
         onCancelReply();
@@ -211,7 +212,7 @@ const PrivateMessageInput = ({
     } finally {
       setIsSending(false); // ✅ always reset
     }
-  }, [input, imageUris, selectedFruits, isSending, onSend, onCancelReply, setSelectedFruits, localState?.isPro, uploadToBunny]);
+  }, [input, imageUris, selectedFruits, isSending, onSend, onCancelReply, replyTo, setSelectedFruits, localState?.isPro, uploadToBunny]);
 
   // ✅ Memoize hasFruits and hasContent
   const hasFruits = useMemo(() =>
@@ -262,7 +263,7 @@ const PrivateMessageInput = ({
       {/* Reply Context */}
       {replyTo && (
         <View style={styles.replyContainer}>
-          <Text style={styles.replyText}>
+          <Text style={styles.replyText} numberOfLines={1}>
             {t('private_chat.replying_to', { text: replyTo?.text || t('private_chat.message_placeholder') })}
           </Text>
           <TouchableOpacity

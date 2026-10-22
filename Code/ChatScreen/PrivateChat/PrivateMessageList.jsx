@@ -41,6 +41,22 @@ const BUBBLE_PADDING_H = 10;
 const IMAGE_GAP = 4;
 const SINGLE_IMAGE_MAX = 250;
 
+// Text for the quoted reply inside a bubble, built only from the snapshot the
+// sender stored on the message (no read of the original).
+const replyPreviewText = (replyTo, t) => {
+  if (!replyTo || typeof replyTo !== 'object') return t('chat.reply_deleted');
+  if (typeof replyTo.text === 'string' && replyTo.text.trim().length > 0) return replyTo.text;
+  const images = replyTo.imagesCount
+    || (Array.isArray(replyTo.imageUrls) ? replyTo.imageUrls.length : (replyTo.imageUrl ? 1 : 0));
+  if (images > 0) return t('chat.reply_images', { count: images });
+  if (replyTo.hasFruits) {
+    return replyTo.fruitsCount > 0
+      ? t('chat.reply_items', { count: replyTo.fruitsCount })
+      : t('chat.reply_items_message');
+  }
+  return t('chat.reply_deleted');
+};
+
 // One DM bubble (plus its day separator). Memoised, so a new message
 // re-renders only the rows whose props changed instead of every row on
 // screen. `actions` keeps one identity for the list's lifetime (it calls
@@ -85,6 +101,27 @@ const PrivateMessageRow = memo(function PrivateMessageRow(props) {
         shadowOffset: { width: 0, height: 1 },
         elevation: 1,
       }}>
+
+      {/* Reply preview: tap jumps to the quoted message */}
+      {item.replyTo && (
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => actions.scrollTo(item.replyTo.id)}
+          style={{
+            backgroundColor: isDarkMode ? '#ffffff15' : '#00000008',
+            borderLeftWidth: 2,
+            borderLeftColor: '#1E88E5',
+            borderRadius: 4,
+            paddingHorizontal: 6,
+            paddingVertical: 3,
+            marginBottom: 4,
+          }}
+        >
+          <Text style={{ fontSize: 12, color: isDarkMode ? '#9CA3AF' : '#6B7280' }} numberOfLines={2}>
+            {t('chat.replying_to_preview', { text: replyPreviewText(item.replyTo, t) })}
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {/* Message Content */}
 
@@ -218,6 +255,9 @@ const PrivateMessageRow = memo(function PrivateMessageRow(props) {
           </MenuOption>
           <MenuOption onSelect={() => actions.translate(item)}>
             <Text style={styles.menuOptionText}>{t('private_chat.translate')}</Text>
+          </MenuOption>
+          <MenuOption onSelect={() => actions.reply(item)}>
+            <Text style={styles.menuOptionText}>{t('chat.reply')}</Text>
           </MenuOption>
           {!isMyMessage && (
             <MenuOption onSelect={() => actions.report(item)}>
@@ -480,6 +520,36 @@ const PrivateMessageList = ({
 
   const showReadReceipts = localState?.showReadReceipts;
 
+  // Tapping a quoted reply scrolls to the original if it is loaded; older
+  // messages are not fetched for it.
+  const flatListRef = useRef(null);
+  const scrollToMessage = useCallback((messageId) => {
+    const index = filteredMessagesRef.current.findIndex((m) => String(m?.id) === String(messageId));
+    if (index === -1 || !flatListRef.current) {
+      Alert.alert(t('chat.message_not_found', { defaultValue: 'Message not found or too old.' }));
+      return;
+    }
+    flatListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+  }, [t]);
+
+  // The row isn't laid out yet: get close by the average row height, then
+  // retry (same as the group chat list, from Adopt Me).
+  const scrollRetryRef = useRef(0);
+  const handleScrollToIndexFailed = useCallback((info) => {
+    const list = flatListRef.current;
+    if (!list) return;
+    list.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+    // At most three retries per jump; the window reopens after 2 s.
+    if (scrollRetryRef.current >= 3) return;
+    scrollRetryRef.current += 1;
+    if (scrollRetryRef.current === 1) setTimeout(() => { scrollRetryRef.current = 0; }, 2000);
+    setTimeout(() => {
+      try {
+        flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
+      } catch (e) { /* the next failure callback retries */ }
+    }, 250);
+  }, []);
+
   // Row callbacks, read through a ref so `rowActions` keeps one identity for
   // the life of the list; the memoised rows still call the latest handlers.
   const rowActionsRef = useRef(null);
@@ -488,6 +558,12 @@ const PrivateMessageList = ({
     longPress: () => triggerHapticFeedback('impactMedium'),
     copy: handleCopy,
     translate: handleTranslate,
+    reply: (message) => {
+      if (!onReply) return;
+      triggerHapticFeedback('impactLight');
+      onReply(message);
+    },
+    scrollTo: scrollToMessage,
     report: handleReport,
   };
   const rowActions = useMemo(() => {
@@ -497,6 +573,8 @@ const PrivateMessageList = ({
       longPress: call('longPress'),
       copy: call('copy'),
       translate: call('translate'),
+      reply: call('reply'),
+      scrollTo: call('scrollTo'),
       report: call('report'),
     };
   }, []);
@@ -562,6 +640,7 @@ const PrivateMessageList = ({
         <ScamSafetyBox setShowRatingModal={setShowRatingModal} canRate={canRate} hasRated={hasRated} selectedUserId={selectedUser?.senderId} />
 
         <FlatList
+          ref={flatListRef}
           style={{ flex: 1 }}
           data={filteredMessages}
           removeClippedSubviews={false}
@@ -576,6 +655,7 @@ const PrivateMessageList = ({
           maxToRenderPerBatch={10}
           windowSize={10}
           initialNumToRender={15}
+          onScrollToIndexFailed={handleScrollToIndexFailed}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }

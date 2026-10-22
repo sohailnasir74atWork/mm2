@@ -643,6 +643,7 @@
     "pinned_message": "رسالة مثبّتة",
     "pinned_messages": "الرسائل المثبّتة",
     "reply_deleted": "[رسالة محذوفة]",
+    "message_not_found": "الرسالة غير موجودة أو قديمة جدًا.",
     "reply_emoji": "[إيموجي]",
     "reply_images_zero": "[صور]",
     "reply_images_one": "[صورة]",

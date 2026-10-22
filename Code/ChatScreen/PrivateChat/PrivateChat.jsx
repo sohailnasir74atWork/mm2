@@ -498,7 +498,7 @@ showSuccessMessage(
   const getImageUrl = resolveItemImage;
 
   // ✅ Memoize sendMessage
-  const sendMessage = useCallback(async (text, image, fruits) => {
+  const sendMessage = useCallback(async (text, image, fruits, replyToMsg) => {
     // Guard for a stale screen — the input is already disabled when this door
     // is shut, so this only fires if the switch flipped while the chat was open.
     if (chatBlockedBy) {
@@ -585,7 +585,25 @@ showSuccessMessage(
     if (hasFruits) {
       messageData.fruits = fruits;       // 👈 your array of selected fruits
     }
-  
+
+    // Reply: a small snapshot rides in the same write, so the bubble can show
+    // the quote without reading the original message. Text is cut to 120
+    // chars and images/items are stored as counts — every byte here is
+    // downloaded again each time the chat is opened.
+    if (replyToMsg && replyToMsg.id != null) {
+      const replyImages = Array.isArray(replyToMsg.imageUrls)
+        ? replyToMsg.imageUrls.length
+        : (replyToMsg.imageUrl ? 1 : 0);
+      const replyFruits = Array.isArray(replyToMsg.fruits) ? replyToMsg.fruits.length : 0;
+      messageData.replyTo = {
+        id: String(replyToMsg.id),
+        senderId: replyToMsg.senderId || null,
+        text: typeof replyToMsg.text === 'string' ? replyToMsg.text.slice(0, 120) : '',
+        ...(replyImages ? { imagesCount: replyImages } : {}),
+        ...(replyFruits ? { hasFruits: true, fruitsCount: replyFruits } : {}),
+      };
+    }
+
     // What to show as last message in chat list
     const imageCount = Array.isArray(image) ? image.length : (image ? 1 : 0);
     const photosCountStr = imageCount > 1 ? t('private_chat.multiple_photos', { count: imageCount }) : t('private_chat.single_photo');

@@ -620,6 +620,7 @@
     "pinned_message": "Message épinglé",
     "pinned_messages": "Messages épinglés",
     "reply_deleted": "[Message supprimé]",
+    "message_not_found": "Message introuvable ou trop ancien.",
     "reply_emoji": "[Emoji]",
     "reply_images_one": "[Image]",
     "reply_images_many": "[{{count}} images]",

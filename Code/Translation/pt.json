@@ -609,6 +609,7 @@
     "pinned_message": "Mensagem fixada",
     "pinned_messages": "Mensagens fixadas",
     "reply_deleted": "[Mensagem apagada]",
+    "message_not_found": "Mensagem não encontrada ou muito antiga.",
     "reply_emoji": "[Emoji]",
     "reply_images_one": "[Imagem]",
     "reply_images_many": "[{{count}} imagens]",

@@ -616,6 +616,7 @@
     "pinned_message": "Закреплённое сообщение",
     "pinned_messages": "Закреплённые сообщения",
     "reply_deleted": "[Сообщение удалено]",
+    "message_not_found": "Сообщение не найдено или слишком старое.",
     "reply_emoji": "[Эмодзи]",
     "reply_images_one": "[{{count}} фото]",
     "reply_images_few": "[{{count}} фото]",

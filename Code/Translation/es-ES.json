@@ -504,6 +504,7 @@
     "pinned_message": "Mensaje fijado",
     "pinned_messages": "Mensajes fijados",
     "reply_deleted": "[Mensaje eliminado]",
+    "message_not_found": "Mensaje no encontrado o demasiado antiguo.",
     "reply_emoji": "[Emoji]",
     "reply_images_one": "[Imagen]",
     "reply_images_many": "[{{count}} imágenes]",

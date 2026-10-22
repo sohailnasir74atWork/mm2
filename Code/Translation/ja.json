@@ -496,6 +496,7 @@
     "pinned_message": "ピン留めメッセージ",
     "pinned_messages": "ピン留めメッセージ",
     "reply_deleted": "［削除されたメッセージ］",
+    "message_not_found": "メッセージが見つからないか、古すぎます。",
     "reply_emoji": "［絵文字］",
     "reply_images_other": "［画像{{count}}枚］",
     "reply_items_message": "［アイテムのメッセージ］",

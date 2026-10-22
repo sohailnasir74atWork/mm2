@@ -620,6 +620,7 @@
     "pinned_message": "Angepinnte Nachricht",
     "pinned_messages": "Angepinnte Nachrichten",
     "reply_deleted": "[Gelöschte Nachricht]",
+    "message_not_found": "Nachricht nicht gefunden oder zu alt.",
     "reply_emoji": "[Emoji]",
     "reply_images_one": "[Bild]",
     "reply_images_other": "[{{count}} Bilder]",

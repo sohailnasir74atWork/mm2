@@ -183,6 +183,20 @@ const ProfileBottomDrawer = ({
 
   const selectedUserId = selectedUser?.senderId || selectedUser?.id || null;
 
+  // Android / iOS of the viewed user (users/{uid}/OS), admins only. Falls back
+  // to the OS stamped on the chat message the drawer was opened from.
+  const [userOS, setUserOS] = useState(null);
+  useEffect(() => {
+    setUserOS(null);
+    if (!isVisible || !isAdmin || !selectedUserId || !appdatabase) return;
+    let alive = true;
+    get(ref(appdatabase, `users/${selectedUserId}/OS`))
+      .then((snap) => { if (alive && snap.exists()) setUserOS(snap.val()); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [isVisible, isAdmin, selectedUserId, appdatabase]);
+  const platformOS = userOS || selectedUser?.OS || null;
+
   // A review's flag: close the drawer, then open Complaints & ideas with the
   // review attached (Reports/openReportForm).
   const reportReview = useCallback((rev) => {
@@ -2150,6 +2164,18 @@ const ProfileBottomDrawer = ({
                     <Icon name="calendar-outline" size={11} color={c.textMuted} />
                     <Text style={{ fontSize: 10, color: c.textMuted, fontWeight: '500' }}>
                       {t('profile.joined_ago', { time: createdAtText })}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Android / iOS: admins only */}
+              {isAdmin && (platformOS === 'android' || platformOS === 'ios') && (
+                <View style={{ alignItems: 'center', marginTop: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Icon name={platformOS === 'ios' ? 'logo-apple' : 'logo-android'} size={11} color={platformOS === 'ios' ? '#007AFF' : '#34C759'} />
+                    <Text style={{ fontSize: 10, color: c.textMuted, fontWeight: '500' }}>
+                      {platformOS === 'ios' ? 'iOS' : 'Android'}
                     </Text>
                   </View>
                 </View>

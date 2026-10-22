@@ -11,7 +11,7 @@ import { ensurePostChannel } from './Helper/postNotifications';
 import { createNewUser, registerForNotifications } from './Globelhelper';
 import { useLocalState } from './LocalGlobelStats';
 import { requestPermission } from './Helper/PermissionCheck';
-import { useColorScheme, AppState } from 'react-native';
+import { useColorScheme, AppState, Platform } from 'react-native';
 import { getFlag } from './Helper/CountryCheck';
 import { getConfigNodes } from './Helper/configCache';
 import { indexMM2Images, indexSupremePrices, unwrapFeed } from './Helper/valueSources';
@@ -407,6 +407,14 @@ export const GlobalStateProvider = ({ children }) => {
           id: userId,
           createdAt: existing.createdAt || authCreatedAtMs(loggedInUser)   // fallback if missing (local only, never written)
         };
+
+        // Platform ('android' | 'ios') on the user record, for the admin-only
+        // line in the profile drawer. Written only when missing or changed
+        // (the account moved to another phone), so most sign-ins write nothing.
+        if (existing.OS !== Platform.OS) {
+          userData.OS = Platform.OS;
+          update(userRef, { OS: Platform.OS }).catch(() => {});
+        }
 
         // 🛡️ Fix: If displayName is empty/falsy, regenerate one and save it.
         // Safe to write: this is a SUCCESSFUL whole-node read, so an empty

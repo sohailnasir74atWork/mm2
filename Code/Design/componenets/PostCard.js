@@ -256,7 +256,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
         </TouchableOpacity>
 
         <TouchableOpacity style={{ marginLeft: 10, flex: 1 }} onPress={openProfileDrawer} activeOpacity={0.8}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 6, rowGap: 4 }}>
             <Text style={s.name} numberOfLines={1}>{item.displayName}</Text>
             {item.isPro && (
               <Image resizeMethod="resize" source={require('../../../assets/pro.png')} style={s.badge} />

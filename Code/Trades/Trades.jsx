@@ -1607,7 +1607,7 @@ const TradeList = ({ route }) => {
               />
             </View>
             <View style={{ marginLeft: 10, flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', columnGap: 6, rowGap: 4, flexWrap: 'wrap' }}>
                 <Text style={styles.cardName} numberOfLines={1}>{item.traderName}</Text>
                 {item.isPro && (
                   <Image resizeMethod="resize" source={require('../../assets/pro.png')} style={{ width: 11, height: 11 }} />

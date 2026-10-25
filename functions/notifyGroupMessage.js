@@ -60,6 +60,7 @@ const UNREAD_PUSH_CAP = 3;
 // news; don't wake anyone for it.
 const MAX_MESSAGE_AGE_MS = 10 * 60 * 1000;
 const PREVIEW_MAX = 120;
+const ACTIVITY_WRITE_EVERY_MS = 60 * 60 * 1000;
 
 const DEAD_TOKEN_CODES = new Set([
   'messaging/invalid-registration-token',
@@ -99,6 +100,14 @@ exports.notifyGroupMessage = functions
 
       const memberIds = Array.isArray(group.memberIds) ? group.memberIds : [];
       if (!memberIds.includes(senderId)) return null;
+
+      // A message makes the group active again: cleanupDeadGroups deletes
+      // groups quiet for 15 days and the app counts down from lastActivityAt.
+      // At most one write an hour per group.
+      if (!(Number(group.lastActivityAt) > sentAt - ACTIVITY_WRITE_EVERY_MS)) {
+        await groupDoc.ref.update({ lastActivityAt: sentAt })
+          .catch((e) => console.warn(`lastActivityAt ${groupId}: ${e.message}`));
+      }
       const recipients = [...new Set(memberIds)].filter((id) => id && typeof id === 'string' && id !== senderId);
       if (recipients.length === 0) return null;
 

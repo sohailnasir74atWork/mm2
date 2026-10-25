@@ -278,10 +278,12 @@ const GroupMessageList = ({
               activeOpacity={0.7}
               style={{ alignSelf: 'flex-start' }}
             >
-              <View style={{ 
-                flexDirection: 'row', 
-                alignItems: 'center', 
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
                 flexWrap: 'nowrap',
+                gap: 6,
+                marginBottom: 2,
               }}>
                 <Text 
                   style={[styles.userNameText, { 
@@ -297,7 +299,7 @@ const GroupMessageList = ({
                 {item?.isPro && (
                   <Image resizeMethod="resize"
                     source={require('../../../assets/pro.png')}
-                    style={{ width: 16, height: 16, marginLeft: 4 }}
+                    style={{ width: 16, height: 16 }}
                   />
                 )}
 
@@ -305,7 +307,7 @@ const GroupMessageList = ({
                 {item?.robloxUsernameVerified && (
                   <Image resizeMethod="resize"
                     source={require('../../../assets/verification.png')}
-                    style={{ width: 16, height: 16, marginLeft: 4 }}
+                    style={{ width: 16, height: 16 }}
                   />
                 )}
 
@@ -315,7 +317,7 @@ const GroupMessageList = ({
                   const roles = getUserRoles(item.senderId);
                   const firstBadge = getFirstBadgeType(roles);
                   return (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 4 }}>
+                    <>
                       {roles.isAdmin && (
                         <UserBadgePill type="admin" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'admin'} />
                       )}
@@ -334,7 +336,7 @@ const GroupMessageList = ({
                       {roles.isHelper && (
                         <UserBadgePill type="helper" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
                       )}
-                    </View>
+                    </>
                   );
                 })()}
 
@@ -342,7 +344,7 @@ const GroupMessageList = ({
                 {hasRecentWin && (
                   <Image resizeMethod="resize"
                     source={require('../../../assets/trophy.webp')}
-                    style={{ width: 10, height: 10, marginLeft: 4 }}
+                    style={{ width: 10, height: 10 }}
                   />
                 )}
 
@@ -353,7 +355,6 @@ const GroupMessageList = ({
                     paddingHorizontal: 4,
                     paddingVertical: 1,
                     borderRadius: 3,
-                    marginLeft: 4,
                   }}>
                     <Text style={{
                       color: '#FFF',

@@ -1,13 +1,13 @@
 /**
  * Cloud Function: delete dead groups — no messages for INACTIVE_DAYS.
  *
- * ⚠️  DRY RUN BY DEFAULT, AND NOT EXPORTED FROM index.js.
+ * LIVE since 2026-10-25 (owner request: inactive 15 days → deleted, warning
+ * on the group list from day 7). This permanently deletes user data across
+ * six paths; a copy of each group doc goes to Firestore groups_deleted first.
  *
- * This permanently deletes user data across six paths. index.js already sets
- * the precedent for that: cleanupOldPrivateChats is written but deliberately
- * unexported, "Export it only on an explicit instruction." Same rule here.
- * Deploy it, read one dry-run log, confirm the count and a few sampled names
- * are what you expect, and only then set DRY_RUN = false.
+ * Every group it keeps gets groups/{id}.lastActivityAt brought up to date, and
+ * notifyGroupMessage bumps that field on each message (at most hourly).
+ * GroupsScreen counts down from it: "deleted in N days" from day 7.
  *
  * ── The trap this function exists to avoid ────────────────────────────────
  *
@@ -28,8 +28,8 @@
  *
  * ── What counts as dead ──────────────────────────────────────────────────
  *
- *   has messages, newest older than INACTIVE_DAYS   -> dead
- *   no messages, created more than INACTIVE_DAYS ago -> dead
+ *   activity = newest of: last message, lastActivityAt, createdAt
+ *   activity older than INACTIVE_DAYS                -> dead
  *   no messages, created recently                    -> SPARED
  *
  * That last line is deliberate. A group created an hour ago has no messages
@@ -45,7 +45,7 @@
  * nothing — a cleanup job that silently does nothing is the failure mode to
  * design against.
  *
- * Deploy (after exporting it in index.js):
+ * Deploy:
  * firebase deploy --only functions:cleanupDeadGroups --project mm2vlaues-ed80c
  */
 
@@ -56,11 +56,12 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-/** Flip to false ONLY on an explicit instruction to start deleting. */
-const DRY_RUN = true;
+/** Set true to log what would be deleted without deleting or writing. */
+const DRY_RUN = false;
 
-const INACTIVE_DAYS = 7;
+const INACTIVE_DAYS = 15;
 const INACTIVE_MS = INACTIVE_DAYS * 24 * 60 * 60 * 1000;
+const MAX_DELETE_PER_RUN = 200;
 const PAGE_SIZE = 200;           // Firestore docs per page
 const GROUP_CONCURRENCY = 15;    // groups inspected in parallel
 const TIME_BUDGET_MS = 480 * 1000;
@@ -151,7 +152,14 @@ const collectMemberIds = async (rtdb, groupId, data) => {
 };
 
 /** Deletes all six paths a group occupies. Admin SDK bypasses security rules. */
-const deleteGroupEverywhere = async (db, rtdb, groupId, memberIds) => {
+const deleteGroupEverywhere = async (db, rtdb, groupId, memberIds, data, activityAt) => {
+  await db.collection('groups_deleted').doc(groupId).set({
+    group: data,
+    reason: `inactive_${INACTIVE_DAYS}_days`,
+    lastActivityAt: activityAt || null,
+    deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
   // One atomic multi-path update for everything in RTDB.
   const updates = {
     [`groups/${groupId}`]: null,
@@ -219,13 +227,21 @@ exports.cleanupDeadGroups = functions
         const data = doc.data() || {};
         const lastAt = await lastMessageAt(rtdb, doc.id);
         const createdAt = toMillis(data.createdAt);
+        const stored = Number(data.lastActivityAt) || 0;
+        const activityAt = Math.max(lastAt, createdAt, stored);
 
-        // Spare a young group that simply has not been spoken in yet.
-        if (lastAt === 0 && createdAt > cutoff) return { doc, data, keep: true };
-        const activityAt = lastAt || createdAt;
-        if (activityAt > cutoff) return { doc, data, keep: true };
+        // No date at all: can't tell its age, leave it.
+        if (!activityAt) return { doc, data, keep: true };
+        if (activityAt > cutoff) {
+          // Keep the app's countdown source current (never moves backwards).
+          if (!DRY_RUN && activityAt - stored > 60 * 1000) {
+            await doc.ref.update({ lastActivityAt: activityAt })
+              .catch((err) => console.warn(`[deadGroups] lastActivityAt ${doc.id}: ${err.message}`));
+          }
+          return { doc, data, keep: true };
+        }
 
-        return { doc, data, keep: false, lastAt, createdAt };
+        return { doc, data, keep: false, lastAt, createdAt, activityAt };
       });
 
       for (const v of verdicts) {
@@ -242,10 +258,10 @@ exports.cleanupDeadGroups = functions
           );
         }
 
-        if (!DRY_RUN) {
+        if (!DRY_RUN && deleted < MAX_DELETE_PER_RUN) {
           try {
             const memberIds = await collectMemberIds(rtdb, v.doc.id, v.data);
-            await deleteGroupEverywhere(db, rtdb, v.doc.id, memberIds);
+            await deleteGroupEverywhere(db, rtdb, v.doc.id, memberIds, v.data, v.activityAt);
             deleted += 1;
           } catch (err) {
             console.error(`[deadGroups] failed to delete ${v.doc.id}: ${err.message}`);

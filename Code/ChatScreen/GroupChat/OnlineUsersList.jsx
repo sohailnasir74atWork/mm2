@@ -537,7 +537,7 @@ const OnlineUsersList = ({
           {item.isOnline !== false && <View style={styles.onlineIndicator} />}
         </View>
         <View style={styles.userInfo}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 6, rowGap: 4 }}>
             <Text style={styles.userName} numberOfLines={1}>
               {`${item.displayName || t('group_chat.anonymous')}`}
             </Text>
@@ -546,7 +546,7 @@ const OnlineUsersList = ({
             {item?.isPro && (
               <Image resizeMethod="resize"
                 source={require('../../../assets/pro.png')}
-                style={{ width: 12, height: 12, marginLeft: 4 }}
+                style={{ width: 12, height: 12 }}
               />
             )}
 
@@ -554,7 +554,7 @@ const OnlineUsersList = ({
             {item?.robloxUsernameVerified && (
               <Image resizeMethod="resize"
                 source={require('../../../assets/verification.png')}
-                style={{ width: 12, height: 12, marginLeft: 4 }}
+                style={{ width: 12, height: 12 }}
               />
             )}
 
@@ -564,7 +564,7 @@ const OnlineUsersList = ({
                 Date.now() - item.lastGameWinAt <= 24 * 60 * 60 * 1000)) && (
               <Image resizeMethod="resize"
                 source={require('../../../assets/trophy.webp')}
-                style={{ width: 10, height: 10, marginLeft: 4 }}
+                style={{ width: 10, height: 10 }}
               />
             )}
 
@@ -572,7 +572,7 @@ const OnlineUsersList = ({
             {(() => {
               const firstBadge = getFirstBadgeType(item);
               return (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 4 }}>
+                <>
                   {item?.isAdmin && (
                     <UserBadgePill type="admin" size="sm" isDarkMode={isDarkMode} labelOverride={t('chat.admin')} glow={firstBadge === 'admin'} />
                   )}
@@ -591,7 +591,7 @@ const OnlineUsersList = ({
                   {item?.isHelper && (
                     <UserBadgePill type="helper" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
                   )}
-                </View>
+                </>
               );
             })()}
 
@@ -599,7 +599,6 @@ const OnlineUsersList = ({
             {item?.isAdmin && item?.OS && (
               <View
                 style={{
-                  marginLeft: 4,
                   paddingHorizontal: 4,
                   paddingVertical: 1,
                   borderRadius: 3,

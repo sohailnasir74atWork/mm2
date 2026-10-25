@@ -15,7 +15,8 @@
  * Deliberately NOT covered:
  *   - private_messages. Personal conversation history; nobody asked for it to
  *     be deleted, and cleanupOldPrivateChats stays unexported.
- *   - statuses. They already carry their own expiresAt.
+ *   - statuses. expiresAt only hides them; cleanupExpiredStatuses.js deletes
+ *     them (added 2026-10-25).
  *   - Bunny CDN images behind feed posts. The storage zone `post-gag` is
  *     SHARED with another app in this account, so a deletion bug there would
  *     damage data this project does not own. The documents go; the image files

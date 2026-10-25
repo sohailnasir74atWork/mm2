@@ -516,7 +516,9 @@ highlightedMessage: {
 nameRow: {
   flexDirection: 'row',
   alignItems: 'center',      // vertical alignment (text + images)
-  // justifyContent: 'center',  // center the whole row horizontally
+  // One gap for name, icons and role pills, so nothing touches the name.
+  gap: 6,
+  marginBottom: 2,
 },
 
 userNameText: {
@@ -524,14 +526,12 @@ userNameText: {
   fontSize: 10,
   lineHeight: 14,
   paddingTop: 0,
-  marginBottom: 2,
 },
 userNameTextMy: {
   color: isDarkMode ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)',
   fontSize: 10,
   lineHeight: 14,
   paddingTop: 0,
-  marginBottom: 2,
 },
 userNameAdmin: {
   color: 'white',
@@ -542,8 +542,6 @@ userNameAdmin: {
 icon: {
   width: 10,
   height: 10,
-  marginLeft: 4,
-  // paddingBottom:5
 },
 
 adminContainer: {
@@ -557,7 +555,6 @@ adminContainer: {
 },
 
 platformBadge: {
-  marginLeft: 6,
   // paddingHorizontal: 3,
   // paddingVertical: 1,
   borderRadius: '50%',

@@ -214,9 +214,7 @@ const MessageRow = memo(function MessageRow(props) {
 {hasRecentWin && (
   <Image resizeMethod="resize"
     source={require('../../../assets/trophy.webp')}
-    style={{  width: 10,
-      height: 10,
-      marginLeft: 4,}}
+    style={{ width: 10, height: 10 }}
   />
 )}
 

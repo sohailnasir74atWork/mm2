@@ -17,7 +17,7 @@ const ROWS = [
 
 const ALL_ON = { groupChatNotifications: true, groupInvitationNotifications: true, groupJoinRequestNotifications: true };
 
-const GroupNotificationRows = ({ uid, appdatabase, styles, onHaptic }) => {
+const GroupNotificationRows = ({ uid, appdatabase, styles, onHaptic, iconStyle, iconColor, iconSize }) => {
   const { t } = useTranslation();
   const [prefs, setPrefs] = useState(ALL_ON);
   // Latest value per key, so two quick flips end on the last one picked.
@@ -66,7 +66,7 @@ const GroupNotificationRows = ({ uid, appdatabase, styles, onHaptic }) => {
               style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}
               onPress={() => onToggle(row.key, !prefs[row.key])}
             >
-              <Icon name={row.icon} size={18} color={'white'} style={{ backgroundColor: row.color, padding: 5, borderRadius: 5 }} />
+              <Icon name={row.icon} size={iconSize || 18} color={iconColor || 'white'} style={iconStyle || { backgroundColor: row.color, padding: 5, borderRadius: 5 }} />
               <Text style={styles.optionText}>{t(row.labelKey)}</Text>
             </TouchableOpacity>
             <Switch value={prefs[row.key]} onValueChange={(v) => onToggle(row.key, v)} />

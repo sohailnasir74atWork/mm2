@@ -87,6 +87,9 @@ exports.notifyPostLike = require('./notifyPostLike').notifyPostLike;
 exports.notifyGroupInvitation = require('./notifyGroupInvitation').notifyGroupInvitation;
 exports.notifyGroupJoinRequest = require('./notifyGroupJoinRequest').notifyGroupJoinRequest;
 exports.notifyGroupMessage = require('./notifyGroupMessage').notifyGroupMessage;
+// All Groups search key (groups/{id}.groupNameLower). Deploy by name:
+//   firebase deploy --only functions:syncGroupNameLower --project mm2vlaues-ed80c
+exports.syncGroupNameLower = require('./syncGroupNameLower').syncGroupNameLower;
 
 // ── Role rosters (mods / trusted / cmsr) ───────────────────────────────
 const rosters = require('./syncRoleRosters');
@@ -106,20 +109,22 @@ exports.cleanupOldPublicChats = retention.cleanupOldPublicChats;
 exports.cleanupOldTrades = retention.cleanupOldTrades;
 exports.cleanupOldPosts = retention.cleanupOldPosts;
 
+// Expired statuses (expiresAt < now), every 30 min. Added 2026-10-25: the app
+// only hid them, so 8.8k expired docs had piled up since March.
+exports.cleanupExpiredStatuses = require('./cleanupExpiredStatuses').cleanupExpiredStatuses;
+
 // NOT exported: private message retention. See the header.
 // exports.cleanupOldPrivateChats = require('./cleanupOldPrivateChats').cleanupOldPrivateChats;
 
-// NOT exported: dead-group cleanup (added 2026-09-13). Deletes groups with no
-// messages for 7 days, across six paths — Firestore groups + group_invitations
-// + group_join_requests, and RTDB groups/{id} + group_messages/{id} +
-// group_meta_data/{member}/{id} for every member.
-//
-// It ships with DRY_RUN = true, so exporting it only produces a log of what it
-// WOULD delete. Read one night's log, confirm the count and sampled names,
-// then set DRY_RUN = false. Note the header in that file: the obvious Firestore
-// query on lastMessageTimestamp would have matched every group, because
-// nothing ever writes that field.
-// exports.cleanupDeadGroups = require('./cleanupDeadGroups').cleanupDeadGroups;
+// Dead-group cleanup, LIVE 2026-10-25 (owner request). Daily 04:30 UTC: groups
+// with no message for 15 days are deleted across six paths — Firestore groups
+// + group_invitations + group_join_requests, and RTDB groups/{id} +
+// group_messages/{id} + group_meta_data/{member}/{id} for every member (backup
+// in groups_deleted). Kept groups get lastActivityAt for the app's "deleted in
+// N days" warning. Note the header in that file: the obvious Firestore query
+// on lastMessageTimestamp would match every group, because nothing writes it.
+//   firebase deploy --only functions:cleanupDeadGroups --project mm2vlaues-ed80c
+exports.cleanupDeadGroups = require('./cleanupDeadGroups').cleanupDeadGroups;
 exports.expireFeaturedTrades = require('./expireFeaturedTrades').expireFeaturedTrades;
 
 // ── Feed Hot / Trending (2026-10-13) ───────────────────────────────────

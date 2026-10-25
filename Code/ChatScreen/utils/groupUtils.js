@@ -17,6 +17,9 @@ import {
   orderBy,
   limit,
   startAfter,
+  // RTDB startAt/endAt are imported above; these are Firestore's.
+  startAt as fsStartAt,
+  endAt as fsEndAt,
 } from '@react-native-firebase/firestore';
 
 const MAX_GROUP_MEMBERS = 50; // Maximum members per group
@@ -25,6 +28,12 @@ const MAX_GROUP_MEMBERS = 50; // Maximum members per group
 // (owner decision there 2026-10-07: was 1). Client-side only, like the rest of
 // group creation; old builds still stop their own users at one.
 export const MAX_GROUPS_PER_USER = 2;
+
+// Search key for the All Groups search: Firestore range queries are
+// case-sensitive, so groups also store their name lowercased. Same rule as
+// functions/syncGroupNameLower.js, which fills it for older builds and the web.
+// Ported from Adopt Me 2026-10-25.
+export const toGroupNameLower = (name) => String(name || '').trim().toLowerCase();
 
 /**
  * Every active group the user created (newest first). Same two equality
@@ -195,6 +204,7 @@ export const createGroup = async (firestoreDB, appdatabase, creatorData, memberI
       id: groupId,
       name: finalGroupName,
       groupName: finalGroupName, // Also store as groupName for consistency
+      groupNameLower: toGroupNameLower(finalGroupName), // All Groups search key
       description: finalDescription,
       createdBy: creatorData.id,
       creatorDisplayName: creatorData.displayName || 'Anonymous', // Store creator display name for explore feature
@@ -1317,6 +1327,7 @@ export const updateGroupName = async (firestoreDB, appdatabase, groupId, userId,
     await updateDoc(groupRef, {
       groupName: trimmedName,
       name: trimmedName, // Also update name field for compatibility
+      groupNameLower: toGroupNameLower(trimmedName),
       updatedAt: serverTimestamp(),
     });
 
@@ -1961,7 +1972,29 @@ export const getAllGroups = async (firestoreDB, filter = 'all', searchQuery = ''
   try {
     let groupsQuery;
 
-    if (filter === 'recent') {
+    if (searchQuery && searchQuery.trim()) {
+      // Search the server (was: filter the page already loaded, so most groups
+      // could never be found). Prefix match on the lowercased name, so "pets"
+      // finds "Pets Trading". Ported from Adopt Me 2026-10-25.
+      const searchTerm = toGroupNameLower(searchQuery);
+      groupsQuery = lastDoc
+        ? query(
+          collection(firestoreDB, 'groups'),
+          where('isActive', '==', true),
+          orderBy('groupNameLower'),
+          startAfter(lastDoc), // one start cursor: lastDoc already sorts after searchTerm
+          fsEndAt(searchTerm + '\uf8ff'),
+          limit(limitCount)
+        )
+        : query(
+          collection(firestoreDB, 'groups'),
+          where('isActive', '==', true),
+          orderBy('groupNameLower'),
+          fsStartAt(searchTerm),
+          fsEndAt(searchTerm + '\uf8ff'),
+          limit(limitCount)
+        );
+    } else if (filter === 'recent') {
       // Get recent groups (created in last 7 days) - client-side filter since Firestore timestamp comparison is complex
       if (lastDoc) {
         groupsQuery = query(
@@ -2010,19 +2043,10 @@ export const getAllGroups = async (firestoreDB, filter = 'all', searchQuery = ''
       };
     });
 
-    // Filter by recent (last 7 days) if needed
-    if (filter === 'recent') {
+    // Filter by recent (last 7 days) if needed (not when searching: name order)
+    if (filter === 'recent' && !(searchQuery && searchQuery.trim())) {
       const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
       groups = groups.filter(group => group.createdAtTimestamp >= sevenDaysAgo);
-    }
-
-    // Filter by search query if provided
-    if (searchQuery && searchQuery.trim()) {
-      const queryLower = searchQuery.toLowerCase().trim();
-      groups = groups.filter(group => {
-        const groupName = (group.groupName || '').toLowerCase();
-        return groupName.includes(queryLower);
-      });
     }
 
     // Check if there are more groups to load

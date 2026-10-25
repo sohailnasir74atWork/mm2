@@ -17,6 +17,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useGlobalState } from '../../GlobelStats';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
+import InactiveGroupWarning, { useGroupsLastActivity } from './InactiveGroupWarning';
 import config from '../../Helper/Environment';
 import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 import { useTranslation } from 'react-i18next';
@@ -111,6 +112,10 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
   const [allGroupsLoading, setAllGroupsLoading] = useState(false);
   const [allGroupsLoadingMore, setAllGroupsLoadingMore] = useState(false);
   const [allGroupsSearchQuery, setAllGroupsSearchQuery] = useState('');
+  const [searchText, setSearchText] = useState('');
+  // Bumped on every new All Groups load (tab open, search, clear). A response
+  // whose number is no longer current belongs to an older search: dropped.
+  const allGroupsRequestRef = useRef(0);
   const [creatorNames, setCreatorNames] = useState({}); // Cache creator names
   const [allGroupsHasMore, setAllGroupsHasMore] = useState(true);
   const [allGroupsLastDoc, setAllGroupsLastDoc] = useState(null);
@@ -700,6 +705,13 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
   }, [user?.id, firestoreDB, appdatabase, uploadToBunny, setGroups, isAdmin, groups]);
 
   // Render group item — reads groups/mutedGroups from refs to avoid dep churn
+  // lastActivityAt per joined group, for the inactive-group countdown.
+  const myGroupIds = useMemo(
+    () => (Array.isArray(groups) ? groups : []).map((g) => g?.groupId).filter(Boolean),
+    [groups],
+  );
+  const groupActivity = useGroupsLastActivity(firestoreDB, myGroupIds);
+
   const renderGroupItem = useCallback(({ item }) => {
     if (!item || typeof item !== 'object') return null;
 
@@ -757,6 +769,10 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
             <Text style={styles.lastMessage} numberOfLines={1}>
               {lastMessage}
             </Text>
+            <InactiveGroupWarning
+              lastActivityAt={Math.max(groupActivity[groupId] || 0, Number(item.lastMessageTimestamp) || 0)}
+              isDarkMode={isDarkMode}
+            />
           </View>
           {unreadCount > 0 && (
             <View style={styles.unreadBadge}>
@@ -820,7 +836,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         </Menu>
       </View>
     );
-  }, [styles, handleOpenGroup, handleLeaveGroup, handleUpdateGroupIcon, handleEditGroup, handleDeleteGroup, handleToggleMute, handleShowGroupInfo, user?.id, isDarkMode, isAdmin, t]);
+  }, [styles, handleOpenGroup, handleLeaveGroup, handleUpdateGroupIcon, handleEditGroup, handleDeleteGroup, handleToggleMute, handleShowGroupInfo, user?.id, isDarkMode, isAdmin, t, groupActivity]);
 
   const filteredGroups = useMemo(() => {
     if (!Array.isArray(groups)) return [];
@@ -832,13 +848,18 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
 
   // ✅ Load initial 8 groups when "All Groups" tab is active
   useEffect(() => {
-    if (activeTab === 'all' && firestoreDB && appdatabase && !allGroupsLoading) {
+    // No `!allGroupsLoading` guard: it skipped a search pressed while the first
+    // page was still loading, and nothing re-ran it. A newer load wins instead.
+    if (activeTab === 'all' && firestoreDB && appdatabase) {
+      const requestId = ++allGroupsRequestRef.current;
+      const isCurrent = () => requestId === allGroupsRequestRef.current;
       const loadAllGroups = async () => {
         setAllGroupsLoading(true);
         setAllGroupsHasMore(true);
         setAllGroupsLastDoc(null);
         try {
           const result = await getAllGroups(firestoreDB, 'all', allGroupsSearchQuery, 8, null);
+          if (!isCurrent()) return;
           if (result.success) {
             // Show all groups (including user's own groups)
             const availableGroups = (result.groups || []).filter(group => {
@@ -849,9 +870,10 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
             setAllGroupsHasMore(result.hasMore || false);
             setAllGroupsLastDoc(result.lastDoc || null);
 
-            // ✅ Fetch creator names for all groups in parallel
-            const creatorIds = [...new Set(availableGroups.map(g => g.createdBy).filter(Boolean))];
-            // ✅ OPTIMIZED: Fetch only displayName instead of full user object
+            // Creator names come with the group doc (creatorDisplayName); one
+            // RTDB read only for old groups that don't carry it.
+            const storedNames = storedCreatorNames(availableGroups);
+            const creatorIds = [...new Set(availableGroups.map(g => g.createdBy).filter(id => id && !storedNames[id]))];
             const creatorPromises = creatorIds.map(async (creatorId) => {
               try {
                 const { ref, get } = await import('@react-native-firebase/database');
@@ -866,18 +888,20 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
             });
 
             const creatorResults = await Promise.all(creatorPromises);
-            const namesMap = creatorResults.reduce((acc, curr) => ({ ...acc, ...curr }), {});
+            if (!isCurrent()) return;
+            const namesMap = creatorResults.reduce((acc, curr) => ({ ...acc, ...curr }), storedNames);
             setCreatorNames(namesMap);
           } else {
             setAllGroups([]);
             setAllGroupsHasMore(false);
           }
         } catch (error) {
+          if (!isCurrent()) return;
           console.error('Error loading all groups:', error);
           setAllGroups([]);
           setAllGroupsHasMore(false);
         } finally {
-          setAllGroupsLoading(false);
+          if (isCurrent()) setAllGroupsLoading(false);
         }
       };
 
@@ -891,9 +915,12 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
       return;
     }
 
+    const requestId = allGroupsRequestRef.current;
+    const isCurrent = () => requestId === allGroupsRequestRef.current;
     setAllGroupsLoadingMore(true);
     try {
       const result = await getAllGroups(firestoreDB, 'all', allGroupsSearchQuery, 8, allGroupsLastDoc);
+      if (!isCurrent()) return;
       if (result.success) {
         // Filter out groups user is already a member of
         // Show all groups (including user's own groups)
@@ -902,9 +929,9 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
           return groupId; // Only filter out groups without valid ID
         });
 
-        // ✅ Fetch creator names for new groups
-        const creatorIds = [...new Set(newGroups.map(g => g.createdBy).filter(Boolean))];
-        // ✅ OPTIMIZED: Fetch only displayName instead of full user object
+        // Stored creatorDisplayName first; RTDB only for groups without it.
+        const storedNames = storedCreatorNames(newGroups);
+        const creatorIds = [...new Set(newGroups.map(g => g.createdBy).filter(id => id && !storedNames[id]))];
         const creatorPromises = creatorIds.map(async (creatorId) => {
           try {
             const { ref, get } = await import('@react-native-firebase/database');
@@ -919,7 +946,8 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         });
 
         const creatorResults = await Promise.all(creatorPromises);
-        const namesMap = creatorResults.reduce((acc, curr) => ({ ...acc, ...curr }), {});
+        if (!isCurrent()) return;
+        const namesMap = creatorResults.reduce((acc, curr) => ({ ...acc, ...curr }), storedNames);
 
         setAllGroups(prev => [...prev, ...newGroups]);
         setCreatorNames(prev => ({ ...prev, ...namesMap }));
@@ -929,6 +957,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         setAllGroupsHasMore(false);
       }
     } catch (error) {
+      if (!isCurrent()) return;
       console.error('Error loading more groups:', error);
       setAllGroupsHasMore(false);
     } finally {
@@ -939,13 +968,35 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
   // ✅ Reset all groups when switching to joined tab
   useEffect(() => {
     if (activeTab === 'joined') {
+      allGroupsRequestRef.current += 1; // drop any All Groups load still in flight
+      setAllGroupsLoading(false);
       setAllGroups([]);
       setAllGroupsSearchQuery('');
+      setSearchText('');
       setCreatorNames({});
       setAllGroupsHasMore(true);
       setAllGroupsLastDoc(null);
     }
   }, [activeTab]);
+
+  // Search runs on the button / keyboard Search key, 3+ characters (as Adopt Me).
+  const handleSearch = () => {
+    const text = searchText.trim();
+    if (text === '') {
+      setAllGroupsSearchQuery('');
+      return;
+    }
+    if (text.length < 3) {
+      Alert.alert(t('groups_screen.search'), t('groups_screen.search_min_chars', { count: 3 }));
+      return;
+    }
+    setAllGroupsSearchQuery(text);
+  };
+
+  // Clearing the box brings back the newest-first list.
+  useEffect(() => {
+    if (searchText === '') setAllGroupsSearchQuery('');
+  }, [searchText]);
 
   // Render invitation item
   const renderInvitationItem = useCallback(({ item }) => {
@@ -1234,6 +1285,7 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
             }}>
               {memberCount === 1 ? t('groups_screen.member_count_singular', { count: memberCount }) : t('groups_screen.member_count_plural', { count: memberCount })}
             </Text>
+            <InactiveGroupWarning lastActivityAt={item.lastActivityAt} isDarkMode={isDarkMode} />
           </View>
           <View style={{ flexDirection: 'row', gap: 6, alignItems: 'flex-start', marginTop: 2 }}>
             {isAlreadyJoined ? (
@@ -1642,8 +1694,29 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
         />
         )
       ) : (
-        // All Groups Tab
-        allGroupsLoading ? (
+        // All Groups Tab: name search (server side, groupUtils.getAllGroups), then the list.
+        <View style={{ flex: 1 }}>
+          <View style={styles.searchRow}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder={t('groups_screen.search_placeholder')}
+              placeholderTextColor={isDarkMode ? '#9CA3AF' : '#6B7280'}
+              value={searchText}
+              onChangeText={setSearchText}
+              onSubmitEditing={handleSearch}
+              returnKeyType="search"
+              autoCorrect={false}
+            />
+            <TouchableOpacity
+              onPress={handleSearch}
+              style={styles.searchButton}
+              accessibilityRole="button"
+              accessibilityLabel={t('groups_screen.search')}
+            >
+              <Icon name="search" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        {allGroupsLoading ? (
           <View style={styles.emptyContainer}>
             <ActivityIndicator size="large" color="#8B5CF6" />
           </View>
@@ -1675,7 +1748,8 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
             maxToRenderPerBatch={10}
             windowSize={10}
           />
-        )
+        )}
+        </View>
       )}
 
       {/* FAB. Only on the Joined tab: on All Groups you are browsing other
@@ -1986,6 +2060,14 @@ const GroupsScreen = ({ groups = [], setGroups, groupsLoading = false }) => {
 };
 
 // Styles
+// Creator names stored on the group doc at creation (creatorDisplayName), so the
+// All Groups list needs no RTDB read for them. 'Anonymous' is the old default.
+const storedCreatorNames = (groups) => Object.fromEntries(
+  groups
+    .filter(g => g.createdBy && g.creatorDisplayName && g.creatorDisplayName !== 'Anonymous')
+    .map(g => [g.createdBy, g.creatorDisplayName]),
+);
+
 const getStyles = (isDarkMode) =>
   StyleSheet.create({
     container: {
@@ -2053,7 +2135,31 @@ const getStyles = (isDarkMode) =>
     emptyText: {
       color: isDarkMode ? 'white' : 'black',
       textAlign: 'center'
-    }
+    },
+    searchRow: {
+      paddingHorizontal: 12,
+      marginBottom: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    searchInput: {
+      flex: 1,
+      backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6',
+      borderWidth: 1,
+      borderColor: isDarkMode ? '#374151' : '#E5E7EB',
+      borderRadius: 10,
+      padding: 12,
+      color: isDarkMode ? '#FFFFFF' : '#111827',
+      fontSize: 14,
+      marginRight: 8,
+    },
+    searchButton: {
+      backgroundColor: config.colors.primary || '#8B5CF6',
+      padding: 12,
+      borderRadius: 10,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
   });
 
 export default GroupsScreen;

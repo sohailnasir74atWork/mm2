@@ -9,12 +9,37 @@ import { useTranslation } from 'react-i18next';
 import { useHaptic } from '../../Helper/HepticFeedBack';
 // ✅ MM2: Removed PetGuessingGameScreen and game invite imports - MM2 doesn't use gaming features
 import { collection, query, where, onSnapshot } from '@react-native-firebase/firestore';
+import { useChatBadges, acknowledgeDmBadge, acknowledgeGroupBadge } from '../chatBadgeStore';
+
+// The badges read the store themselves, so a new message re-renders only
+// these two small components, not the header or the screens under it.
+const InboxBadge = () => {
+  const { dm } = useChatBadges();
+  if (dm <= 0) return null;
+  return (
+    <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'red', borderRadius: 8, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 }}>
+      <Text style={{ color: '#fff', fontSize: 8, fontFamily: 'Lato-Bold' }}>
+        {dm > 9 ? '9+' : dm}
+      </Text>
+    </View>
+  );
+};
+
+// "!" for pending invitations or join requests (prioritized), else the unread count.
+const GroupsBadge = ({ hasPending }) => {
+  const { group } = useChatBadges();
+  if (!hasPending && group <= 0) return null;
+  return (
+    <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#10B981', borderRadius: 8, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 }}>
+      <Text style={{ color: '#fff', fontSize: 8, fontFamily: 'Lato-Bold' }}>
+        {hasPending ? '!' : (group > 9 ? '9+' : group)}
+      </Text>
+    </View>
+  );
+};
+
 const CommunityChatHeader = ({
   selectedTheme,
-  unreadcount,
-  setunreadcount,
-  groupUnreadCount = 0,
-  setGroupUnreadCount,
   triggerHapticFeedback,
   onOnlineUsersPress,
 
@@ -111,7 +136,7 @@ const CommunityChatHeader = ({
             onPress={() => {
               navigation.navigate('Inbox');
               triggerHapticFeedback('impactLight');
-              setunreadcount(0);
+              acknowledgeDmBadge();
             }}
             style={{ position: 'relative', padding: 8, marginRight: 4 }}
           >
@@ -120,13 +145,7 @@ const CommunityChatHeader = ({
               size={24}
               color={config.colors.primary}
             />
-            {unreadcount > 0 && (
-              <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'red', borderRadius: 8, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 }}>
-                <Text style={{ color: '#fff', fontSize: 8, fontFamily: 'Lato-Bold' }}>
-                  {unreadcount > 9 ? '9+' : unreadcount}
-                </Text>
-              </View>
-            )}
+            <InboxBadge />
           </TouchableOpacity>
 
           {/* Groups Button */}
@@ -134,9 +153,7 @@ const CommunityChatHeader = ({
             onPress={() => {
               navigation.navigate('Groups');
               triggerHapticFeedback('impactLight');
-              if (setGroupUnreadCount && typeof setGroupUnreadCount === 'function') {
-                setGroupUnreadCount(0);
-              }
+              acknowledgeGroupBadge();
             }}
             style={{ position: 'relative', padding: 8, marginRight: 4 }}
           >
@@ -145,14 +162,7 @@ const CommunityChatHeader = ({
               size={24}
               color={config.colors.primary}
             />
-            {/* Show "!" if there are pending invitations or join requests (prioritized), otherwise show unread count */}
-            {(pendingGroupInvitationsCount > 0 || pendingJoinRequestsCount > 0 || groupUnreadCount > 0) && (
-              <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#10B981', borderRadius: 8, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 }}>
-                <Text style={{ color: '#fff', fontSize: 8, fontFamily: 'Lato-Bold' }}>
-                  {(pendingGroupInvitationsCount > 0 || pendingJoinRequestsCount > 0) ? '!' : (groupUnreadCount > 9 ? '9+' : groupUnreadCount)}
-                </Text>
-              </View>
-            )}
+            <GroupsBadge hasPending={pendingGroupInvitationsCount > 0 || pendingJoinRequestsCount > 0} />
           </TouchableOpacity>
         </>
       )}

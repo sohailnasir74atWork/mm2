@@ -34,6 +34,8 @@ import { hideTranslateTip } from '../TranslateTip';
 
 
 
+const dismissKeyboard = () => Keyboard.dismiss();
+
 // Bubble geometry, shared by the bubble itself and the image grid it holds so
 // the two cannot drift apart.
 const BUBBLE_MAX_WIDTH_RATIO = 0.8;
@@ -649,7 +651,8 @@ const PrivateMessageList = ({
           inverted
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
-          onScroll={() => Keyboard.dismiss()}
+          // Once per drag, not on every scroll frame.
+          onScrollBeginDrag={dismissKeyboard}
           onTouchStart={() => Keyboard.dismiss()}
           keyboardShouldPersistTaps="handled"
           maxToRenderPerBatch={10}

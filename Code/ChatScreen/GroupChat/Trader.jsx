@@ -118,7 +118,9 @@ const [bannerHeight, setBannerHeight] = useState(0); // measured, 0 when no ad i
   }, [isAtBottom, pendingMessages]);
 
 
-  const INITIAL_PAGE_SIZE = 5; // ✅ Initial load: 5 messages
+  // 10, not 5: five rows don't fill the screen, so onEndReached paged the
+  // room up in steps right after it opened (looked jumpy). Blox uses 10.
+  const INITIAL_PAGE_SIZE = 10;
   const PAGE_SIZE = 10; // ✅ Pagination: load 10 messages per batch
 
   const navigation = useNavigation()

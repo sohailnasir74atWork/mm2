@@ -15,7 +15,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import config from '../../Helper/Environment';
 import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 import { useTranslation } from 'react-i18next';
-import database, { ref, update } from '@react-native-firebase/database';
+import database, { ref } from '@react-native-firebase/database';
 import { showSuccessMessage, showErrorMessage } from '../../Helper/MessageHelper';
 import FramedAvatar from './FramedAvatar';
 import { getCachedProfile, warmProfileCache } from '../../Helper/profileCache';
@@ -23,6 +23,8 @@ import { getCachedProfile, warmProfileCache } from '../../Helper/profileCache';
 // ✅ Constants for pagination (moved outside component to avoid recreation)
 const INITIAL_LOAD = 15; // ✅ Initial chats to display
 const LOAD_MORE = 10; // ✅ Load 10 more on scroll
+// The list is redrawn at most once per this window while updates stream in.
+const LIST_FLUSH_MS = 250;
 
 const DEFAULT_AVATAR = 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
 
@@ -95,106 +97,130 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
   const [localChats, setLocalChats] = useState([]);
   const [displayedChatsCount, setDisplayedChatsCount] = useState(INITIAL_LOAD); // ✅ Start with 15 chats
 
-  // Child listeners only — no separate initial read. child_added replays the
-  // existing children on attach, so the list arrives without a second full
-  // download of chat_meta_data.
-  useFocusEffect(
-    useCallback(() => {
-      if (!user?.id || !appdatabase) {
-        setLocalChats([]);
-        setLocalLoading(false);
-        return;
+  // Read inside the listeners, so a banned-list change does not re-attach
+  // them (which rebuilt the whole list from an empty map).
+  const bannedUsersRef = useRef(bannedUsers);
+  bannedUsersRef.current = bannedUsers;
+  // The listener's map, so opening a chat can zero its count there too (the
+  // next throttled flush would otherwise bring the old count back).
+  const chatsMapRef = useRef(null);
+
+  // Child listeners for as long as the Inbox is mounted. They used to live in
+  // useFocusEffect: every return from a DM started again from an empty map and
+  // re-added the chats one child_added at a time (one sort + render each), so
+  // the list visibly rebuilt and reordered, and blur reset it to 15 rows. The
+  // Inbox stays mounted under a DM, so this keeps the list as it was.
+  //
+  // child_added replays the existing children on attach, so the list arrives
+  // without a second full download of chat_meta_data. The `value` event fires
+  // once after that replay (from the same listen, no extra download) and
+  // paints the first list in one go; later updates are throttled.
+  useEffect(() => {
+    if (!user?.id || !appdatabase) {
+      setLocalChats([]);
+      setLocalLoading(false);
+      return;
+    }
+
+    setLocalLoading(true);
+    const userChatsRef = ref(appdatabase, `chat_meta_data/${user.id}`);
+    const chatsMap = new Map(); // Track chats locally
+    chatsMapRef.current = chatsMap;
+    let initialLoaded = false;
+    let flushTimer = null;
+    let idleHandle = null;
+    let disposed = false;
+
+    const updateChatsList = () => {
+      flushTimer = null;
+      idleHandle = null;
+      if (disposed) return;
+      const updatedChats = Array.from(chatsMap.values())
+        .sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp);
+
+      setLocalChats(updatedChats);
+      setLocalLoading(false);
+
+      if (setChats && typeof setChats === 'function') {
+        setChats(updatedChats);
       }
+    };
 
-      setLocalLoading(true);
-      const userChatsRef = ref(appdatabase, `chat_meta_data/${user.id}`);
-      const chatsMap = new Map(); // Track chats locally
-      const banned = Array.isArray(bannedUsers) ? bannedUsers : [];
-
-      // ✅ Helper function to update chats list from map
-      let firstBatchApplied = false;
-      const updateChatsList = () => {
-        const updatedChats = Array.from(chatsMap.values())
-          .sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp);
-
-        setLocalChats(updatedChats);
-        // Only snap back to the first page on the initial batch. This used to
-        // run on EVERY child event, so an incoming message yanked a user who
-        // had scrolled back to 15 rows — and re-fired the profile-warm effect.
-        if (!firstBatchApplied) {
-          firstBatchApplied = true;
-          setDisplayedChatsCount(INITIAL_LOAD);
+    // Throttle, not debounce: one redraw per LIST_FLUSH_MS window. A debounce
+    // that restarts per event never fires during a steady stream.
+    const scheduleUpdate = () => {
+      if (!initialLoaded || flushTimer || idleHandle) return;
+      flushTimer = setTimeout(() => {
+        flushTimer = null;
+        if (typeof requestIdleCallback === 'function') {
+          idleHandle = requestIdleCallback(updateChatsList, { timeout: LIST_FLUSH_MS });
+        } else {
+          updateChatsList();
         }
-        setLocalLoading(false);
+      }, LIST_FLUSH_MS);
+    };
 
-        if (setChats && typeof setChats === 'function') {
-          setChats(updatedChats);
-        }
-      };
+    // ✅ OPTIMIZED: Use child listeners for updates (only downloads changed chats)
+    const handleChildChange = (snapshot) => {
+      if (!snapshot || !snapshot.key) return;
+      const chatData = snapshot.val();
+      if (!chatData || typeof chatData !== 'object') return;
 
-      // ✅ OPTIMIZED: Use child listeners for updates (only downloads changed chats)
-      const handleChildChange = (snapshot) => {
-        if (!snapshot || !snapshot.key) return;
-        const chatData = snapshot.val();
-        if (!chatData || typeof chatData !== 'object') return;
+      const chatPartnerId = snapshot.key;
+      const banned = Array.isArray(bannedUsersRef.current) ? bannedUsersRef.current : [];
+      const isBlocked = banned.includes(chatPartnerId);
+      const rawUnread = chatData?.unreadCount || 0;
+      // (A blocked partner's unread is reset in ChatNavigator, which holds the
+      // same child listeners for the whole session.)
 
-        const chatPartnerId = snapshot.key;
-        const isBlocked = banned.includes(chatPartnerId);
-        const rawUnread = chatData?.unreadCount || 0;
+      chatsMap.set(chatPartnerId, {
+        chatId: chatData.chatId,
+        otherUserId: chatPartnerId,
+        lastMessage: chatData.lastMessage || t('chat.no_messages_yet'),
+        lastMessageTimestamp: chatData.timestamp || 0,
+        unreadCount: isBlocked ? 0 : rawUnread,
+        otherUserAvatar: chatData.receiverAvatar || 'https://example.com/default-avatar.jpg',
+        otherUserName: chatData.receiverName || t('private_chat.anonymous'),
+      });
 
-        if (isBlocked && rawUnread > 0) {
-          const blockedChatRef = ref(appdatabase, `chat_meta_data/${user.id}/${chatPartnerId}`);
-          update(blockedChatRef, { unreadCount: 0 }).catch((error) => {
-            console.error("Error resetting unread count:", error);
-          });
-        }
+      scheduleUpdate();
+    };
 
-        chatsMap.set(chatPartnerId, {
-          chatId: chatData.chatId,
-          otherUserId: chatPartnerId,
-          lastMessage: chatData.lastMessage || t('chat.no_messages_yet'),
-          lastMessageTimestamp: chatData.timestamp || 0,
-          unreadCount: isBlocked ? 0 : rawUnread,
-          otherUserAvatar: chatData.receiverAvatar || 'https://example.com/default-avatar.jpg',
-          otherUserName: chatData.receiverName || t('private_chat.anonymous'),
-        });
+    const handleChildRemoved = (snapshot) => {
+      if (!snapshot || !snapshot.key) return;
+      chatsMap.delete(snapshot.key);
+      scheduleUpdate();
+    };
 
-        updateChatsList();
-      };
+    const handleInitialValue = () => {
+      if (initialLoaded) return;
+      initialLoaded = true;
+      clearTimeout(emptyInboxTimer);
+      setDisplayedChatsCount(INITIAL_LOAD);
+      updateChatsList();
+    };
 
-      const handleChildRemoved = (snapshot) => {
-        if (!snapshot || !snapshot.key) return;
-        chatsMap.delete(snapshot.key);
-        updateChatsList();
-      };
+    // An empty inbox still fires `value`; this only covers a stalled read.
+    const emptyInboxTimer = setTimeout(handleInitialValue, 2500);
 
-      // NOTE: no separate initial get() here.
-      // RTDB `child_added` replays every existing child at attach time, so it
-      // already delivers the full initial list. The previous
-      // `loadInitialChats()` + attach pair downloaded the entire
-      // chat_meta_data node TWICE on every focus. `handleChildChange` performs
-      // the same per-chat mapping and blocked-chat reset the initial pass did,
-      // and clears the spinner via updateChatsList.
-      //
-      // An empty inbox never fires child_added, so clear the spinner on a
-      // short fallback rather than leaving it spinning forever.
-      const emptyInboxTimer = setTimeout(() => setLocalLoading(false), 2500);
+    userChatsRef.on('child_added', handleChildChange);
+    userChatsRef.on('child_changed', handleChildChange);
+    userChatsRef.on('child_removed', handleChildRemoved);
+    userChatsRef.once('value').then(handleInitialValue, handleInitialValue);
 
-      // Listen to individual chat changes (only downloads changed chats, not all)
-      userChatsRef.on('child_added', handleChildChange);
-      userChatsRef.on('child_changed', handleChildChange);
-      userChatsRef.on('child_removed', handleChildRemoved);
-
-      // ✅ Cleanup listeners when screen loses focus
-      return () => {
-        clearTimeout(emptyInboxTimer);
-        userChatsRef.off('child_added', handleChildChange);
-        userChatsRef.off('child_changed', handleChildChange);
-        userChatsRef.off('child_removed', handleChildRemoved);
-        setDisplayedChatsCount(INITIAL_LOAD);
-      };
-    }, [user?.id, appdatabase, bannedUsers, setChats])
-  );
+    return () => {
+      disposed = true;
+      clearTimeout(emptyInboxTimer);
+      if (flushTimer) clearTimeout(flushTimer);
+      if (idleHandle && typeof cancelIdleCallback === 'function') cancelIdleCallback(idleHandle);
+      userChatsRef.off('child_added', handleChildChange);
+      userChatsRef.off('child_changed', handleChildChange);
+      userChatsRef.off('child_removed', handleChildRemoved);
+    };
+    // t is read only for row fallbacks; listing it would re-attach on a
+    // language change, which is harmless but not needed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, appdatabase, setChats]);
 
   // ✅ Use local chats if available, fallback to props for backward compatibility
   // Memoised so the list (and every memoised row) keeps its identity across
@@ -355,6 +381,8 @@ const InboxScreen = ({ chats, setChats, loading, bannedUsers }) => {
   
     try {
       // ✅ Update local state to reset unread count
+      const mapped = chatsMapRef.current?.get(otherUserId);
+      if (mapped) chatsMapRef.current.set(otherUserId, { ...mapped, unreadCount: 0 });
       setLocalChats((prevChats) => {
         if (!Array.isArray(prevChats)) return prevChats;
         return prevChats.map((chat) =>

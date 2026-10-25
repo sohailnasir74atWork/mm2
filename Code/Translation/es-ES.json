@@ -303,6 +303,7 @@
     "not_listed": "No listado"
   },
   "trade": {
+    "roblox_verified_locked": "Tu nombre de Roblox verificado. Para cambiarlo, verifica un nombre nuevo en Ajustes.",
     "search_placeholder": "Buscar",
     "delete_confirmation_title": "Eliminar tradeo",
     "delete_confirmation_message": "¿Seguro que quieres eliminar este tradeo? No se puede deshacer.",

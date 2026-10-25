@@ -393,6 +393,7 @@
     "ok": "OK"
   },
   "trade": {
+    "roblox_verified_locked": "Tu nombre de Roblox verificado. Para cambiarlo, verifica un nombre nuevo en Ajustes.",
     "search_placeholder": "Buscar",
     "filter_has": "Tiene",
     "filter_wants": "Quiere",

@@ -404,6 +404,7 @@
     "ok": "موافق"
   },
   "trade": {
+    "roblox_verified_locked": "اسمك الموثّق في Roblox. لتغييره، وثّق اسمًا جديدًا من الإعدادات.",
     "search_placeholder": "ابحث",
     "filter_has": "يمتلك",
     "filter_wants": "يريد",

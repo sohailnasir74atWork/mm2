@@ -299,6 +299,7 @@
     "not_listed": "掲載なし"
   },
   "trade": {
+    "roblox_verified_locked": "認証済みのRoblox名です。変更するには、設定で新しい名前を認証してください。",
     "search_placeholder": "検索",
     "delete_confirmation_title": "削除の確認",
     "delete_confirmation_message": "このトレードを削除しますか？この操作は取り消せません。",

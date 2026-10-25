@@ -49,6 +49,7 @@ import {
   startAfter as fsStartAfter, Timestamp,
 } from '@react-native-firebase/firestore';
 import { useGlobalState } from '../GlobelStats';
+import ProGrantPanel from './ProGrantPanel';
 import { getThemeColors } from '../Helper/themeColors';
 import {
   unbanUserWithEmail, banUserwithEmail, setUserStrike, muteUser, canStaffBanMute,
@@ -1816,6 +1817,10 @@ const AdminDashboard = () => {
                   </TouchableOpacity>
                 )}
               </View>
+
+              {isAdmin && !!merged.id && (
+                <ProGrantPanel uid={merged.id} name={merged.displayName} adminUid={user?.id} colors={newsColors} />
+              )}
 
               {detailLoading && <ActivityIndicator color={c.primary} style={{ marginBottom: 12 }} />}
 

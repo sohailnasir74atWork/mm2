@@ -1,12 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createMMKV } from 'react-native-mmkv';
 import { AppState } from 'react-native';
 import Purchases from 'react-native-purchases';
+import { getAnalytics, getAppInstanceId } from '@react-native-firebase/analytics';
 import config from './Helper/Environment';
 import { useTranslation } from 'react-i18next';
 
 import { showErrorMessage, showSuccessMessage } from './Helper/MessageHelper';
 import { trackProPurchase } from './Helper/growthAnalytics';
+import { isProGrantActive, onProGrantChange, startProGrants } from './Helper/proGrant';
 
 const storage = createMMKV();
 
@@ -166,6 +168,26 @@ export const LocalStateProvider = ({ children }) => {
       // console.error('🚨 MMKV supports only string, number, boolean, or JSON stringified objects.');
     }
   }, []); // ✅ Empty deps - function is stable, doesn't depend on any props/state
+
+  // Pro = a RevenueCat purchase OR Pro an admin gave (RTDB pro_grants,
+  // Helper/proGrant.js). RevenueCat is the only thing that sets rcPro; an
+  // admin grant starting, ending or the user signing out re-runs the merge.
+  const rcProRef = useRef(null);
+  const applyPro = useCallback((rcPro) => {
+    if (typeof rcPro === 'boolean') rcProRef.current = rcPro;
+    const grantPro = isProGrantActive();
+    if (rcProRef.current === null) {
+      // RevenueCat hasn't answered yet: only ever add Pro here, never remove it.
+      if (grantPro) updateLocalState('isPro', true);
+      return;
+    }
+    updateLocalState('isPro', rcProRef.current || grantPro);
+  }, [updateLocalState]);
+  useEffect(() => {
+    const stop = onProGrantChange(() => applyPro());
+    startProGrants();
+    return stop;
+  }, [applyPro]);
   const canTranslate = useCallback(() => {
     const today = new Date().toDateString();
     const { count, date } = localState.translationUsage || { count: 0, date: today };
@@ -211,6 +233,12 @@ export const LocalStateProvider = ({ children }) => {
         shouldShowInAppMessagesAutomatically: false,
       });
       showBillingMessagesLater();
+      // Lets RevenueCat's Firebase integration send renewals, refunds and
+      // cancellations to GA4 for this device, so a Google Ads campaign's
+      // revenue keeps counting after the first payment. Never awaited.
+      getAppInstanceId(getAnalytics())
+        .then((id) => (id ? Purchases.setFirebaseAppInstanceID(id) : null))
+        .catch(() => {});
       const userID = await Purchases.getAppUserID();
       setCustomerId(userID);
 
@@ -274,7 +302,7 @@ export const LocalStateProvider = ({ children }) => {
       );
       const proStatus = !!(proKey && entitlements[proKey]);
 
-      updateLocalState('isPro', proStatus);
+      applyPro(proStatus);
       setMySubscriptions(
         proStatus
           ? customerInfo.activeSubscriptions.map((plan) => ({
@@ -306,7 +334,7 @@ export const LocalStateProvider = ({ children }) => {
       // console.log(customerInfo.activeSubscriptions)
       const proStatus = !!(proKey && entitlements[proKey]);
       if (proStatus) {
-        updateLocalState('isPro', proStatus); // Persist Pro status in MMKV
+        applyPro(proStatus); // Persist Pro status in MMKV
         const activePlansWithExpiry = customerInfo.activeSubscriptions.map((subscription) => ({
           plan: subscription,
           expiry: customerInfo.allExpirationDates[subscription],
@@ -315,10 +343,10 @@ export const LocalStateProvider = ({ children }) => {
       } else {
         // A lapsed subscription must turn ads back on. This branch used to be
         // missing, so once isPro had ever been written true it stayed true in
-        // MMKV on this device forever. RevenueCat is the only source of Pro in
-        // this app, so an answered-but-empty entitlement set is authoritative
+        // MMKV on this device forever. An answered-but-empty entitlement set is
+        // authoritative for the RevenueCat half of Pro (applyPro adds admin Pro)
         // (a thrown getCustomerInfo lands in the catch and changes nothing).
-        updateLocalState('isPro', false);
+        applyPro(false);
         setMySubscriptions([]);
       }
     } catch (error) {
@@ -336,7 +364,7 @@ export const LocalStateProvider = ({ children }) => {
       );
       const proStatus = !!(proKey && entitlements[proKey]);
 
-      updateLocalState('isPro', proStatus);
+      applyPro(proStatus);
       setMySubscriptions(
         proStatus
           ? customerInfo.activeSubscriptions.map((plan) => ({

@@ -381,6 +381,7 @@
     "ok": "ОК"
   },
   "trade": {
+    "roblox_verified_locked": "Твой подтверждённый ник Roblox. Чтобы сменить его, подтверди новый ник в Настройках.",
     "search_placeholder": "Поиск",
     "filter_has": "Есть",
     "filter_wants": "Хочет",

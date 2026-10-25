@@ -22,6 +22,7 @@ import SignInDrawer from '../Firebase/SigninDrawer';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../Translation/LanguageProvider';
 import { showSuccessMessage, showErrorMessage } from '../Helper/MessageHelper';
+import { verifiedRobloxName, readVerifiedRobloxName, robloxFieldsForTrade } from '../Helper/robloxIdentity';
 import InterstitialAdManager from '../Ads/IntAd';
 import PostAdManager from '../Ads/PostAd';
 import BannerAdComponent from '../Ads/bannerAds';
@@ -841,6 +842,11 @@ const HomeScreen = ({ selectedTheme }) => {
 
     setIsSubmitting(true);
     try {
+      // The name on the trade comes from the stored record (users/{uid}), so a
+      // stale in-memory profile cannot put a different name next to the tick.
+      const verifiedName = await readVerifiedRobloxName(appdatabase, user?.id, user);
+      const robloxFields = robloxFieldsForTrade(verifiedName, user?.robloxUsername);
+
       // ✅ FIRESTORE ONLY: Read rating summary from user_ratings_summary (single source of truth)
       let userRating = null;
       let ratingCount = 0;
@@ -949,8 +955,8 @@ const HomeScreen = ({ selectedTheme }) => {
         rating: userRating,
         ratingCount,
         flage: user.flage ? user.flage : null,
-        robloxUsername: user?.robloxUsername || null,
-        robloxUsernameVerified: user?.robloxUsernameVerified || false,
+        robloxUsername: robloxFields.robloxUsername || null,
+        robloxUsernameVerified: robloxFields.robloxUsernameVerified,
         hasRecentGameWin: hasRecentWin, // ✅ Game win info
         lastGameWinAt: user?.lastGameWinAt || null, // ✅ Game win timestamp
 
@@ -1038,7 +1044,7 @@ const HomeScreen = ({ selectedTheme }) => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [isSubmitting, user, localState.isPro, hasItems, wantsItems, description, type, lastTradeTime, tradesCollection, t, resetState]);
+  }, [isSubmitting, user, appdatabase, localState.isPro, hasItems, wantsItems, description, type, lastTradeTime, tradesCollection, t, resetState]);
 
   // ── Open the Log Trade sheet ──
   // Unlike "Create Trade" this posts nothing public — TradeCompletion records
@@ -1544,6 +1550,17 @@ const HomeScreen = ({ selectedTheme }) => {
                     value={description}
                     onChangeText={setDescription}
                   />
+                  {verifiedRobloxName(user) && (
+                    <>
+                      <View style={[styles.input, styles.robloxLockedRow]}>
+                        <Text style={styles.robloxLockedName} numberOfLines={1}>{verifiedRobloxName(user)}</Text>
+                        <Image source={require('../../assets/verification.png')} style={styles.robloxLockedBadge} />
+                      </View>
+                      <Text style={styles.robloxLockedHint}>
+                        {t('trade.roblox_verified_locked', { defaultValue: 'Your verified Roblox name. To change it, verify a new name in Settings.' })}
+                      </Text>
+                    </>
+                  )}
                   <View style={styles.buttonContainer}>
                     <TouchableOpacity
                       style={[styles.button, styles.cancelButton]}
@@ -2167,6 +2184,28 @@ const getStyles = (isDarkMode, isGG) =>
       marginBottom: 20,
       color: isDarkMode ? 'white' : 'black',
       fontFamily: 'Lato-Ragular'
+    },
+    robloxLockedRow: {
+      marginTop: 8,
+      marginBottom: 4,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    robloxLockedName: {
+      flexShrink: 1,
+      color: isDarkMode ? 'white' : 'black',
+      fontFamily: 'Lato-Regular',
+    },
+    robloxLockedBadge: {
+      width: 14,
+      height: 14,
+      marginLeft: 6,
+    },
+    robloxLockedHint: {
+      fontSize: 10,
+      marginBottom: 16,
+      color: 'grey',
+      fontFamily: 'Lato-Regular',
     },
     buttonContainer: {
       flexDirection: 'row',

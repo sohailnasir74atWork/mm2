@@ -388,6 +388,7 @@
     "ok": "OK"
   },
   "trade": {
+    "roblox_verified_locked": "Ton pseudo Roblox vérifié. Pour le changer, vérifie un nouveau pseudo dans les Paramètres.",
     "search_placeholder": "Rechercher",
     "filter_has": "Possède",
     "filter_wants": "Souhaite",

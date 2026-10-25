@@ -712,10 +712,13 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
     }
   }
 
-  // Link check (only for non-pro & non-admin)
+  // Link check: only admins may post links in the public chat (Pro no longer bypasses)
   const containsLink = trimmedInput ? LINK_REGEX.test(trimmedInput) : false;
-  if (containsLink && !localState?.isPro && !isAdmin) {
-    Alert.alert(t('home.alert.error'), t('misc.proUsersOnlyLinks'));
+  if (containsLink && !isAdmin) {
+    Alert.alert(
+      t('home.alert.error'),
+      t('misc.adminOnlyLinks', { defaultValue: 'Only admins can send links.' }),
+    );
     return;
   }
 

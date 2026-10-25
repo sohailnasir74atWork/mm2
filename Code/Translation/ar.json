@@ -1,5 +1,6 @@
 {
   "settings": {
+    "view_public_profile": "عرض ملفي الشخصي العام",
     "login_register": "تسجيل الدخول / إنشاء حساب",
     "login_description": "سجّل الدخول للوصول إلى الإشعارات، التداول، الدردشة والمزيد",
     "app_settings": "إعدادات التطبيق",
@@ -1401,6 +1402,7 @@
     "correct_count": "الإجابات الصحيحة: {{score}}/5"
   },
   "profile": {
+    "public_view": "العرض العام",
     "recent_trades": "أحدث الصفقات",
     "no_trades_yet": "لا توجد صفقات بعد.",
     "load_more_trades": "عرض المزيد من الصفقات",

@@ -1,5 +1,6 @@
 {
   "settings": {
+    "view_public_profile": "Voir mon profil public",
     "login_register": "Connexion / Inscription",
     "login_description": "Connecte-toi pour accéder aux notifications, au trading, au chat et bien plus encore",
     "app_settings": "APPLI",
@@ -1336,6 +1337,7 @@
     "correct_count": "{{score}}/5 bonnes réponses"
   },
   "profile": {
+    "public_view": "Vue publique",
     "recent_trades": "Trades récents",
     "no_trades_yet": "Pas encore de trades.",
     "load_more_trades": "Voir plus de trades",

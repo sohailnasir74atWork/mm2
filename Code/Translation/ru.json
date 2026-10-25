@@ -1,5 +1,6 @@
 {
   "settings": {
+    "view_public_profile": "Посмотреть мой публичный профиль",
     "login_register": "Вход / Регистрация",
     "login_description": "Войдите, чтобы получить доступ к уведомлениям, торговле, чату и многому другому",
     "app_settings": "НАСТРОЙКИ ПРИЛОЖЕНИЯ",
@@ -1320,6 +1321,7 @@
     "correct_count": "Верно: {{score}}/5"
   },
   "profile": {
+    "public_view": "Публичный вид",
     "recent_trades": "Последние трейды",
     "no_trades_yet": "Трейдов пока нет.",
     "load_more_trades": "Показать ещё трейды",

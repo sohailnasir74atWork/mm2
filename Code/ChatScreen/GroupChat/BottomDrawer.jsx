@@ -208,6 +208,10 @@ const ProfileBottomDrawer = ({
   // Staff = admin, moderator or Junior Mod. Declared up here because the
   // profile fetch below uses it: only staff look up another user's email.
   const isStaff = isAdmin || !!user?.isModerator || !!user?.isBabyMod;
+  // Self view (Setting.jsx "View my public profile"): the drawer renders
+  // exactly what another player sees, minus the actions that only make
+  // sense on someone else (block, chat, follow, mod tools).
+  const isOwnProfile = !!user?.id && (selectedUserId === user.id || selectedUserId === user.senderId);
 
   // ✅ FIXED: Real-time online status listener instead of stale one-shot prop
   const isOnline = useOnlineStatus(isVisible ? selectedUserId : null);
@@ -1941,21 +1945,36 @@ const ProfileBottomDrawer = ({
                 </View>
               )}
 
-              {/* Ban/Block icon on banner */}
-              <TouchableOpacity
-                onPress={handleBanToggle}
-                style={{
+              {/* Ban/Block icon on banner; on your own profile a "public view" chip instead */}
+              {isOwnProfile ? (
+                <View style={{
                   position: 'absolute', top: 12, left: 14,
-                  padding: 6, borderRadius: 999,
-                  backgroundColor: 'rgba(255,255,255,0.15)',
-                }}
-              >
-                <Icon
-                  name={isBlock ? 'shield-checkmark-outline' : 'ban-outline'}
-                  size={16}
-                  color="#fff"
-                />
-              </TouchableOpacity>
+                  flexDirection: 'row', alignItems: 'center', gap: 4,
+                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  paddingHorizontal: 10, paddingVertical: 4,
+                  borderRadius: 999,
+                }}>
+                  <Icon name="eye-outline" size={12} color="#fff" />
+                  <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 }}>
+                    {t('profile.public_view')}
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={handleBanToggle}
+                  style={{
+                    position: 'absolute', top: 12, left: 14,
+                    padding: 6, borderRadius: 999,
+                    backgroundColor: 'rgba(255,255,255,0.15)',
+                  }}
+                >
+                  <Icon
+                    name={isBlock ? 'shield-checkmark-outline' : 'ban-outline'}
+                    size={16}
+                    color="#fff"
+                  />
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* ═══ CONTENT AREA (white/dark bg below banner) ═══ */}
@@ -2291,7 +2310,7 @@ const ProfileBottomDrawer = ({
                 {/* Top row: Chat + Follow (or Chat + Roblox if no follow) */}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   {/* Chat Action */}
-                  {!fromPvtChat && (
+                  {!fromPvtChat && !isOwnProfile && (
                     <TouchableOpacity
                       onPress={handleStartChat}
                       activeOpacity={0.85}
@@ -2424,7 +2443,7 @@ const ProfileBottomDrawer = ({
                   an ordinary profile view. A user holding only the delegated
                   Junior-Mod grant is not staff, but still needs the toggle to
                   reach their one chip — ProfileAdminActions hides the rest. */}
-              {!loadDetails && user?.id !== selectedUserId && (isStaff || canManageBabyMod) && (
+              {!loadDetails && !isOwnProfile && (isStaff || canManageBabyMod) && (
                 <View style={{ paddingHorizontal: 12 }}>
                   <TouchableOpacity
                     onPress={() => setShowModTools((prev) => !prev)}

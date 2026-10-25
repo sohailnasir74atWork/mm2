@@ -1,5 +1,6 @@
 {
   "settings": {
+    "view_public_profile": "Mein öffentliches Profil ansehen",
     "login_register": "Anmelden / Registrieren",
     "login_description": "Melden Sie sich an, um auf Benachrichtigungen, Handel, Chat und vieles mehr zuzugreifen",
     "app_settings": "APP-EINSTELLUNGEN",
@@ -1321,6 +1322,7 @@
     "correct_count": "{{score}}/5 richtig"
   },
   "profile": {
+    "public_view": "Öffentliche Ansicht",
     "recent_trades": "Neueste Trades",
     "no_trades_yet": "Noch keine Trades.",
     "load_more_trades": "Mehr Trades laden",

@@ -1,5 +1,6 @@
 {
   "settings": {
+    "view_public_profile": "Ver mi perfil público",
     "login_register": "Inicia sesión / Regístrate",
     "app_settings": "AJUSTES DE LA APP",
     "haptic_feedback": "Vibración",
@@ -1169,6 +1170,7 @@
     "correct_count": "{{score}}/5 aciertos"
   },
   "profile": {
+    "public_view": "Vista pública",
     "recent_trades": "Últimos tradeos",
     "no_trades_yet": "Aún sin tradeos.",
     "load_more_trades": "Cargar más tradeos",

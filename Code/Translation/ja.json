@@ -1,5 +1,6 @@
 {
   "settings": {
+    "view_public_profile": "自分の公開プロフィールを見る",
     "login_register": "ログイン・新規登録",
     "app_settings": "アプリ設定",
     "haptic_feedback": "バイブレーション",
@@ -1133,6 +1134,7 @@
     "correct_count": "{{score}}/5問正解"
   },
   "profile": {
+    "public_view": "公開表示",
     "recent_trades": "最近のトレード",
     "no_trades_yet": "まだトレードはありません。",
     "load_more_trades": "トレードをもっと見る",

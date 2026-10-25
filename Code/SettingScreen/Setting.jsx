@@ -73,6 +73,7 @@ import { pickImages } from '../Helper/imagePicker';
 import { uploadImage, UPLOAD_KIND } from '../Helper/imageUpload';
 import { timeAgo } from '../Helper/timeAgo';
 import FramedAvatar from '../ChatScreen/GroupChat/FramedAvatar';
+import ProfileBottomDrawer from '../ChatScreen/GroupChat/BottomDrawer';
 import { getMyCosmetics, syncMyCosmetics } from '../Helper/cosmeticsCache';
 import { usePrivacyOptionsRequired, showPrivacyOptionsForm } from '../Ads/consentOptions';
 import ScreenBottomBanner from '../Ads/ScreenBottomBanner';
@@ -81,6 +82,8 @@ import { openReportForm, reviewForReport } from '../Reports/openReportForm';
 
 // ~500 KB max for avatar (small, DP-friendly)
 const MAX_AVATAR_SIZE_BYTES = 500 * 1024;
+// Stable empty list for the public-profile preview drawer.
+const NO_BANNED_USERS = [];
 
 // Helper function to format item names
 const formatTradeName = (name) => {
@@ -497,6 +500,12 @@ export default function SettingsScreen({ selectedTheme }) {
   const modalInsets = useModalWindowInsets();
   const navBarInset = useNavBarInset();
   const [isDrawerVisible, setDrawerVisible] = useState(false);
+  // Public-profile preview. The drawer starts loading the moment it has a
+  // selectedUser (it does not wait for isVisible), so it is only mounted
+  // while open or sliding closed: target = who it shows, visible = open.
+  const [showPublicProfile, setShowPublicProfile] = useState(false);
+  const [publicProfileTarget, setPublicProfileTarget] = useState(null);
+  const publicProfileCloseTimer = useRef(null);
   const [newDisplayName, setNewDisplayName] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [openSingnin, setOpenSignin] = useState(false);
@@ -678,6 +687,53 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
 
   const { triggerHapticFeedback } = useHaptic();
+
+  const publicProfileUser = useMemo(() => {
+    if (!user?.id) return null;
+    return {
+      id: user.id,
+      senderId: user.id,
+      sender: user.displayName || t('group_chat.anonymous'),
+      displayName: user.displayName || t('group_chat.anonymous'),
+      avatar: user.avatar || null,
+      flage: user.flage || null,
+      robloxUsername: user.robloxUsername || null,
+      robloxUserId: user.robloxUserId || null,
+      robloxUsernameVerified: !!user.robloxUsernameVerified,
+      // Chat messages stamp Pro from localState, so the preview does too.
+      isPro: !!localState?.isPro,
+    };
+  }, [user?.id, user?.displayName, user?.avatar, user?.flage, user?.robloxUsername, user?.robloxUserId, user?.robloxUsernameVerified, localState?.isPro, t]);
+
+  const handleViewPublicProfile = useCallback(() => {
+    triggerHapticFeedback('impactLight');
+    if (!publicProfileUser) {
+      showErrorMessage(t('home.alert.error'), t('settings.login_first'));
+      return;
+    }
+    if (publicProfileCloseTimer.current) {
+      clearTimeout(publicProfileCloseTimer.current);
+      publicProfileCloseTimer.current = null;
+    }
+    setPublicProfileTarget(publicProfileUser);
+    setShowPublicProfile(true);
+  }, [publicProfileUser, triggerHapticFeedback, t]);
+
+  // Hide first so the Modal slides out, then unmount once the animation is
+  // done (400 ms, as in Adopt Me's copy of this preview).
+  const closePublicProfile = useCallback(() => {
+    setShowPublicProfile(false);
+    if (publicProfileCloseTimer.current) clearTimeout(publicProfileCloseTimer.current);
+    publicProfileCloseTimer.current = setTimeout(() => {
+      publicProfileCloseTimer.current = null;
+      setPublicProfileTarget(null);
+    }, 400);
+  }, []);
+
+  useEffect(() => () => {
+    if (publicProfileCloseTimer.current) clearTimeout(publicProfileCloseTimer.current);
+  }, []);
+
   const themes = [t('settings.theme_system'), t('settings.theme_light'), t('settings.theme_dark')];
     // const themes = ['System', 'Light','Dark'];
 
@@ -2701,6 +2757,15 @@ const formatPlanName = (plan) => {
             </Text>
           </View>
         )}
+
+        {/* 👁 View my public profile — opens the same drawer others see */}
+        {user?.id && (
+          <TouchableOpacity style={styles.option} onPress={handleViewPublicProfile}>
+            <Icon name="eye-outline" size={18} color={'white'} style={{backgroundColor:'#0EA5E9', padding:5, borderRadius:5}} />
+            <Text style={[styles.optionText, { flex: 1 }]} numberOfLines={1}>{t('settings.view_public_profile')}</Text>
+            <Icon name="chevron-forward" size={16} color={isDarkMode ? '#9ca3af' : '#6b7280'} />
+          </TouchableOpacity>
+        )}
         
         {/* Flag Visibility Toggle */}
         {user?.id && (
@@ -3325,6 +3390,17 @@ const formatPlanName = (plan) => {
       </ScrollView>}
       {/* Clears the Android nav bar under the scrolling page. */}
       <ScreenBottomBanner ad={false} />
+
+      {/* Public profile preview: the shared profile drawer pointed at yourself */}
+      {publicProfileTarget && (
+        <ProfileBottomDrawer
+          isVisible={showPublicProfile}
+          toggleModal={closePublicProfile}
+          selectedUser={publicProfileTarget}
+          isOnline={false}
+          bannedUsers={NO_BANNED_USERS}
+        />
+      )}
 
       {/* Bottom Drawer */}
          {/* Bottom Drawer */}

@@ -1,5 +1,6 @@
 {
   "settings": {
+    "view_public_profile": "Ver meu perfil público",
     "login_register": "Entrar / Registrar",
     "login_description": "Faça login para acessar notificações, negociações, bate-papo e muito mais",
     "app_settings": "CONFIGURAÇÕES DO APLICATIVO",
@@ -685,6 +686,7 @@
     "notification_channel_name": "Notificações gerais"
   },
   "profile": {
+    "public_view": "Visão pública",
     "recent_trades": "Trocas Recentes",
     "no_trades_yet": "Nenhuma troca ainda.",
     "load_more_trades": "Carregar mais trocas",

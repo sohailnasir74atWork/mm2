@@ -1,5 +1,6 @@
 {
   "settings": {
+    "view_public_profile": "Ver mi perfil público",
     "login_register": "Inicia sesión o regístrate",
     "login_description": "Inicia sesión para acceder a notificaciones, comercio, chat y mucho más",
     "app_settings": "AJUSTES DE LA APP",
@@ -1341,6 +1342,7 @@
     "correct_count": "{{score}}/5 correctas"
   },
   "profile": {
+    "public_view": "Vista pública",
     "recent_trades": "Últimos tradeos",
     "no_trades_yet": "Sin tradeos aún.",
     "load_more_trades": "Cargar más tradeos",

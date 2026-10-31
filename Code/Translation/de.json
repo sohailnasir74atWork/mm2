@@ -344,7 +344,8 @@
     "ban_device_linked": "Ein anderer Account auf diesem Gerät wurde gesperrt. Deshalb ist das Gerät eingeschränkt, bis diese Sperre endet. Mit einem anderen Account anzumelden, hebt das nicht auf.",
     "ban_reason_title": "Grund",
     "ban_appeal_question": "Denkst du, das ist ein Fehler?",
-    "ban_appeal_button": "Einspruch senden"
+    "ban_appeal_button": "Einspruch senden",
+    "new_badge": "NEU"
   },
   "value": {
     "title": "Wert-Bildschirm",
@@ -1065,6 +1066,10 @@
     "loading_subtext": "Zeigt die meistbewerteten Nutzer mit mindestens 3,7 Sternen …",
     "empty_text": "Keine Nutzer mit mindestens 3,7 Sternen gefunden",
     "empty_subtext": "Die Rangliste wird täglich aktualisiert",
+    "tab_top_rated": "Top bewertet",
+    "tab_custom": "Eigene",
+    "empty_custom": "Noch keine eigenen Abzeichen vergeben",
+    "empty_roster": "Noch niemand hier",
     "last_updated": "Zuletzt aktualisiert: {{date}}"
   },
   "create_group": {

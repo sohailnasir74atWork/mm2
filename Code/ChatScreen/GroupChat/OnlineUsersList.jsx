@@ -17,7 +17,8 @@ import { useGlobalState } from '../../GlobelStats';
 import { ref, get, query, orderByValue, equalTo, limitToFirst, startAfter } from '@react-native-firebase/database';
 import { searchUsersByName } from '../utils/userSearch';
 import { getOrFetchFullProfile } from '../../Helper/profileCache';
-import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
+import UserBadgePill, { getFirstBadgeType, CustomBadgePills } from '../../Helper/UserBadgePill';
+import { getUserRoles } from '../../Helper/roleRoster';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import InterstitialAdManager from '../../Ads/IntAd';
@@ -571,6 +572,8 @@ const OnlineUsersList = ({
             {/* Role pills */}
             {(() => {
               const firstBadge = getFirstBadgeType(item);
+              // Badge colours + custom badges: the live worn_badges roster.
+              const worn = getUserRoles(item.id);
               return (
                 <>
                   {item?.isAdmin && (
@@ -583,14 +586,15 @@ const OnlineUsersList = ({
                     <UserBadgePill type="jmd" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'jmd'} />
                   )}
                   {item?.isTrusted && (
-                    <UserBadgePill type="trusted" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
+                    <UserBadgePill type="trusted" color={worn.badgeStyles?.trusted} size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
                   )}
                   {item?.isCMSR && (
-                    <UserBadgePill type="cmsr" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
+                    <UserBadgePill type="cmsr" color={worn.badgeStyles?.cmsr} size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
                   )}
                   {item?.isHelper && (
-                    <UserBadgePill type="helper" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
+                    <UserBadgePill type="helper" color={worn.badgeStyles?.helper} size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
                   )}
+                  <CustomBadgePills roles={worn} size="sm" isDarkMode={isDarkMode} />
                 </>
               );
             })()}

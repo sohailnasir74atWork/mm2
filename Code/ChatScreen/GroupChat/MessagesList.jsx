@@ -26,7 +26,7 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import { showSuccessMessage } from '../../Helper/MessageHelper';
 import FramedAvatar from './FramedAvatar';
 import { resolveProfile, warmProfileCache, getCachedProfile } from '../../Helper/profileCache';
-import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
+import UserBadgePill, { getFirstBadgeType, CustomBadgePills } from '../../Helper/UserBadgePill';
 import { getSafeTextColor, RainbowText, isMultiColorText, getMultiColorPalette } from '../../Helper/contrastHelper';
 import axios from 'axios';
 import { useLocalState } from '../../LocalGlobelStats';
@@ -192,14 +192,15 @@ const MessageRow = memo(function MessageRow(props) {
         <UserBadgePill type="jmd" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'jmd'} />
       )}
       {roles.isTrusted && (
-        <UserBadgePill type="trusted" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
+        <UserBadgePill type="trusted" color={roles.badgeStyles?.trusted} size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
       )}
       {roles.isCMSR && (
-        <UserBadgePill type="cmsr" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
+        <UserBadgePill type="cmsr" color={roles.badgeStyles?.cmsr} size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
       )}
       {roles.isHelper && (
-        <UserBadgePill type="helper" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
+        <UserBadgePill type="helper" color={roles.badgeStyles?.helper} size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
       )}
+      <CustomBadgePills roles={roles} size="sm" isDarkMode={isDarkMode} />
     </>
   );
 })()}

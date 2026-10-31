@@ -288,7 +288,9 @@
     "ban_device_linked": "この端末で使われた別のアカウントがBANされたため、そのBANが終わるまでこの端末は制限されます。別のアカウントでログインしても解除されません。",
     "ban_reason_title": "理由",
     "ban_appeal_question": "まちがいだと思う？",
-    "ban_appeal_button": "異議を申し立てる"
+    "ban_appeal_button": "異議を申し立てる",
+    "mini_games": "ミニゲーム",
+    "new_badge": "NEW"
   },
   "value": {
     "search_placeholder": "検索",
@@ -883,6 +885,10 @@
     "loading_subtext": "評価3.7以上で、レビュー数が多いユーザーを表示しています…",
     "empty_text": "評価3.7以上のユーザーは見つかりませんでした",
     "empty_subtext": "ランキングは毎日更新されます",
+    "tab_top_rated": "高評価",
+    "tab_custom": "カスタム",
+    "empty_custom": "カスタムバッジを持つユーザーはまだいません",
+    "empty_roster": "まだ誰もいません",
     "last_updated": "最終更新：{{date}}"
   },
   "create_group": {

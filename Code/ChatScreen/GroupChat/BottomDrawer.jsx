@@ -52,14 +52,14 @@ import {
 } from '@react-native-firebase/firestore';
 import { ref, get, set } from '@react-native-firebase/database';
 import { useOnlineStatus, canStaffBanMute, checkBanStatus, setUserStrike, muteUser,
-  unbanUserWithEmail, makeModerator, removeModerator, makeBabyMod, removeBabyMod,
-  makeTrusted, removeTrusted, makeCMSR, removeCMSR, makeHelper, removeHelper } from '../utils';
+  unbanUserWithEmail, makeModerator, removeModerator, makeBabyMod, removeBabyMod } from '../utils';
 import ProfileAdminActions from './ProfileAdminActions';
-import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
+import UserBadgePill, { getFirstBadgeType, CustomBadgePills } from '../../Helper/UserBadgePill';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import FramedAvatar from './FramedAvatar';
 import { getCachedProfile, warmProfileCache, invalidateFullProfile, getRoleOverride, getOrFetchFullProfile } from '../../Helper/profileCache';
+import { getUserRoles, useRoleRosterVersion } from '../../Helper/roleRoster';
 import { getUserEmail } from '../../Helper/privateProfile';
 import { resolveItemImage } from '../../Helper/valueSources';
 
@@ -499,6 +499,7 @@ const ProfileBottomDrawer = ({
   }, [user?.id, selectedUserId, firestoreDB, isFollowing, triggerHapticFeedback, t]);
 
   // ✅ Merge selectedUser with fetched userData
+  const roleRosterVersion = useRoleRosterVersion(appdatabase);
   const mergedUser = useMemo(() => {
     if (!userData) return selectedUser;
     return {
@@ -513,6 +514,10 @@ const ProfileBottomDrawer = ({
       isTrusted: userData.isTrusted,
       isCMSR: userData.isCMSR,
       isHelper: userData.isHelper,
+      // Mod badge colours + custom badges: the live worn_badges roster (a
+      // grant made on this device wins through the role override).
+      badgeStyles: userData.badgeStyles ?? getUserRoles(selectedUserId).badgeStyles ?? null,
+      customBadges: userData.customBadges ?? getUserRoles(selectedUserId).customBadges ?? null,
       robloxUsername: selectedUser?.robloxUsername || userData.robloxUsername,
       robloxUserId: selectedUser?.robloxUserId || userData.robloxUserId,
       robloxUsernameVerified: selectedUser?.robloxUsernameVerified !== undefined 
@@ -520,7 +525,7 @@ const ProfileBottomDrawer = ({
         : userData.robloxUsernameVerified,
       isPro: selectedUser?.isPro !== undefined ? selectedUser.isPro : userData.isPro,
     };
-  }, [selectedUser, userData]);
+  }, [selectedUser, userData, selectedUserId, roleRosterVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─────────────────────────────────────────────
   // Clipboard
@@ -777,12 +782,7 @@ const ProfileBottomDrawer = ({
   const handleDemoteModerator  = () => applyRole(removeModerator, 'isModerator', false, 'Remove Moderator', `Remove Moderator from ${userName}?`);
   const handleMakeBabyMod      = () => applyRole(makeBabyMod, 'isBabyMod', true, 'Make Junior Mod', `Make ${userName} a Junior Mod? They can only mute for up to 2 hours.`);
   const handleRemoveBabyMod    = () => applyRole(removeBabyMod, 'isBabyMod', false, 'Remove Junior Mod', `Remove Junior Mod from ${userName}?`);
-  const handleMakeTrusted      = () => applyRole(makeTrusted, 'isTrusted', true, 'Make Trusted', `Give ${userName} the Trusted badge?`);
-  const handleRemoveTrusted    = () => applyRole(removeTrusted, 'isTrusted', false, 'Remove Trusted', `Remove the Trusted badge from ${userName}?`);
-  const handleMakeCMSR         = () => applyRole(makeCMSR, 'isCMSR', true, 'Make Commissioner', `Give ${userName} the CMSR badge?`);
-  const handleRemoveCMSR       = () => applyRole(removeCMSR, 'isCMSR', false, 'Remove Commissioner', `Remove the CMSR badge from ${userName}?`);
-  const handleMakeHelper       = () => applyRole(makeHelper, 'isHelper', true, 'Make Helper', `Give ${userName} the Helper badge?`);
-  const handleRemoveHelper     = () => applyRole(removeHelper, 'isHelper', false, 'Remove Helper', `Remove the Helper badge from ${userName}?`);
+  // Trusted / CMSR / Helper (+ colours, custom badges): Code/Helper/BadgeManager.jsx.
 
   // ─────────────────────────────────────────────
   // Start chat
@@ -2042,14 +2042,15 @@ const ProfileBottomDrawer = ({
                           <UserBadgePill type="jmd" size="md" isDarkMode={isDarkMode} glow={firstBadge === 'jmd'} />
                         )}
                         {mergedUser?.isTrusted && (
-                          <UserBadgePill type="trusted" size="md" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
+                          <UserBadgePill type="trusted" color={mergedUser?.badgeStyles?.trusted} size="md" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
                         )}
                         {mergedUser?.isCMSR && (
-                          <UserBadgePill type="cmsr" size="md" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
+                          <UserBadgePill type="cmsr" color={mergedUser?.badgeStyles?.cmsr} size="md" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
                         )}
                         {mergedUser?.isHelper && (
-                          <UserBadgePill type="helper" size="md" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
+                          <UserBadgePill type="helper" color={mergedUser?.badgeStyles?.helper} size="md" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
                         )}
+                        <CustomBadgePills roles={mergedUser} size="md" isDarkMode={isDarkMode} />
                       </>
                     );
                   })()}
@@ -2481,15 +2482,11 @@ const ProfileBottomDrawer = ({
                       handleMakeBabyMod={handleMakeBabyMod}
                       handleRemoveBabyMod={handleRemoveBabyMod}
                       canManageBadges={canManageBadges}
-                      targetIsTrusted={!!mergedUser?.isTrusted}
-                      targetIsCMSR={!!mergedUser?.isCMSR}
-                      targetIsHelper={!!mergedUser?.isHelper}
-                      handleMakeTrusted={handleMakeTrusted}
-                      handleRemoveTrusted={handleRemoveTrusted}
-                      handleMakeCMSR={handleMakeCMSR}
-                      handleRemoveCMSR={handleRemoveCMSR}
-                      handleMakeHelper={handleMakeHelper}
-                      handleRemoveHelper={handleRemoveHelper}
+                      appdatabase={appdatabase}
+                      targetUid={selectedUserId}
+                      userName={userName}
+                      viewerUid={user?.id}
+                      onTargetChange={(patch) => setUserData((prev) => ({ ...(prev || {}), ...patch }))}
                     />
                   )}
                 </View>

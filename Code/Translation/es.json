@@ -345,7 +345,8 @@
     "ban_device_linked": "Otra cuenta de este dispositivo fue baneada, así que el dispositivo queda restringido hasta que termine ese baneo. Entrar con otra cuenta no lo quita.",
     "ban_reason_title": "Motivo",
     "ban_appeal_question": "¿Crees que es un error?",
-    "ban_appeal_button": "Enviar una apelación"
+    "ban_appeal_button": "Enviar una apelación",
+    "new_badge": "NUEVO"
   },
   "value": {
     "title": "Pantalla de Valor",
@@ -1077,6 +1078,10 @@
     "loading_subtext": "Mostrando a los usuarios con más reseñas y calificación de 3.7 o más...",
     "empty_text": "No hay usuarios con calificación de 3.7 o más",
     "empty_subtext": "El ranking se actualiza a diario",
+    "tab_top_rated": "Mejor valorados",
+    "tab_custom": "Personalizadas",
+    "empty_custom": "Aún no se han dado insignias personalizadas",
+    "empty_roster": "Todavía no hay nadie aquí",
     "last_updated": "Última actualización: {{date}}"
   },
   "create_group": {

@@ -18,6 +18,7 @@
 import React from 'react';
 import { getThemeColors } from '../../Helper/themeColors';
 import { View, Text, TouchableOpacity } from 'react-native';
+import BadgeManager from '../../Helper/BadgeManager';
 
 const ProfileAdminActions = ({
   isAdmin, isDarkMode, isBanned, mergedUser,
@@ -26,8 +27,10 @@ const ProfileAdminActions = ({
   isBabyMod = false, isModerator = false, isStaff = true,
   canManageBabyMod = false, targetIsBabyMod = false,
   handleMakeBabyMod, handleRemoveBabyMod,
-  canManageBadges = false, targetIsTrusted = false, targetIsCMSR = false, targetIsHelper = false,
-  handleMakeTrusted, handleRemoveTrusted, handleMakeCMSR, handleRemoveCMSR, handleMakeHelper, handleRemoveHelper,
+  // Badges (Trusted / CMSR / Helper + colours + custom badges): one panel,
+  // Code/Helper/BadgeManager.jsx. It writes RTDB itself and reports changes
+  // back through onTargetChange so the drawer's merged user stays current.
+  canManageBadges = false, appdatabase, targetUid, userName, viewerUid, onTargetChange,
   handleDeleteUserData, deletingUser = false,
   canDeleteUser = false,
 }) => {
@@ -105,28 +108,23 @@ const ProfileAdminActions = ({
             onPress={targetIsBabyMod ? handleRemoveBabyMod : handleMakeBabyMod}
           />
         )}
-        {canManageBadges && (
-          <Chip
-            label={targetIsTrusted ? 'Remove Trusted' : 'Make Trusted'}
-            color={targetIsTrusted ? '#f59e0b' : '#10b981'}
-            onPress={targetIsTrusted ? handleRemoveTrusted : handleMakeTrusted}
-          />
-        )}
-        {canManageBadges && (
-          <Chip
-            label={targetIsCMSR ? 'Remove CMSR' : 'Make CMSR'}
-            color={targetIsCMSR ? '#f59e0b' : '#6366f1'}
-            onPress={targetIsCMSR ? handleRemoveCMSR : handleMakeCMSR}
-          />
-        )}
-        {canManageBadges && (
-          <Chip
-            label={targetIsHelper ? 'Remove Helper' : 'Make Helper'}
-            color={targetIsHelper ? '#f59e0b' : '#14b8a6'}
-            onPress={targetIsHelper ? handleRemoveHelper : handleMakeHelper}
-          />
-        )}
       </View>
+
+      {/* Badges: worn list with colours, add (role or custom, max 3), create custom. */}
+      {canManageBadges && targetUid && (
+        <View style={{ marginTop: 12 }}>
+          <View style={{ height: 1, backgroundColor: border, marginBottom: 10 }} />
+          <BadgeManager
+            appdatabase={appdatabase}
+            targetUid={targetUid}
+            userName={userName}
+            target={mergedUser}
+            viewerUid={viewerUid}
+            onTargetChange={onTargetChange}
+            isDarkMode={isDarkMode}
+          />
+        </View>
+      )}
 
       {/* Delete User Data — admins + owner UID */}
       {canDeleteUser && handleDeleteUserData && (

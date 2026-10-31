@@ -12,7 +12,7 @@ import { useGlobalState } from '../../GlobelStats';
 import { ref, get, set, remove } from '@react-native-firebase/database';
 import FramedAvatar from '../GroupChat/FramedAvatar';
 import { getCachedProfile, warmProfileCache, getOrFetchFullProfile } from '../../Helper/profileCache';
-import UserBadgePill, { getPrimaryRoleType } from '../../Helper/UserBadgePill';
+import UserBadgePill, { getPrimaryRoleType, CustomBadgePills } from '../../Helper/UserBadgePill';
 import { getUserRoles, useRoleRosterVersion } from '../../Helper/roleRoster';
 
 // Presence needs its own two colours. config.colors.hasBlockGreen and
@@ -322,11 +322,13 @@ const PrivateChatHeader = React.memo(({ selectedUser, selectedTheme, bannedUsers
             <UserBadgePill
               key={type}
               type={type}
+              color={getUserRoles(selectedUid).badgeStyles?.[type]}
               size="sm"
               isDarkMode={selectedTheme?.dark ?? false}
               glow={type === firstBadge}
             />
           ))}
+          <CustomBadgePills roles={getUserRoles(selectedUid)} size="sm" isDarkMode={selectedTheme?.dark ?? false} />
         </View>
       </TouchableOpacity>
       <TouchableOpacity onPress={handleBanToggle}>

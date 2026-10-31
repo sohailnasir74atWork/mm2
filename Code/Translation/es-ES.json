@@ -294,7 +294,9 @@
     "ban_device_linked": "Se ha baneado otra cuenta de este dispositivo, así que el dispositivo está restringido hasta que acabe ese baneo. Aunque entres con otra cuenta, sigue restringido.",
     "ban_reason_title": "Motivo",
     "ban_appeal_question": "¿Crees que es un error?",
-    "ban_appeal_button": "Enviar una apelación"
+    "ban_appeal_button": "Enviar una apelación",
+    "mini_games": "Minijuegos",
+    "new_badge": "NUEVO"
   },
   "value": {
     "search_placeholder": "Buscar",
@@ -905,6 +907,10 @@
     "loading_subtext": "Usuarios con más reseñas y una nota de 3,7 o más...",
     "empty_text": "No hay usuarios con una nota de 3,7 o más",
     "empty_subtext": "La clasificación se actualiza cada día",
+    "tab_top_rated": "Mejor valorados",
+    "tab_custom": "Personalizadas",
+    "empty_custom": "Aún no se han concedido insignias personalizadas",
+    "empty_roster": "Todavía no hay nadie aquí",
     "last_updated": "Última actualización: {{date}}"
   },
   "create_group": {

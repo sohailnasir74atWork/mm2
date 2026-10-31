@@ -50,7 +50,7 @@ import FramedAvatar from '../ChatScreen/GroupChat/FramedAvatar';
 import { getCachedProfile, warmProfileCache } from '../Helper/profileCache';
 import { getUserRoles, useRoleRosterVersion } from '../Helper/roleRoster';
 import { normalizeSearchTerm, tradeMatchesLocally } from './tradeSearchIndex';
-import UserBadgePill, { getFirstBadgeType } from '../Helper/UserBadgePill';
+import UserBadgePill, { getFirstBadgeType, CustomBadgePills } from '../Helper/UserBadgePill';
 import ChatPillButton, { CHAT_PILL_HEIGHT } from '../Helper/ChatPillButton';
 import { isUserOnline } from '../ChatScreen/utils';
 import { useHaptic } from '../Helper/HepticFeedBack';
@@ -1627,9 +1627,10 @@ const TradeList = ({ route }) => {
                   {rp.isAdmin && <UserBadgePill type="admin" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'admin'} />}
                   {!rp.isAdmin && rp.isModerator && <UserBadgePill type="mod" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'mod'} />}
                   {!rp.isAdmin && !rp.isModerator && rp.isBabyMod && <UserBadgePill type="jmd" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'jmd'} />}
-                  {rp.isTrusted && <UserBadgePill type="trusted" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />}
-                  {rp.isCMSR && <UserBadgePill type="cmsr" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />}
-                  {rp.isHelper && <UserBadgePill type="helper" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />}
+                  {rp.isTrusted && <UserBadgePill type="trusted" color={rp.badgeStyles?.trusted} size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />}
+                  {rp.isCMSR && <UserBadgePill type="cmsr" color={rp.badgeStyles?.cmsr} size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />}
+                  {rp.isHelper && <UserBadgePill type="helper" color={rp.badgeStyles?.helper} size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />}
+                  <CustomBadgePills roles={rp} size="sm" isDarkMode={isDarkMode} />
                 </>
               );
             })()}

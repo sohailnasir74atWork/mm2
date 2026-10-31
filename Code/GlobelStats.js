@@ -1,5 +1,6 @@
 import {trackGrowthEvent} from './Helper/growthAnalytics';
 import { fetchCatalog, refreshCatalog, usableCatalog, withDeadline } from './Helper/catalogNetwork';
+import { startCustomBadgeRegistry } from './Helper/customBadges';
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { getApp, getApps, initializeApp } from '@react-native-firebase/app';
 import { getAuth, onAuthStateChanged, signOut } from '@react-native-firebase/auth';
@@ -14,7 +15,7 @@ import { requestPermission } from './Helper/PermissionCheck';
 import { useColorScheme, AppState, Platform } from 'react-native';
 import { getFlag } from './Helper/CountryCheck';
 import { getConfigNodes } from './Helper/configCache';
-import { indexMM2Images, indexSupremePrices, unwrapFeed } from './Helper/valueSources';
+import { indexMM2Images, indexSupremePrices, unwrapFeed, feedMeta } from './Helper/valueSources';
 import { getServerTime } from './Helper/serverTime';
 import { saveOwnPrivateProfile } from './Helper/privateProfile';
 import { getDeviceFingerprint, stampOwnDeviceId } from './Helper/deviceFingerprint';
@@ -910,6 +911,13 @@ export const GlobalStateProvider = ({ children }) => {
     );
     return () => { try { unsub(); } catch (e) { /* noop */ } };
     // appdatabase is a module-level constant, not a reactive value.
+  }, []);
+
+  // Custom badge definitions (RTDB /custom_badges): one listener for the
+  // session, read by every badge pill (Code/Helper/customBadges.js).
+  useEffect(() => {
+    if (!appdatabase) return;
+    try { startCustomBadgeRegistry(appdatabase); } catch (e) { /* cosmetic */ }
   }, []);
 
   // ── Delegated Junior-Mod grant permission ──

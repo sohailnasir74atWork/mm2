@@ -18,10 +18,15 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { ref, onValue } from '@react-native-firebase/database';
 import { getCachedProfile, getRoleOverride } from './profileCache';
+import { normalizeWorn } from './customBadges';
 
-const NODES = ['mods', 'trusted', 'cmsr', 'helper'];
+// worn_badges (2026-10-31, Code/Helper/customBadges.js): what a MOD granted on
+// top of the role flags — badge colours + custom badges. Mod/admin-written
+// (rules), small (only players with a grant), so it rides the same live
+// listener pattern and reaches every pill at once.
+const NODES = ['mods', 'trusted', 'cmsr', 'helper', 'worn_badges'];
 
-let rosters = { mods: {}, trusted: {}, cmsr: {}, helper: {} };
+let rosters = { mods: {}, trusted: {}, cmsr: {}, helper: {}, worn_badges: {} };
 let version = 0;
 let started = false;
 const listeners = new Set();
@@ -72,6 +77,12 @@ export const getUserRoles = (uid) => {
     isCMSR: !!rosters.cmsr?.[uid],
     isHelper: !!rosters.helper?.[uid],
   };
+  const worn = normalizeWorn(rosters.worn_badges?.[uid]);
+  roles.badgeStyles = worn.styles;
+  roles.customBadges = worn.custom;
   const override = getRoleOverride(uid);
   return override ? { ...roles, ...override } : roles;
 };
+
+/** Members of a roster node ({ uid: { displayName, avatar, ... } }); 'worn_badges' = worn_badges rows. */
+export const getRoster = (node) => rosters[node] || {};

@@ -23,7 +23,7 @@ import config from '../../Helper/Environment';
 import { parseMessageText } from '../ChatHelper';
 import { getSafeTextColor, RainbowText, isMultiColorText, getMultiColorPalette } from '../../Helper/contrastHelper';
 import { resolveProfile, warmProfileCache, getCachedProfile } from '../../Helper/profileCache';
-import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
+import UserBadgePill, { getFirstBadgeType, CustomBadgePills } from '../../Helper/UserBadgePill';
 import FramedAvatar from './FramedAvatar';
 import { getUserRoles, useRoleRosterVersion } from '../../Helper/roleRoster';
 import { sourceLabelForItems } from '../../Helper/valueSources';
@@ -328,14 +328,15 @@ const GroupMessageList = ({
                         <UserBadgePill type="jmd" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'jmd'} />
                       )}
                       {roles.isTrusted && (
-                        <UserBadgePill type="trusted" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
+                        <UserBadgePill type="trusted" color={roles.badgeStyles?.trusted} size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'trusted'} />
                       )}
                       {roles.isCMSR && (
-                        <UserBadgePill type="cmsr" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
+                        <UserBadgePill type="cmsr" color={roles.badgeStyles?.cmsr} size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'cmsr'} />
                       )}
                       {roles.isHelper && (
-                        <UserBadgePill type="helper" size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
+                        <UserBadgePill type="helper" color={roles.badgeStyles?.helper} size="sm" isDarkMode={isDarkMode} glow={firstBadge === 'helper'} />
                       )}
+                      <CustomBadgePills roles={roles} size="sm" isDarkMode={isDarkMode} />
                     </>
                   );
                 })()}

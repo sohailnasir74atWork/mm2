@@ -65,6 +65,7 @@ import {
 } from '../Helper/modLog';
 import UserBadgePill from '../Helper/UserBadgePill';
 import AdminNewsTab from './AdminNewsTab';
+import CustomBadgesTab from './CustomBadgesTab';
 
 const DEFAULT_AVATAR = 'https://bloxfruitscalc.com/wp-content/uploads/2025/display-pic.png';
 const BAN_PAGE = 40;
@@ -168,6 +169,9 @@ const TABS = [
   // More ▸ News posts (AdminNewsTab, ported from Adopt Me 2026-10-13).
   { key: 'news', label: 'News', adminOnly: true },
   { key: 'statuses', label: 'Statuses' },
+  // MOD-made badges (RTDB custom_badges): create / edit / delete. Granting is
+  // on the player's profile (Mod Tools ▸ Badges). MODs and admins.
+  { key: 'customBadges', label: 'Custom Badges' },
   { key: 'access', label: 'Access', adminOnly: true },
 ];
 
@@ -1552,6 +1556,11 @@ const AdminDashboard = () => {
       {/* ── NEWS ── */}
       {tab === 'news' && isAdmin && (
         <AdminNewsTab db={db} uid={user?.id} C={newsColors} accent={HUE.accent} danger={HUE.danger} bottomInset={insets.bottom} />
+      )}
+
+      {/* ── CUSTOM BADGES (mods + admins; Code/Helper/customBadges.js) ── */}
+      {tab === 'customBadges' && (
+        <CustomBadgesTab db={db} uid={user?.id} isAdmin={isAdmin} isDark={isDark} C={newsColors} accent={HUE.accent} danger={HUE.danger} bottomInset={insets.bottom} />
       )}
 
       {/* ── STATUSES ── */}

@@ -1,8 +1,9 @@
 import React, { useRef } from 'react';
-import { View, Text, Animated } from 'react-native';
+import { View, Text, Animated, Image, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { getShimmerValue } from './shimmerDriver';
+import { customIdsOf, resolveCustomBadge } from './customBadges';
 
 // Single source of truth for role/badge pill styling across chat lists,
 // profile drawers, headers, post cards, and trade cards. Two visual tiers:
@@ -18,6 +19,11 @@ import { getShimmerValue } from './shimmerDriver';
 //
 // `labelKey` is the i18n key for the pill text; the type id (admin, mod …)
 // stays the stable value used in logic.
+//
+// 2026-10-31 (Code/Helper/customBadges.js): a MOD can recolour a community
+// badge (`color` prop overrides the type's colour) and grant custom badges
+// (`custom` prop = { name, image, color }: a white mark drawn inside a
+// circle of the badge colour, see CustomGlyph / CustomBadgePills).
 
 const TYPES = {
   admin:    { tier: 'authority', icon: 'shield',             labelKey: 'chat.admin',          color: '#EF4444' },
@@ -77,11 +83,54 @@ const ShimmerOverlay = React.memo(({ isDarkMode }) => {
   );
 });
 
-const UserBadgePill = ({ type, size = 'md', isDarkMode = false, labelOverride, style, glow }) => {
+// A custom badge's icon: the white mark (assets/custom-badges) on a round
+// swatch of the badge colour, so one PNG serves every colour a MOD picks.
+export const CustomGlyph = React.memo(({ image, color, size = 14, style }) => (
+  <View style={[{
+    width: size, height: size, borderRadius: size / 2, backgroundColor: color || '#64748B',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.22)',
+  }, style]}>
+    {image ? <Image resizeMethod="resize" source={image} style={{ width: size * 0.74, height: size * 0.74 }} resizeMode="contain" /> : null}
+  </View>
+));
+
+const UserBadgePill = ({ type, size = 'md', isDarkMode = false, labelOverride, style, glow, color, custom }) => {
   const { t } = useTranslation();
-  const def = TYPES[type];
-  if (!def) return null;
   const s = SIZES[size] || SIZES.md;
+
+  // Custom badge: community-tier pill in the badge's own colour.
+  if (custom && custom.name) {
+    const hue = custom.color || '#64748B';
+    return (
+      <View
+        style={[{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: hexAlpha(hue, isDarkMode ? '26' : '1A'),
+          borderWidth: 1,
+          borderColor: hexAlpha(hue, isDarkMode ? '66' : '40'),
+          paddingHorizontal: s.ph,
+          paddingVertical: s.pv,
+          borderRadius: s.br,
+          gap: s.gap,
+          overflow: glow ? 'hidden' : undefined,
+        }, style]}
+      >
+        <CustomGlyph image={custom.image} color={hue} size={s.ic + 2} />
+        <Text style={{ color: hue, fontSize: s.fs, fontWeight: '700', letterSpacing: 0.3 }} numberOfLines={1}>
+          {custom.name}
+        </Text>
+        {!!glow && <ShimmerOverlay isDarkMode={isDarkMode} />}
+      </View>
+    );
+  }
+
+  const base = TYPES[type];
+  if (!base) return null;
+  // A MOD's colour override only ever applies to community badges; authority
+  // chips keep their fixed colours.
+  const def = base.tier === 'community' && color ? { ...base, color } : base;
   const label = labelOverride || t(def.labelKey);
   // Glow is opt-in per pill. Call sites pass glow={firstBadge === '<type>'}
   // so only the first/highest-priority badge a user owns flashes; the rest
@@ -171,6 +220,21 @@ export const getFirstBadgeType = (u, allowed = DEFAULT_BADGE_ORDER) => {
     if (HAS[t] && HAS[t](u)) return t;
   }
   return null;
+};
+
+// The custom badges a user wears (roles.customBadges from getUserRoles /
+// worn_badges), drawn after the role pills on every surface.
+export const CustomBadgePills = ({ roles, size = 'sm', isDarkMode = false }) => {
+  const ids = customIdsOf(roles?.customBadges);
+  if (ids.length === 0) return null;
+  return (
+    <>
+      {ids.map((id) => {
+        const def = resolveCustomBadge(id, roles.customBadges[id]);
+        return def ? <UserBadgePill key={id} custom={def} size={size} isDarkMode={isDarkMode} /> : null;
+      })}
+    </>
+  );
 };
 
 // Convenience: render every applicable pill for a user, in canonical order.

@@ -340,7 +340,8 @@
     "ban_device_linked": "Un autre compte sur cet appareil a été banni, donc l'appareil reste bloqué jusqu'à la fin de ce ban. Te connecter avec un autre compte n'y change rien.",
     "ban_reason_title": "Motif",
     "ban_appeal_question": "Tu penses que c'est une erreur ?",
-    "ban_appeal_button": "Faire appel"
+    "ban_appeal_button": "Faire appel",
+    "new_badge": "NOUVEAU"
   },
   "value": {
     "title": "Écran de Valeur",
@@ -1070,6 +1071,10 @@
     "loading_subtext": "On affiche les joueurs qui ont reçu le plus d'avis, avec une moyenne d'au moins 3,7…",
     "empty_text": "Aucun joueur avec une moyenne d'au moins 3,7",
     "empty_subtext": "Le classement est mis à jour chaque jour",
+    "tab_top_rated": "Mieux notés",
+    "tab_custom": "Perso",
+    "empty_custom": "Aucun badge perso attribué pour le moment",
+    "empty_roster": "Personne ici pour le moment",
     "last_updated": "Dernière mise à jour : {{date}}"
   },
   "create_group": {

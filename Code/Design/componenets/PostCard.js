@@ -20,7 +20,7 @@ import FramedAvatar from '../../ChatScreen/GroupChat/FramedAvatar';
 import { getCachedProfile } from '../../Helper/profileCache';
 import { getUserRoles } from '../../Helper/roleRoster';
 import { getUserEmail } from '../../Helper/privateProfile';
-import UserBadgePill, { getFirstBadgeType } from '../../Helper/UserBadgePill';
+import UserBadgePill, { getFirstBadgeType, CustomBadgePills } from '../../Helper/UserBadgePill';
 import ChatPillButton from '../../Helper/ChatPillButton';
 import { logModAction, resolveActorRole } from '../../Helper/modLog';
 import { useTranslation } from 'react-i18next';
@@ -276,9 +276,10 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
                   {rp.isAdmin && <UserBadgePill type="admin" size="sm" isDarkMode={isDark} glow={firstBadge === 'admin'} />}
                   {!rp.isAdmin && rp.isModerator && <UserBadgePill type="mod" size="sm" isDarkMode={isDark} glow={firstBadge === 'mod'} />}
                   {!rp.isAdmin && !rp.isModerator && rp.isBabyMod && <UserBadgePill type="jmd" size="sm" isDarkMode={isDark} glow={firstBadge === 'jmd'} />}
-                  {rp.isTrusted && <UserBadgePill type="trusted" size="sm" isDarkMode={isDark} glow={firstBadge === 'trusted'} />}
-                  {rp.isCMSR && <UserBadgePill type="cmsr" size="sm" isDarkMode={isDark} glow={firstBadge === 'cmsr'} />}
-                  {rp.isHelper && <UserBadgePill type="helper" size="sm" isDarkMode={isDark} glow={firstBadge === 'helper'} />}
+                  {rp.isTrusted && <UserBadgePill type="trusted" color={rp.badgeStyles?.trusted} size="sm" isDarkMode={isDark} glow={firstBadge === 'trusted'} />}
+                  {rp.isCMSR && <UserBadgePill type="cmsr" color={rp.badgeStyles?.cmsr} size="sm" isDarkMode={isDark} glow={firstBadge === 'cmsr'} />}
+                  {rp.isHelper && <UserBadgePill type="helper" color={rp.badgeStyles?.helper} size="sm" isDarkMode={isDark} glow={firstBadge === 'helper'} />}
+                  <CustomBadgePills roles={rp} size="sm" isDarkMode={isDark} />
                 </>
               );
             })()}

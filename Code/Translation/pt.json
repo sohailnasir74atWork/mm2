@@ -336,7 +336,9 @@
     "ban_device_linked": "Outra conta neste aparelho foi banida, então o aparelho fica bloqueado até esse ban acabar. Entrar com outra conta não resolve.",
     "ban_reason_title": "Motivo",
     "ban_appeal_question": "Acha que isso é um engano?",
-    "ban_appeal_button": "Enviar um recurso"
+    "ban_appeal_button": "Enviar um recurso",
+    "mini_games": "Minijogos",
+    "new_badge": "NOVO"
   },
   "value": {
     "title": "Tela de Valor",
@@ -1215,6 +1217,10 @@
     "loading_subtext": "Mostrando os usuários mais avaliados com nota 3.7+...",
     "empty_text": "Nenhum usuário com nota 3.7+",
     "empty_subtext": "O ranking é atualizado todo dia",
+    "tab_top_rated": "Mais bem avaliados",
+    "tab_custom": "Personalizadas",
+    "empty_custom": "Ainda não há insígnias personalizadas",
+    "empty_roster": "Ainda não há ninguém aqui",
     "last_updated": "Última atualização: {{date}}"
   },
   "create_group": {

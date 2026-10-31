@@ -35,6 +35,7 @@ import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 import { useTranslation } from 'react-i18next';
 import { addXP, XP_ACTIONS } from '../Engagement/xpUtils';
 import PostAdManager from '../Ads/PostAd';
+import { useModalHandoff } from '../Helper/modalPresentation';
 import { useLocalState } from '../LocalGlobelStats';
 import { useGlobalState } from '../GlobelStats';
 import config from '../Helper/Environment';
@@ -231,6 +232,8 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
   const [followingIds, setFollowingIds] = useState(() => getCachedJSON('following_ids') || []);
   const [viewingStatus, setViewingStatus] = useState(null);
   const [showCreator, setShowCreator] = useState(false);
+  // The feed-post ad is queued until the creator modal has finished closing (iOS).
+  const { handoff: afterCreatorClosed, onDismiss: onCreatorDismissed } = useModalHandoff();
   const [caption, setCaption] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -656,7 +659,9 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
     await performUpload();
 
     if (posted && !localState.isPro) {
-      requestAnimationFrame(() => {
+      // iOS: wait for the composer's onDismiss — UIKit silently refuses an
+      // ad presented while the modal is still closing (bugs LOG 2026-10-18).
+      afterCreatorClosed(null, () => requestAnimationFrame(() => {
         setTimeout(() => {
           try {
             PostAdManager.show('feed');
@@ -664,9 +669,9 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
             console.warn('[StatusFeed] Ad failed:', err);
           }
         }, 400);
-      });
+      }));
     }
-  }, [user, firestoreDB, appdatabase, caption, selectedImage, uploadToBunny, localState.isPro, t, isUserBlocked]);
+  }, [user, firestoreDB, appdatabase, caption, selectedImage, uploadToBunny, localState.isPro, t, isUserBlocked, afterCreatorClosed]);
 
   // ── Delete status (local-first) ──
   const handleDeleteStatus = useCallback((statusId) => {
@@ -1159,7 +1164,7 @@ const StatusFeed = ({ user, firestoreDB, appdatabase, isDarkMode, onRequireSignI
       />
 
       {/* ── Status Creator Modal ── */}
-      <Modal visible={showCreator} transparent animationType="slide" onRequestClose={() => setShowCreator(false)}>
+      <Modal visible={showCreator} transparent animationType="slide" onRequestClose={() => setShowCreator(false)} onDismiss={onCreatorDismissed}>
         <ModalKeyboardView style={styles.creatorOverlay}>
           <View style={[styles.creatorCard, { backgroundColor: isDarkMode ? config.colors.surfaceDark : '#FFF', paddingBottom: 20 + navBarInset }]}>
             <View style={styles.creatorHeader}>

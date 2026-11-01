@@ -25,6 +25,7 @@ import config from '../../Helper/Environment';
 import ConditionalKeyboardWrapper from '../../Helper/keyboardAvoidingContainer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BannerAdComponent from '../../Ads/bannerAds';
+import PostAdManager from '../../Ads/PostAd';
 
 import PetModal from './PetsModel';
 import {
@@ -64,6 +65,10 @@ const PrivateChatScreen = ({route, bannedUsers, isDrawerVisible, setIsDrawerVisi
   const [canRate, setCanRate] = useState(false);
 const [hasRated, setHasRated] = useState(false);
 const [showRatingModal, setShowRatingModal] = useState(false);
+  // Warm the review ad while the user writes, so it is ready on submit.
+  useEffect(() => {
+    if (showRatingModal) PostAdManager.prepare('review');
+  }, [showRatingModal]);
 const [rating, setRating] = useState(0);
 const [petModalVisible, setPetModalVisible] = useState(false);
 const [selectedFruits, setSelectedFruits] = useState([]); 
@@ -300,6 +305,10 @@ showSuccessMessage(
       setHasRated(true);
       setReviewText('');
       setStartRating(false);
+
+      // Review ad: always shown after a saved rating/review, like a posted
+      // trade (PostAd.js; it skips Pro users itself). Owner, 2026-11-01.
+      PostAdManager.show('review');
   
     } catch (error) {
       console.error("Rating error:", error);

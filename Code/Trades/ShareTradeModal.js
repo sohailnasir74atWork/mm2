@@ -110,7 +110,7 @@ const ShareTradeModal = ({ visible, onClose, hasItems, wantsItems, hasTotal, wan
                   requestAnimationFrame(() => {
                     setTimeout(() => {
                       try {
-                        InterstitialAdManager.showAd(callbackfunction);
+                        InterstitialAdManager.showAd(callbackfunction, undefined, 'trade_share');
                       } catch (err) {
                         console.warn('[AdManager] Failed to show ad:', err);
                         callbackfunction();

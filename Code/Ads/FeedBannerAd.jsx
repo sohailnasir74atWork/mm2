@@ -47,7 +47,7 @@ const FeedBannerAd = ({ adKey, isDarkMode = false, gate = null }) => {
   const unitId = getAdUnitId('feedBanner');
   // Not before consent + SDK init (adsGate.js), like the bottom banner.
   const adsReady = useAdsReady();
-  const handlePaid = useCallback((paid) => logAdRevenue('banner', 'feed', paid, unitId), [unitId]);
+  const handlePaid = useCallback((paid) => logAdRevenue('banner', 'feed', paid, unitId, 'feedBanner'), [unitId]);
   const width = Math.max(200, Math.floor(screenWidth - CARD_GUTTER * 2));
 
   const requestOptions = useMemo(

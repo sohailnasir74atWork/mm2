@@ -133,7 +133,7 @@ const MessageInput = ({
 
       if (!localState?.isPro && newCount % CHAT_MESSAGES_PER_AD === 0) {
         // Show ad only if user is NOT pro
-        InterstitialAdManager.showAd(adCallback);
+        InterstitialAdManager.showAd(adCallback, undefined, 'trader_chat');
       } else {
         // One message before the ad message: warm the interstitial so the
         // trigger actually has something to show (lazy-load pipeline).

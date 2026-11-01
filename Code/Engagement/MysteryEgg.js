@@ -676,7 +676,7 @@ const MysteryEggScreen = ({ navigation }) => {
                 onPress={async () => {
                   if (adLoading) return;
                   setAdLoading(true);
-                  const result = await RewardedAdManager.showForResult();
+                  const result = await RewardedAdManager.showForResult('mystery_egg');
                   setAdLoading(false);
                   if (result === 'unavailable') {
                     Alert.alert(t('mystery_egg.alerts.no_ad_title'), t('mystery_egg.alerts.no_ad_msg'));
@@ -812,7 +812,7 @@ const MysteryEggScreen = ({ navigation }) => {
                   onPress={async () => {
                     if (adLoading) return;
                     setAdLoading(true);
-                    const result = await RewardedAdManager.showForResult();
+                    const result = await RewardedAdManager.showForResult('mystery_egg_free_hatch');
                     setAdLoading(false);
                     if (result === 'unavailable') {
                       Alert.alert(t('mystery_egg.alerts.no_ad_title'), t('mystery_egg.alerts.no_ad_msg'));

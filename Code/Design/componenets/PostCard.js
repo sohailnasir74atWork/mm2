@@ -192,7 +192,7 @@ const PostCard = ({ item, userId, onLike, onReaction, localState, appdatabase, o
       }, 300);
     };
     if (!localState?.isPro) {
-      InterstitialAdManager.showAd(callback);
+      InterstitialAdManager.showAd(callback, undefined, 'post_chat');
     } else {
       callback();
     }

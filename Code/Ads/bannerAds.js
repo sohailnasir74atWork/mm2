@@ -165,7 +165,7 @@ const BannerAdComponent = ({
   // also cost the first frame on low-end Android.
   const adsReady = useAdsReady();
   const handlePaid = useCallback(
-    (paid) => logAdRevenue('banner', isCollapsible ? 'banner_collapsible' : 'banner', paid, unitId),
+    (paid) => logAdRevenue('banner', isCollapsible ? 'banner_collapsible' : 'banner', paid, unitId, 'banner'),
     [isCollapsible, unitId],
   );
   const suppressed = !!localState?.isPro || !visible || !adsReady ||

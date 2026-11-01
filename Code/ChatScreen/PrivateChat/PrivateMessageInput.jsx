@@ -170,7 +170,7 @@ const PrivateMessageInput = ({
     setMessageCount(prevCount => {
       const newCount = prevCount + 1;
       if (!localState?.isPro && newCount % CHAT_MESSAGES_PER_AD === 0) {
-        InterstitialAdManager.showAd(() => {});
+        InterstitialAdManager.showAd(() => {}, undefined, 'private_chat');
       } else if (!localState?.isPro && newCount % CHAT_MESSAGES_PER_AD === CHAT_MESSAGES_PER_AD - 1) {
         // One message before the ad message: warm the interstitial so the
         // trigger actually has something to show (lazy-load pipeline).

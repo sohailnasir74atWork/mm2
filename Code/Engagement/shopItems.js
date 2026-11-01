@@ -1039,6 +1039,25 @@ export const CHAT_BG_COLORS = {
 // MM2 scope (owner decision 2026-07-20): egg hatching awards ONLY profile
 // frames and chat text colors. The other catalogs stay defined above for
 // future expansion but are excluded from drop pools and the cosmetics UI.
+// ════════════════════════════════════════════════════════════
+//  LIGHTS OUT MANOR FRAMES (2026-10-30)
+//  Won only from Manor crates, rolled and granted by the server
+//  (functions/manor: manorFinish / manorDouble push them into
+//  users/{uid}/shop/ownedItems/profileFrame). Permanent. Deliberately NOT
+//  in ALL_ITEMS, so they never drop from Mystery Eggs or appear in the egg
+//  catalogue. Must match functions/manor/logic.js SKINS (jest checks).
+// ════════════════════════════════════════════════════════════
+export const MANOR_FRAMES = {
+  manor_classic: { id: 'manor_classic', name: 'Candle Wax', type: COSMETIC_TYPE.FRAME, rarity: RARITY.COMMON, renderType: 'css', duration: -1, borderColors: ['#efe4d2', '#c9b79c'], borderWidth: 2.2, glowColor: null, source: 'manor' },
+  manor_moth: { id: 'manor_moth', name: 'Moth Grey', type: COSMETIC_TYPE.FRAME, rarity: RARITY.COMMON, renderType: 'css', duration: -1, borderColors: ['#b9b2c4', '#8b839a'], borderWidth: 2.2, glowColor: null, source: 'manor' },
+  manor_mint: { id: 'manor_mint', name: 'Mint Lantern', type: COSMETIC_TYPE.FRAME, rarity: RARITY.COMMON, renderType: 'css', duration: -1, borderColors: ['#8fe3b0', '#4fbf86'], borderWidth: 2.2, glowColor: null, source: 'manor' },
+  manor_frost: { id: 'manor_frost', name: 'Frost Halo', type: COSMETIC_TYPE.FRAME, rarity: RARITY.UNCOMMON, renderType: 'css', duration: -1, borderColors: ['#8fd3ff', '#bfe6ff', '#5aa9ff'], borderWidth: 3, glowColor: '#8fd3ff40', source: 'manor' },
+  manor_coral: { id: 'manor_coral', name: 'Coral Glow', type: COSMETIC_TYPE.FRAME, rarity: RARITY.UNCOMMON, renderType: 'css', duration: -1, borderColors: ['#ff9f80', '#ffc2ad', '#ff6f61'], borderWidth: 3, glowColor: '#ff9f8040', source: 'manor' },
+  manor_neon: { id: 'manor_neon', name: 'Neon Ghost', type: COSMETIC_TYPE.FRAME, rarity: RARITY.RARE, renderType: 'css', duration: -1, borderColors: ['#c48bff', '#7b5cff', '#ff5ad8'], borderWidth: 3.4, glowColor: '#c48bff60', source: 'manor' },
+  manor_ember: { id: 'manor_ember', name: 'Ember Trail', type: COSMETIC_TYPE.FRAME, rarity: RARITY.LEGENDARY, renderType: 'css', duration: -1, borderColors: ['#ffb547', '#ff7a2f', '#ff3b30'], borderWidth: 4, glowColor: '#ff7a2f80', source: 'manor' },
+  manor_void: { id: 'manor_void', name: 'Void Prism', type: COSMETIC_TYPE.FRAME, rarity: RARITY.EXCLUSIVE, renderType: 'css', duration: -1, borderColors: ['#ff5a8a', '#ffb547', '#73e6d3', '#5aa9ff', '#b36bff'], borderWidth: 4.5, glowColor: '#b36bff90', source: 'manor' },
+};
+
 export const ALL_ITEMS = { ...FRAMES, ...TEXT_COLORS };
 
 // ════════════════════════════════════════════════════════════

@@ -31,7 +31,7 @@ import BannerAdComponent from '../Ads/bannerAds';
 import ScreenBottomBanner from '../Ads/ScreenBottomBanner';
 import {
   resolveItemImage, buildItemPool, unwrapFeed, priceOf, displayValueText,
-  DEFAULT_VALUE_SOURCE, categoryKey, VALUE_SOURCE,
+  DEFAULT_VALUE_SOURCE, categoryKey, VALUE_SOURCE, poolLookup,
 } from '../Helper/valueSources';
 import ValueCard from './ValueCard';
 import { SCREEN_GUTTER } from '../Helper/layout';
@@ -255,19 +255,18 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
   const myPetsView = useMemo(() => {
     if (!(fromChat && chatPetSource === 'mine')) return [];
     const q = searchText.trim().toLowerCase();
-    const byName = new Map();
-    for (const it of parsedValuesData || []) {
-      const k = (it?.name || '').toLowerCase().trim();
-      if (k && !byName.has(k)) byName.set(k, it);
-    }
+    // The owned item's own row: same id, else same category + name. A name-only
+    // match sent an owned Rare Sunset (0.12) as "Sunset · 650 · Supreme" with
+    // the Godly art (2026-10-30 audit) — 53 names collide across categories.
+    const byId = new Map((parsedValuesData || []).filter(Boolean).map((it) => [it.id, it]));
+    const byNameAndCategory = poolLookup(parsedValuesData);
     const seen = new Set();
     return (localState?.ownedPets || [])
-      .map((p) => byName.get((p?.name || '').toLowerCase().trim()))
+      .map((p) => (p?.id && byId.get(p.id)) || byNameAndCategory(p))
       .filter(Boolean)
       .filter((it) => {
-        const k = (it.name || '').toLowerCase();
-        if (seen.has(k)) return false;
-        seen.add(k);
+        if (seen.has(it.id)) return false;
+        seen.add(it.id);
         return true;
       })
       .filter((it) => !q || (it.name || '').toLowerCase().includes(q));

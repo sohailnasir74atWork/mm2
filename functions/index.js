@@ -230,3 +230,24 @@ exports.emailUnsubscribe = require('./emailUnsubscribe').emailUnsubscribe;
 const tradeMatch = require('./tradeMatch');
 exports.tradeMatchIndex = tradeMatch.tradeMatchIndex;
 exports.tradeMatchDreamAlerts = tradeMatch.tradeMatchDreamAlerts;
+
+// ── Fantasy League (2026-10-30; functions/fantasy/index.js) ──────────────
+// Weekly Movers League + Hype + Guess the Value. Server-scored: players only
+// send picks, every number is stamped and scored here. Firestore rules
+// (managed() lists fantasy_*) BEFORE the first deploy, then:
+//   firebase deploy --only functions:fantasyJoin,functions:fantasySwap,functions:fantasyGuess,functions:fantasyTick --project mm2vlaues-ed80c
+const fantasy = require('./fantasy');
+exports.fantasyJoin = fantasy.fantasyJoin;
+exports.fantasySwap = fantasy.fantasySwap;
+exports.fantasyGuess = fantasy.fantasyGuess;
+exports.fantasyTick = fantasy.fantasyTick;
+
+// ── Lights Out Manor (2026-10-30; functions/manor/index.js) ───────────────
+// Server-rolled crates: round ticket (≥ 20 s, single use), 6 crates + 3 video
+// doubles a day, each new skin grants a permanent My Cosmetics frame.
+// Firestore rules (managed() lists manor_players) BEFORE the first deploy:
+//   firebase deploy --only functions:manorStart,functions:manorFinish,functions:manorDouble --project mm2vlaues-ed80c
+const manor = require('./manor');
+exports.manorStart = manor.manorStart;
+exports.manorFinish = manor.manorFinish;
+exports.manorDouble = manor.manorDouble;

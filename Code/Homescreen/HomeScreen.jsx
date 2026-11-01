@@ -9,10 +9,11 @@ import { buildSearchTokens } from '../Trades/tradeSearchIndex';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import config from '../Helper/Environment';
 import {
-  resolveItemImage, summarizeItems, buildItemPool, unwrapFeed, newestGeneratedAt,
+  resolveItemImage, summarizeItems, buildItemPool, unwrapFeed, sourceUpdatedAt,
   priceOf, displayValueText, isSummable, VALUE_SOURCE, DEFAULT_VALUE_SOURCE,
-  categoryKey, isTradeBlocked,
+  categoryKey, isTradeBlocked, poolLookup,
 } from '../Helper/valueSources';
+import { usableCatalog } from '../Helper/catalogNetwork';
 import ConditionalKeyboardWrapper from '../Helper/keyboardAvoidingContainer';
 import useNavBarInset, { useModalWindowInsets } from '../Helper/useNavBarInset';
 import { useHaptic } from '../Helper/HepticFeedBack';
@@ -37,7 +38,7 @@ import { SCREEN_GUTTER } from '../Helper/layout';
 import { matchesItemName } from '../Helper/itemSearch';
 import { trackTradePosted } from '../Helper/growthAnalytics';
 import { timeAgo } from '../Helper/timeAgo';
-import { tradeStatus as wflStatus } from '../Helper/tradeStatus';
+import { calculatorVerdict, STATUS_LETTER, tradeStatus as wflStatus } from '../Helper/tradeStatus';
 
 const GRID_STEPS = [4, 8, 12, 16];
 
@@ -109,14 +110,6 @@ const getDemandAdvice = (hasAvg, wantsAvg) => {
     : { textKey: 'calc.your_side_harder', tone: 'good' };
 };
 
-const getTradeStatus = (hasTotal, wantsTotal) => {
-  // If both are 0 (initial state), show WIN
-  if (hasTotal === 0 && wantsTotal === 0) return 'win';
-  // You give hasItems and get wantsItems; within 5% either way is FAIR
-  // (Code/Helper/tradeStatus.js, the same rule as the share card).
-  return wflStatus(hasTotal, wantsTotal);
-};
-
 // ✅ Format values as simple numbers with commas
 const formatValue = (value) => {
   if (value === null || value === undefined || value === 0) return '0';
@@ -148,6 +141,7 @@ const HomeScreen = ({ selectedTheme }) => {
   // changes what items are WORTH, never which items exist, so nothing can
   // vanish from the grid mid-trade. See Code/Helper/valueSources.js.
   const valueSource = localState?.valueSource || DEFAULT_VALUE_SOURCE;
+  const sourceLabel = valueSource === VALUE_SOURCE.MM2 ? 'MM2' : 'Supreme';
 
   // Totals are DERIVED from the grids, not accumulated alongside them. They
   // used to be state bumped by an updateTotal() call next to every mutation,
@@ -198,17 +192,13 @@ const HomeScreen = ({ selectedTheme }) => {
   // days; players believe it is every two to three weeks, and a label that
   // always says "just now" is why nobody could tell.
   //
-  // Null for an older raw upload with no meta — the label hides rather than
-  // inventing a time.
-  const lastUpdatedTime = useMemo(() => {
-    const parse = (raw) => {
-      try {
-        if (!raw) return null;
-        return typeof raw === 'string' ? JSON.parse(raw) : raw;
-      } catch (e) { return null; }
-    };
-    return newestGeneratedAt(parse(localState?.data), parse(localState?.suprime));
-  }, [localState?.data, localState?.suprime]);
+  // Null until a fetch has stored the feed's meta (dataMeta / suprimeMeta) —
+  // the label hides rather than inventing a time. The list being priced, not
+  // the newer of the two: they update on different days.
+  const lastUpdatedTime = useMemo(() => sourceUpdatedAt(
+    valueSource === VALUE_SOURCE.MM2 ? localState?.dataMeta : localState?.suprimeMeta,
+    valueSource,
+  ), [valueSource, localState?.dataMeta, localState?.suprimeMeta]);
 
   // ✅ Cleanup all timeouts and animation frames on unmount
   useEffect(() => {
@@ -246,10 +236,16 @@ const HomeScreen = ({ selectedTheme }) => {
     triggerHapticFeedback('impactLight');
     setRefreshing(true);
     try {
-      await reload();
+      // reload() resolves false when a feed did not come back fresh (the old
+      // values are still shown) — that is not "Values updated!".
+      const fresh = await reload();
       if (!isMountedRef.current) return;
       // No stamping here: lastUpdatedTime is derived from the refreshed feed.
-      showSuccessMessage(t('home.alert.success'), t('home.alert.values_reloaded', { defaultValue: 'Values updated!' }));
+      if (fresh === false) {
+        showErrorMessage(t('home.alert.error'), t('home.alert.reload_error', { defaultValue: 'Failed to refresh' }));
+      } else {
+        showSuccessMessage(t('home.alert.success'), t('home.alert.values_reloaded', { defaultValue: 'Values updated!' }));
+      }
     } catch (error) {
       console.error('Error refreshing values:', error);
       if (!isMountedRef.current) return;
@@ -265,14 +261,28 @@ const HomeScreen = ({ selectedTheme }) => {
     return ['INVENTORY', 'ALL', 'ANCIENT', 'UNIQUE', 'CHROMA', 'GODLY', 'LEGEND', 'RARE', 'UNCOMMON', 'COMMON', 'VINTAGE', 'PETS'];
   }, []);
 
-  const tradeStatus = useMemo(() =>
-    getTradeStatus(hasTotal, wantsTotal)
-    , [hasTotal, wantsTotal]);
+  // The list being priced must actually be on this device: on a fresh install
+  // whose Supreme fetch failed, every item read "Not listed", both totals were
+  // 0 and the verdict said WIN. See calculatorVerdict (Helper/tradeStatus.js).
+  const activeFeedLoaded = useMemo(
+    () => !!usableCatalog(valueSource === VALUE_SOURCE.MM2 ? localState?.data : localState?.suprime),
+    [valueSource, localState?.data, localState?.suprime],
+  );
+
+  // You give hasItems and get wantsItems; within 5% either way is FAIR.
+  // `tradeStatus` is null when there is no honest verdict, and `verdict.reason`
+  // says why ('empty' | 'no_data' | 'incomplete').
+  const verdict = useMemo(() => calculatorVerdict({
+    give: { count: hasItems.filter(Boolean).length, total: hasTotal, unpriced: hasSummary.unpriced },
+    get: { count: wantsItems.filter(Boolean).length, total: wantsTotal, unpriced: wantsSummary.unpriced },
+    feedLoaded: activeFeedLoaded,
+  }), [hasItems, wantsItems, hasTotal, wantsTotal, hasSummary.unpriced, wantsSummary.unpriced, activeFeedLoaded]);
+  const tradeStatus = verdict.status;
 
   // Store review: a Win/Fair result with both sides filled, left unchanged
   // for 3 s, counts as one finished check (the 5th in a session may ask).
   useEffect(() => {
-    if (tradeStatus === 'lose' || !(hasTotal > 0 && wantsTotal > 0)) return undefined;
+    if (!tradeStatus || tradeStatus === 'lose' || !(hasTotal > 0 && wantsTotal > 0)) return undefined;
     const id = setTimeout(() => maybeAskForReview('calculator'), 3000);
     return () => clearTimeout(id);
   }, [tradeStatus, hasTotal, wantsTotal]);
@@ -529,6 +539,15 @@ const HomeScreen = ({ selectedTheme }) => {
     if (!isFavorite) maybeAskForReview('collection');
   }, [localState.favorites, updateLocalState, triggerHapticFeedback]);
 
+  // Saved item → its row in the current catalogue: the exact row id first,
+  // then the same category (poolLookup), so a Vintage Laser in My Stuff is not
+  // shown as the Godly one. Built once per catalogue, not per saved item.
+  const findPoolRow = useMemo(() => {
+    const byId = new Map(fruitRecords.filter(Boolean).map((row) => [row.id, row]));
+    const byNameAndCategory = poolLookup(fruitRecords);
+    return (owned) => (owned?.id && byId.get(owned.id)) || byNameAndCategory(owned);
+  }, [fruitRecords]);
+
   // ✅ MM2: Simplified filteredData (no value types/modifiers needed)
   const filteredData = useMemo(() => {
     let list;
@@ -538,24 +557,14 @@ const HomeScreen = ({ selectedTheme }) => {
       const myItems = localState.ownedPets || [];
       const seen = new Set();
       list = myItems
-        .map(owned => {
-          // Match saved items with current fruitRecords to get latest values
-          const foundItem = fruitRecords.find(
-            item => item && (
-              (owned.id && item.id === owned.id) ||
-              (owned.name && item.name &&
-                item.name.toLowerCase() === owned.name.toLowerCase())
-            )
-          );
-          return foundItem || null;
-        })
+        // Match saved items with current fruitRecords to get latest values
+        .map(owned => findPoolRow(owned))
         .filter(Boolean)
         .filter(item => {
           // Dedupe (users can own the same item twice) — the calc grid adds
           // per-tap anyway, so one row per distinct item is what we want.
-          const k = (item.name || '').toLowerCase();
-          if (seen.has(k)) return false;
-          seen.add(k);
+          if (seen.has(item.id)) return false;
+          seen.add(item.id);
           return true;
         });
     } else {
@@ -575,6 +584,7 @@ const HomeScreen = ({ selectedTheme }) => {
       .sort((a, b) => (b.Value || 0) - (a.Value || 0));
   }, [
     fruitRecords,
+    findPoolRow,
     debouncedSearchText,
     selectedPetType,
     localState.ownedPets,
@@ -603,10 +613,15 @@ const HomeScreen = ({ selectedTheme }) => {
       if (!selectedSection) return;
       triggerHapticFeedback('impactLight');
 
+      // Keep the MM2 baseline in `Value`, exactly as selectItem does: priceOf
+      // derives the active list's price on demand. Writing the Supreme price
+      // here showed it under MM2 after a toggle, and turned a Supreme-unpriced
+      // item into an "observed" 0 with no "?" badge and no Unpriced count.
+      const baseline = Number(item.Value || 0);
       const selectedItem = {
         ...item,
-        selectedValue: currentValue,
-        Value: currentValue,
+        selectedValue: baseline,
+        Value: baseline,
       };
 
       const nextHasItems = [...hasItems];
@@ -662,7 +677,7 @@ const HomeScreen = ({ selectedTheme }) => {
         </TouchableOpacity>
       </View>
     );
-  }, [selectedSection, hasItems, wantsItems, maybeExpandGrid, triggerHapticFeedback, toggleFavorite, isDarkMode, getImageUrl, t]);
+  }, [selectedSection, hasItems, wantsItems, maybeExpandGrid, triggerHapticFeedback, toggleFavorite, isDarkMode, getImageUrl, t, valueSource]);
 
   // ✅ MM2: Simplified grid item render
   const renderGridItem = useCallback(({ item }) => {
@@ -858,6 +873,14 @@ const HomeScreen = ({ selectedTheme }) => {
         return;
       }
 
+      // Without the list there is nothing to price with: every item would be
+      // posted at 0 under a WIN. An incomplete trade may still be posted — it
+      // just carries no verdict (see handleCreateTrade).
+      if (verdict.reason === 'no_data') {
+        showErrorMessage(t("home.alert.error"), t("home.alert.values_not_loaded", { source: sourceLabel }));
+        return;
+      }
+
       // Leaderboard awards can't be traded in the game: name them and stop
       // before the post sheet opens (the calculator itself still values them).
       const blocked = [...new Set([...hasItems, ...wantsItems]
@@ -874,7 +897,7 @@ const HomeScreen = ({ selectedTheme }) => {
       // Clean up after execution
       delete timeoutRefs.current[timeoutKey];
     }, 100); // Small delay to allow React state to settle
-  }, [hasItems, wantsItems, t, user?.id]);
+  }, [hasItems, wantsItems, t, user?.id, verdict.reason, sourceLabel]);
 
   const handleCreateTrade = useCallback(async () => {
     if (isSubmitting) return;
@@ -960,9 +983,15 @@ const HomeScreen = ({ selectedTheme }) => {
         };
       };
 
-      // ✅ Calculate trade status and convert to single letter: 'w' (win), 'l' (lose), 'f' (fair)
-      const tradeStatus = getTradeStatus(hasTotal, wantsTotal);
-      const statusLetter = tradeStatus === 'win' ? 'w' : tradeStatus === 'lose' ? 'l' : 'f';
+      // 'w' / 'l' / 'f', or null when the calculator has no honest verdict
+      // (an unpriced item, a bundle-only side). Every reader guards with
+      // `status &&`, so null shows no badge instead of a made-up WIN.
+      if (verdict.reason === 'no_data') {
+        showErrorMessage(t("home.alert.error"), t("home.alert.values_not_loaded", { source: sourceLabel }));
+        setIsSubmitting(false);
+        return;
+      }
+      const statusLetter = verdict.status ? STATUS_LETTER[verdict.status] : null;
 
       const mappedHasItems = hasItems.filter(item => item && (item.name || item.Name)).map(mapTradeItem);
       const mappedWantsItems = wantsItems.filter(item => item && (item.name || item.Name)).map(mapTradeItem);
@@ -1083,7 +1112,7 @@ const HomeScreen = ({ selectedTheme }) => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [isSubmitting, user, appdatabase, localState.isPro, hasItems, wantsItems, description, type, lastTradeTime, tradesCollection, t, resetState]);
+  }, [isSubmitting, user, appdatabase, localState.isPro, hasItems, wantsItems, description, type, lastTradeTime, tradesCollection, t, resetState, valueSource, hasTotal, wantsTotal, verdict, sourceLabel]);
 
   // ── Open the Log Trade sheet ──
   // Unlike "Create Trade" this posts nothing public — TradeCompletion records
@@ -1316,6 +1345,22 @@ const HomeScreen = ({ selectedTheme }) => {
                     styles.noticeText,
                     { color: demandAdvice.tone === 'good' ? NOTICE_GOOD_FG : NOTICE_CAUTION_FG },
                   ]}>{t(demandAdvice.textKey)}</Text>
+                </View>
+              ) : null}
+
+              {/* Why WIN / FAIR / LOSE are all off: an unpriced or bundle-only
+                  side, or a list that never loaded. See calculatorVerdict. */}
+              {verdict.reason === 'incomplete' || verdict.reason === 'no_data' ? (
+                <View style={[styles.notice, styles.noticeCaution]}>
+                  <Icon
+                    name="help-circle-outline"
+                    size={15}
+                    color={NOTICE_CAUTION_FG}
+                    style={{ marginRight: 7 }}
+                  />
+                  <Text style={[styles.noticeText, { color: NOTICE_CAUTION_FG }]}>
+                    {t(verdict.reason === 'no_data' ? 'calc.no_verdict_no_data' : 'calc.no_verdict_incomplete', { source: sourceLabel })}
+                  </Text>
                 </View>
               ) : null}
 
@@ -1667,7 +1712,7 @@ const HomeScreen = ({ selectedTheme }) => {
         uid={user?.id}
         hasItems={hasItems}
         wantsItems={wantsItems}
-        tradeResult={tradeStatus}
+        tradeResult={tradeStatus || undefined}
         t={t}
       />
     </>

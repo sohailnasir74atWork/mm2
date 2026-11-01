@@ -7,7 +7,9 @@
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "test:birthdays": "firebase emulators:exec --config ../firebase.test.json --project demo-mm2 --only database,firestore,auth 'node --test test/birthdays.test.js'"
+    "test:birthdays": "firebase emulators:exec --config ../firebase.test.json --project demo-mm2 --only database,firestore,auth 'node --test test/birthdays.test.js'",
+    "test:fantasy": "firebase emulators:exec --config ../firebase.test.json --project demo-mm2 --only database,firestore,auth 'node --test --test-force-exit test/fantasyLogic.test.js test/fantasy.test.js'",
+    "test:manor": "firebase emulators:exec --config ../firebase.test.json --project demo-mm2 --only database,firestore,auth 'node --test --test-force-exit test/manorLogic.test.js test/manor.test.js'"
   },
   "engines": {
     "node": "22"

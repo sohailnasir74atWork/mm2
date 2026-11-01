@@ -786,24 +786,36 @@ export const GlobalStateProvider = ({ children }) => {
 
       if (shouldFetch) {
         let image = '';
-        const load = async url => unwrapFeed(await fetchCatalog(url));
+        // `meta` is kept aside and saved with its catalogue: the unwrapped
+        // feed has none, and the calculator's "Updated" label reads it.
+        const metas = {};
+        const load = async (url, key) => {
+          const raw = await fetchCatalog(url);
+          metas[key] = feedMeta(raw);
+          return unwrapFeed(raw);
+        };
         const catalogStartedAt = Date.now();
+        // No RTDB fallback: mm2Data / suprimeData do not exist and the rules
+        // deny them (checked 2026-10-29), so that read could only fail. A fresh
+        // install retries the CDN instead; Bunny serves both feeds gzipped
+        // (~40 KB on the wire), so a retry costs little.
+        const firstLoadRetries = [1000, 3000];
         const results = await Promise.all([
           refreshCatalog({
-            load: () => load('https://mm2-api.b-cdn.net/data.json'), cached: ls.data,
-            save: value => updateLocalStateRef.current('data', value), // object: stored once as JSON, kept parsed in state
-            fallback: async () => {
-              const snapshot = await get(ref(appdatabase, 'mm2Data'));
-              return snapshot.exists() ? unwrapFeed(snapshot.val()) : null;
+            load: () => load('https://mm2-api.b-cdn.net/data.json', 'data'), cached: ls.data,
+            save: async value => { // object: stored once as JSON, kept parsed in state
+              await updateLocalStateRef.current('data', value);
+              await updateLocalStateRef.current('dataMeta', metas.data || null);
             },
+            retryDelaysMs: firstLoadRetries,
           }),
           refreshCatalog({
-            load: () => load('https://mm2api-suprime.b-cdn.net/supreme.json'), cached: ls.suprime,
-            save: value => updateLocalStateRef.current('suprime', value), // object: stored once as JSON, kept parsed in state
-            fallback: async () => {
-              const snapshot = await get(ref(appdatabase, 'suprimeData'));
-              return snapshot.exists() ? unwrapFeed(snapshot.val()) : null;
+            load: () => load('https://mm2api-suprime.b-cdn.net/supreme.json', 'suprime'), cached: ls.suprime,
+            save: async value => { // object: stored once as JSON, kept parsed in state
+              await updateLocalStateRef.current('suprime', value);
+              await updateLocalStateRef.current('suprimeMeta', metas.suprime || null);
             },
+            retryDelaysMs: firstLoadRetries,
           }),
         ]);
         catalogRefreshed = results.every(r => r.fresh);

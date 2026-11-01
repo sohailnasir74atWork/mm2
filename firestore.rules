@@ -81,9 +81,24 @@ service cloud.firestore {
         'games', 'game_stats', 'game_scores', 'game_leaderboard_cache', 'leaderboard_cache',
         'mystery_levels', 'mystery_answers', 'trade_journal',
         'petGuessingGame_rooms', 'petGuessingGame_userInvites',
-        'mod_actions'
+        'mod_actions',
+        'fantasy_rounds', 'fantasy_seasons', 'fantasy_guess', 'fantasy_state',
+        'manor_players'
       ];
     }
+
+    // ── Fantasy League (functions/fantasy, 2026-10-30) ──
+    // fantasy_rounds, fantasy_seasons, fantasy_guess (and their entries /
+    // players subcollections) and fantasy_state are written ONLY by the
+    // functions (Admin SDK). Listing them in managed() with no match block
+    // below is the whole rule: reads stay open through the catch-all (the
+    // leaderboards are public), every client write is refused. Players
+    // change their team through fantasyJoin / fantasySwap / fantasyGuess.
+    //
+    // ── Lights Out Manor (functions/manor, 2026-10-30) ──
+    // manor_players/{uid} (owned skins, round ticket, daily crate counters) is
+    // written ONLY by manorStart / manorFinish / manorDouble. Same pattern:
+    // listed in managed(), readable through the catch-all, no client writes.
 
     // ── Catch-all ──────────────────────────────────────────────────────
     // Reads: unchanged (everything except the moderation log).
@@ -101,8 +116,24 @@ service cloud.firestore {
     // deletes (single, or the "delete all" batch). No client ever writes
     // another player's trade.
     match /trades_new/{tradeId} {
-      allow create: if createsAs('userId');
-      allow update: if (ownerIs('userId') && keepsOwner('userId')) || isStaff();
+      // A post starts unfeatured, stamped with the server's time. A client-set
+      // isFeatured/featuredUntil was a permanent top slot, and a future
+      // timestamp pinned the post above the feed and escaped the 15-day
+      // cleanup (audit 2026-10-30). Every app build since 2025-05 and the
+      // website post isFeatured: false + serverTimestamp() with no featuredUntil.
+      allow create: if createsAs('userId')
+        && request.resource.data.get('isFeatured', false) == false
+        && !('featuredUntil' in request.resource.data)
+        && request.resource.data.timestamp == request.time;
+      // After posting, the owner can only feature it. The boost is 12 h (24 h
+      // before 2026-09-16), so 26 h covers both plus a skewed phone clock.
+      // Items, totals, verdict and badges stay as posted: editing them after
+      // people had replied was possible, with no edit marker.
+      allow update: if isStaff() || (ownerIs('userId') && keepsOwner('userId')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isFeatured', 'featuredUntil'])
+        && (!('featuredUntil' in request.resource.data)
+          || (request.resource.data.featuredUntil is timestamp
+            && request.resource.data.featuredUntil <= request.time + duration.value(26, 'h'))));
       allow delete: if ownerIs('userId') || isStaff();
     }
 

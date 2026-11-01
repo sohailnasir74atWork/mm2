@@ -77,6 +77,12 @@ export const LocalStateProvider = ({ children }) => {
     // cold start it came back undefined and stayed that way until the next
     // network fetch finished.
     suprime: loadCatalog('suprime'),
+    // Each feed's `meta` block (generatedAt, and from 2026-10-30 the source
+    // sites' own update times). `data` / `suprime` hold the unwrapped
+    // catalogue, so without these the calculator's "Updated" label had no time
+    // to show and was always blank. GlobelStats writes them with the feeds.
+    dataMeta: safeParseJSON('dataMeta', null),
+    suprimeMeta: safeParseJSON('suprimeMeta', null),
     // Which catalogue prices the calculator: 'mm2' | 'supreme'. The two
     // disagree on 70% of the items they share, so this is a real preference,
     // not a display option. See Code/Helper/valueSources.js.

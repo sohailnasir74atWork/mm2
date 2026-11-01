@@ -243,6 +243,12 @@ function App() {
             {/* Trade Match (More hub card; params { tab: 'wanters' }). Draws
                 its own header. Port of Adopt Me's, on the RTDB trade_index. */}
             <Stack.Screen name="TradeMatch" options={{ headerShown: false }} getComponent={() => require('./Code/TradeMatch/TradeMatchScreen').default} />
+            {/* Fantasy League (More hub card; league pushes with route
+                'FantasyLeague'). Draws its own header. functions/fantasy. */}
+            <Stack.Screen name="FantasyLeague" options={{ headerShown: false }} getComponent={() => require('./Code/FantasyLeague/FantasyLeagueScreen').default} />
+            {/* Lights Out Manor mini game (More hub card). Full screen, draws its
+                own controls. Code/Manor/ManorScreen.jsx. */}
+            <Stack.Screen name="Manor" options={{ headerShown: false, gestureEnabled: false }} getComponent={() => require('./Code/Manor/ManorScreen').default} />
 
             <Stack.Screen
               name="SocialDashboard"

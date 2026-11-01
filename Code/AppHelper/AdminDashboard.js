@@ -1275,7 +1275,7 @@ const AdminDashboard = () => {
 
   if (!isStaff) {
     return (
-      <View style={[s.root, { paddingTop: insets.top, alignItems: 'center', justifyContent: 'center' }]}>
+      <View style={[s.root, { alignItems: 'center', justifyContent: 'center' }]}>
         <Icon name="lock-closed-outline" size={44} color={c.textMuted} />
         <Text style={[s.sub, { marginTop: 12 }]}>Staff only.</Text>
       </View>
@@ -1285,7 +1285,9 @@ const AdminDashboard = () => {
   const listBottom = { paddingBottom: 60 + insets.bottom };
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    // No paddingTop: the native stack header (App.js 'Admin') already sits
+    // below the status bar; adding insets.top here left an empty band.
+    <View style={s.root}>
       {/* tabs */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={s.tabBar}>
         {visibleTabs.map((t) => (

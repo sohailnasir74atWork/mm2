@@ -8,7 +8,8 @@
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
-    "fetch:functions": "node scripts/fetch-live-functions.js"
+    "fetch:functions": "node scripts/fetch-live-functions.js",
+    "manor:build": "node scripts/manor/build-game.js"
   },
   "dependencies": {
     "@invertase/react-native-apple-authentication": "^2.4.0",
@@ -58,6 +59,7 @@
     "react-native-tracking-transparency": "^0.1.2",
     "react-native-vector-icons": "^10.2.0",
     "react-native-view-shot": "^6.0.1",
+    "react-native-webview": "^16.0.0",
     "sp-react-native-in-app-updates": "^1.5.0"
   },
   "devDependencies": {

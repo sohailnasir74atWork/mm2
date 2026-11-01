@@ -17,7 +17,7 @@ import { useGlobalState } from '../GlobelStats';
 import { useLocalState } from '../LocalGlobelStats';
 import { useThemeColors } from '../Helper/themeColors';
 import {
-  buildItemPool, unwrapFeed, priceOf, isSummable, DEFAULT_VALUE_SOURCE, categoryKey,
+  buildItemPool, unwrapFeed, priceOf, isSummable, DEFAULT_VALUE_SOURCE, categoryKey, poolLookup,
 } from '../Helper/valueSources';
 import config from '../Helper/Environment';
 import { maybeAskForReview } from '../AppHelper/reviewPrompt';
@@ -265,26 +265,19 @@ const MyStuffScreen = ({ selectedTheme }) => {
   // not price leaderboard awards at all. An item the pool does not know falls
   // back to whatever value was stored with it, which is what this always did.
   // See Code/Helper/valueSources.js.
-  // name → first catalogue entry with that name (what .find() returned), built
-  // once per catalogue load: lookupVal runs for every grid cell on each
-  // select-mode tap, and scanning the whole pool per cell was the slow part.
-  const pricedByName = useMemo(() => {
-    const m = new Map();
-    parsedData.forEach(d => {
-      const n = (d?.name || '').toLowerCase().trim();
-      if (!m.has(n)) m.set(n, d);
-    });
-    return m;
-  }, [parsedData]);
+  // item → its catalogue entry (same category first, so a Vintage Laser is
+  // not priced as the Godly one), built once per catalogue load: lookupVal
+  // runs for every grid cell on each select-mode tap, and scanning the whole
+  // pool per cell was the slow part.
+  const findInPool = useMemo(() => poolLookup(parsedData), [parsedData]);
 
   const lookupVal = useCallback((item) => {
     if (!item?.name) return 0;
-    const n = (item.name || '').toLowerCase().trim();
-    const f = pricedByName.get(n);
+    const f = findInPool(item);
     const priced = priceOf(f || item, valueSource);
     if (isSummable(priced)) return priced.value || 0;
     return 0;
-  }, [pricedByName, valueSource]);
+  }, [findInPool, valueSource]);
 
   // Portfolio stats
   const stats = useMemo(() => {

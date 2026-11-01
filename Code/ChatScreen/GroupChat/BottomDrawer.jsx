@@ -1333,7 +1333,12 @@ const ProfileBottomDrawer = ({
     const tradePercentage = Math.abs(((tradeRatio - 1) * 100).toFixed(0));
     const isProfit = tradeRatio > 1;
     const neutral = tradeRatio === 1;
-    const formattedTime = trade.timestamp ? dayjs(trade.timestamp.toDate()).fromNow() : "Unknown";
+    // Same guard as the trade feed (Trades.jsx): some documents hold a numeric
+    // Date.now() with no .toDate(), and timestamps are client-written, so an
+    // unguarded call let one odd trade crash this profile to the ErrorBoundary.
+    const formattedTime = trade.timestamp
+      ? dayjs(typeof trade.timestamp?.toDate === 'function' ? trade.timestamp.toDate() : trade.timestamp).fromNow()
+      : "Unknown";
 
     const groupedHasItems = groupTradeItems(trade.hasItems || []);
     const groupedWantsItems = groupTradeItems(trade.wantsItems || []);

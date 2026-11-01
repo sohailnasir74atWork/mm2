@@ -167,7 +167,7 @@ export function setValueUpdatesEnabled(enabled) {
 
 // Screens a push may open. data.route comes from the server, so it is
 // matched against this list and never passed to navigate() unchecked.
-const ALLOWED_ROUTES = ['Values', 'Birthdays', 'TradeMatch'];
+const ALLOWED_ROUTES = ['Values', 'Birthdays', 'TradeMatch', 'FantasyLeague'];
 // Birthday pushes (functions/birthdays): the birthday itself, a first wish,
 // a thank-you. All carry route 'Birthdays'.
 const BIRTHDAY_TYPES = ['birthday', 'birthday_wish', 'birthday_thanks'];
@@ -184,6 +184,9 @@ export function routeForNotificationData(data) {
   // Trade Match dream alerts (functions/tradeMatch.js tradeMatchDreamAlerts):
   // { type: 'trade_match', route: 'TradeMatch', itemKey, fromUid }.
   if (data.type === 'trade_match' || data.route === 'TradeMatch') return 'TradeMatch';
+  // Fantasy League (functions/fantasy/core.js): fantasy_move, fantasy_results,
+  // fantasy_guess, all with route 'FantasyLeague'.
+  if (data.route === 'FantasyLeague' && String(data.type || '').startsWith('fantasy_')) return 'FantasyLeague';
   // Per-item alerts from valueAlertsPoll: { kind, game, item }, no route.
   if (data.kind === 'value_change') return 'Values';
   return null;

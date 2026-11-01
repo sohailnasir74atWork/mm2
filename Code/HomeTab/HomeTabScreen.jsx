@@ -9,9 +9,14 @@
  * Invite moved to the More tab (Code/More/MoreHubScreen.jsx) on 2026-10-13;
  * nothing appears on both screens, so add a tool to one or the other.
  *
- * The mini-games row is no longer on Home. The game screens (ArrowGameScreen,
- * GameScreen) are still registered in App.js, so nothing that deep-links into
- * them breaks; they just have no entry point here.
+ * The old mini-games row is no longer on Home. The game screens
+ * (ArrowGameScreen, GameScreen) are still registered in App.js, so nothing
+ * that deep-links into them breaks; they just have no entry point here.
+ *
+ * Mini games (owner, 2026-10-31): Lights Out Manor, Fantasy League and
+ * Mystery Eggs, three in one row under Explore. The two new games carry a NEW
+ * tag until first opened (./newBadges). All three moved off the More tab
+ * (eggs were More's hero card), so they appear only here.
  */
 import React, { useMemo, useCallback, useState } from 'react';
 import {
@@ -27,7 +32,7 @@ import { useTranslation } from 'react-i18next';
 import config from '../Helper/Environment';
 import { useThemeColors } from '../Helper/themeColors';
 import {
-  buildItemPool, unwrapFeed, priceOf, isSummable, DEFAULT_VALUE_SOURCE,
+  buildItemPool, unwrapFeed, priceOf, isSummable, DEFAULT_VALUE_SOURCE, poolLookup,
 } from '../Helper/valueSources';
 import { setAppLanguage } from '../../i18n';
 import { useLanguage } from '../Translation/LanguageProvider';
@@ -46,6 +51,7 @@ import { getMyCosmetics, syncMyCosmetics } from '../Helper/cosmeticsCache';
 import BirthdayHomeCard from '../Birthdays/BirthdayHomeCard';
 import BanStatusCard from './BanStatusCard';
 import { flipInRTL } from '../Helper/rtl';
+import { isNew, markSeen } from './newBadges';
 
 const LANGUAGES = [
   { code: 'en', name: 'English', flag: '🇺🇸' },
@@ -110,6 +116,9 @@ const HomeTabScreen = ({ selectedTheme }) => {
   const isFocused = useIsFocused();
 
   const [showDailyStars, setShowDailyStars] = useState(false);
+  // Re-read the NEW tags when Home comes back into view.
+  const [, setBadgeTick] = useState(0);
+  useFocusEffect(useCallback(() => { setBadgeTick((n) => n + 1); }, []));
   const [homeQuery, setHomeQuery] = useState('');
   const [showLangPicker, setShowLangPicker] = useState(false);
 
@@ -182,14 +191,14 @@ const HomeTabScreen = ({ selectedTheme }) => {
 
   // Priced from the catalogue the user selected, and only from values that can
   // honestly be summed. See Code/Helper/valueSources.js.
+  const findInPool = useMemo(() => poolLookup(parsedData), [parsedData]);
   const lookupVal = useCallback((item) => {
     if (!item?.name) return 0;
-    const n = (item.name || '').toLowerCase().trim();
-    const f = parsedData.find(d => (d?.name || '').toLowerCase().trim() === n);
+    const f = findInPool(item);
     const priced = priceOf(f || item, valueSource);
     if (isSummable(priced)) return priced.value || 0;
     return 0;
-  }, [parsedData, valueSource]);
+  }, [findInPool, valueSource]);
 
   const portfolio = useMemo(() => owned.reduce((s, p) => s + lookupVal(p), 0), [owned, lookupVal]);
 
@@ -290,46 +299,9 @@ const HomeTabScreen = ({ selectedTheme }) => {
             or today's birthdays (renders nothing otherwise, or signed out). */}
         <BirthdayHomeCard userId={user?.id || null} userName={user?.displayName} />
 
-        {/* ── Tools: what the app is for ──
-            A 2x2 grid, every tile visible at once, each with its own hue so the
-            grid is scannable by colour before it is read. */}
-        <Text style={[$.sectionTitle, $.sectionSpacing, { color: C.text }]}>{t('home.explore_tools', { defaultValue: 'Explore' })}</Text>
-        <View style={$.toolGrid}>
-          {[
-            // Nothing here duplicates the tab bar: Calculator, Trade, Feed and
-            // Chat are one tap away down there already, so the grid holds the
-            // destinations that have no tab of their own.
-            { icon: 'values', accent: 'violet', label: t('home.values'), sub: t('home.values_sub', { defaultValue: 'Latest item values' }), onPress: () => nav.navigate('Values') },
-            { icon: 'trophy', accent: 'rose', label: t('home.top_rated'), sub: t('home.top_rated_sub', { defaultValue: 'Most trusted traders' }), onPress: () => nav.navigate('Leaderboard') },
-            { icon: 'friends', accent: 'blue', label: t('home.friends') || 'Friends', sub: t('home.friends_sub', { defaultValue: 'Your trading circle' }), onPress: () => guard(() => nav.navigate('SocialDashboard'), t('home.signin_continue')) },
-            { icon: 'star', accent: 'amber', label: t('home.daily_stars'), sub: t('home.daily_stars_sub', { defaultValue: 'Collect your daily reward' }), onPress: () => guard(() => setShowDailyStars(true), t('home.signin_continue')) },
-          ].map((tool) => {
-            const a = accentFor(tool.accent, dark);
-            return (
-              <TouchableOpacity
-                key={tool.icon}
-                accessibilityRole="button"
-                accessibilityLabel={tool.label + '. ' + tool.sub}
-                style={[$.toolCard, { backgroundColor: a.tint, borderColor: a.tint }]}
-                onPress={tool.onPress}
-                activeOpacity={0.8}
-              >
-                <View style={$.toolTopRow}>
-                  <View style={[$.toolIcon, { backgroundColor: dark ? '#FFFFFF0D' : '#FFFFFFB3' }]}>
-                    <HomeIcon name={tool.icon} size={30} color={a.color} />
-                  </View>
-                  <FontAwesome name="arrow-up-right-from-square" size={12} color={a.color} style={flipInRTL} />
-                </View>
-                <Text style={[$.toolLabel, { color: C.text }]} numberOfLines={1}>{tool.label}</Text>
-                <Text style={[$.toolSub, { color: a.color }]} numberOfLines={1}>{tool.sub}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
         {/* ── Trade Match ── the owner wanted it on Home, not in More (2026-10-13).
-            Full width under Explore: finding a trade partner is the next thing
-            a trader does after checking a value. */}
+            Right under the birthday card with My Stuff Worth (owner,
+            2026-10-31): the trader's own tools come before browsing. */}
         <TouchableOpacity
           onPress={() => guard(() => nav.navigate('TradeMatch'), t('trade_match.sign_in'))}
           activeOpacity={0.85}
@@ -371,8 +343,9 @@ const HomeTabScreen = ({ selectedTheme }) => {
           </View>
         </TouchableOpacity>
 
-        {/* ── Stories ── titled like every other section, so the avatar row
-            reads as a feature rather than loose circles between two cards. */}
+        {/* ── Stories ── right under the birthday card (owner, 2026-10-31), so
+            the avatar row is on the first screen. Titled like every other
+            section, so it reads as a feature rather than loose circles. */}
         <View style={[$.sectionHead, $.sectionSpacing]}>
           <Text style={[$.sectionTitle, { color: C.text }]}>{t('home.stories', { defaultValue: 'Stories' })}</Text>
           <Text style={[$.sectionMeta, { color: C.textSecondary }]}>{t('home.stories_sub', { defaultValue: 'Last 24 hours' })}</Text>
@@ -384,6 +357,92 @@ const HomeTabScreen = ({ selectedTheme }) => {
           isDarkMode={dark}
           onRequireSignIn={requireSignInForStatus}
         />
+
+        {/* ── Tools: what the app is for ──
+            A 2x2 grid, every tile visible at once, each with its own hue so the
+            grid is scannable by colour before it is read. */}
+        <Text style={[$.sectionTitle, $.sectionSpacing, { color: C.text }]}>{t('home.explore_tools', { defaultValue: 'Explore' })}</Text>
+        <View style={$.toolGrid}>
+          {[
+            // Nothing here duplicates the tab bar: Calculator, Trade, Feed and
+            // Chat are one tap away down there already, so the grid holds the
+            // destinations that have no tab of their own.
+            { icon: 'values', accent: 'violet', label: t('home.values'), sub: t('home.values_sub', { defaultValue: 'Latest item values' }), onPress: () => nav.navigate('Values') },
+            { icon: 'trophy', accent: 'rose', label: t('home.top_rated'), sub: t('home.top_rated_sub', { defaultValue: 'Most trusted traders' }), onPress: () => nav.navigate('Leaderboard') },
+            { icon: 'friends', accent: 'blue', label: t('home.friends') || 'Friends', sub: t('home.friends_sub', { defaultValue: 'Your trading circle' }), onPress: () => guard(() => nav.navigate('SocialDashboard'), t('home.signin_continue')) },
+            { icon: 'star', accent: 'amber', label: t('home.daily_stars'), sub: t('home.daily_stars_sub', { defaultValue: 'Collect your daily reward' }), onPress: () => guard(() => setShowDailyStars(true), t('home.signin_continue')) },
+          ].map((tool) => {
+            const a = accentFor(tool.accent, dark);
+            return (
+              <TouchableOpacity
+                key={tool.icon}
+                accessibilityRole="button"
+                accessibilityLabel={tool.label + '. ' + tool.sub}
+                style={[$.toolCard, { backgroundColor: a.tint, borderColor: a.tint }]}
+                onPress={tool.onPress}
+                activeOpacity={0.8}
+              >
+                <View style={$.toolTopRow}>
+                  <View style={[$.toolIcon, { backgroundColor: dark ? '#FFFFFF0D' : '#FFFFFFB3' }]}>
+                    <HomeIcon name={tool.icon} size={30} color={a.color} />
+                  </View>
+                  <FontAwesome name="arrow-up-right-from-square" size={12} color={a.color} style={flipInRTL} />
+                </View>
+                <Text style={[$.toolLabel, { color: C.text }]} numberOfLines={1}>{tool.label}</Text>
+                <Text style={[$.toolSub, { color: a.color }]} numberOfLines={1}>{tool.sub}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* ── Mini games ── (owner, 2026-10-31) right under Explore so it is on
+            the first screen. Lights Out Manor keeps its night look (the game's
+            own colours) so it reads as a game, not another tool. */}
+        <View style={[$.sectionHead, $.sectionSpacing]}>
+          <View style={$.titleRow}>
+            <Text style={[$.sectionTitle, { color: C.text }]}>{t('home.mini_games', { defaultValue: 'Mini games' })}</Text>
+            {(isNew('manor') || isNew('fantasy')) && (
+              <View style={$.newTag}><Text style={$.newTagText}>{t('home.new_badge', { defaultValue: 'NEW' })}</Text></View>
+            )}
+          </View>
+        </View>
+        {/* Three in one row: compact tiles, icon above, NEW (or a play mark) in the corner. */}
+        <View style={$.miniRow}>
+          {[
+            { key: 'manor', screen: 'Manor', icon: 'lantern', label: t('manor_app.title'), sub: t('more_hub.manor_desc'), fresh: isNew('manor'),
+              bg: '#141a2c', border: '#2a3352', iconBg: '#FFFFFF12', color: '#ffb547', text: '#f3eadb' },
+            { key: 'fantasy', screen: 'FantasyLeague', icon: 'trophy', label: t('fantasy.title'), sub: t('more_hub.fantasy_desc'), fresh: isNew('fantasy'),
+              bg: accentFor('violet', dark).tint, border: accentFor('violet', dark).tint, iconBg: dark ? '#FFFFFF0D' : '#FFFFFFB3', color: accentFor('violet', dark).color, text: C.text },
+            { key: 'eggs', screen: 'MysteryEggScreen', icon: 'egg', label: t('mystery_egg.screen.header_title', { defaultValue: 'Mystery Eggs' }), sub: t('home.win_cosmetics_sub', { defaultValue: 'Hatch eggs to unlock' }), fresh: false,
+              signIn: t('more_hub.signin_eggs'),
+              bg: accentFor('rose', dark).tint, border: accentFor('rose', dark).tint, iconBg: dark ? '#FFFFFF0D' : '#FFFFFFB3', color: accentFor('rose', dark).color, text: C.text },
+          ].map((g) => {
+            const go = () => { if (g.fresh) { markSeen(g.key); setBadgeTick((n) => n + 1); } nav.navigate(g.screen); };
+            return (
+              <TouchableOpacity
+                key={g.key}
+                accessibilityRole="button"
+                accessibilityLabel={`${g.label}. ${g.sub}`}
+                style={[$.miniCard, { backgroundColor: g.bg, borderColor: g.border }]}
+                onPress={() => (g.signIn ? guard(go, g.signIn) : go())}
+                activeOpacity={0.85}
+              >
+                <View style={$.miniTop}>
+                  <View style={[$.miniIcon, { backgroundColor: g.iconBg }]}>
+                    <HomeIcon name={g.icon} size={24} color={g.color} />
+                  </View>
+                  {g.fresh ? (
+                    <View style={[$.newTag, $.newTagSmall]}><Text style={$.newTagText}>{t('home.new_badge', { defaultValue: 'NEW' })}</Text></View>
+                  ) : (
+                    <FontAwesome name="play" size={10} color={g.color} style={flipInRTL} />
+                  )}
+                </View>
+                <Text style={[$.miniLabel, { color: g.text }]} numberOfLines={2}>{g.label}</Text>
+                <Text style={[$.miniSub, { color: g.color }]} numberOfLines={3}>{g.sub}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         {/* ── Footer ── */}
         <Text style={[$.footer, { color: C.textSecondary }]}>{t('home.made_with_love')}</Text>
@@ -461,6 +520,18 @@ const $ = StyleSheet.create({
   toolIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   toolLabel: { fontSize: 15, fontFamily: FONT_BOLD },
   toolSub: { fontSize: 12, fontFamily: FONT_REGULAR, marginTop: 3 },
+
+  // Mini games
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  newTag: { backgroundColor: '#ff3b5c', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  newTagText: { color: '#FFFFFF', fontSize: 10.5, fontFamily: FONT_BOLD, letterSpacing: 0.8 },
+  newTagSmall: { paddingHorizontal: 6, paddingVertical: 2 },
+  miniRow: { flexDirection: 'row', paddingHorizontal: SCREEN_GUTTER, marginTop: 10, gap: 10 },
+  miniCard: { flex: 1, minWidth: 0, padding: 10, borderRadius: 18, borderWidth: 1 },
+  miniTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  miniIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  miniLabel: { fontSize: 13.5, fontFamily: FONT_BOLD, lineHeight: 17 },
+  miniSub: { fontSize: 11, fontFamily: FONT_REGULAR, lineHeight: 14, marginTop: 3 },
 
   // Trade Match
   matchCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: SCREEN_GUTTER, marginTop: 12, padding: 14, borderRadius: 20, borderWidth: 1 },

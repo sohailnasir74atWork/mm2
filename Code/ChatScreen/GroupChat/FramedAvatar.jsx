@@ -587,6 +587,19 @@ const FRAME_DEFS = {
   },
 };
 
+// Lights Out Manor frames (Code/Engagement/shopItems.js MANOR_FRAMES).
+const MANOR_FRAME_DEFS = {
+  manor_classic: { borderWidth: 2.2, gap: 1.2, decorations: [] },
+  manor_moth: { borderWidth: 2.2, gap: 1.2, decorations: [] },
+  manor_mint: { borderWidth: 2.2, gap: 1.2, decorations: [] },
+  manor_frost: { borderWidth: 2.4, gap: 1.2, glowOpacity: 0.2, decorScale: 0.8, decorations: ['sparkles'], scalloped: true },
+  manor_coral: { borderWidth: 2.4, gap: 1.2, glowOpacity: 0.2, decorScale: 0.8, decorations: ['hearts'] },
+  manor_neon: { borderWidth: 2.8, gap: 1.6, glowOpacity: 0.45, decorScale: 1.1, decorations: ['bolts', 'sparkles'], doubleBorder: true, doubleBorderWidth: 1 },
+  manor_ember: { borderWidth: 3.2, gap: 1.8, glowOpacity: 0.7, decorScale: 1.5, decorations: ['flames', 'sparkles'], doubleBorder: true, doubleBorderWidth: 1.2 },
+  manor_void: { borderWidth: 3.5, gap: 2, glowOpacity: 0.85, decorScale: 1.8, decorations: ['halo', 'orbit', 'sparkles'], doubleBorder: true, doubleBorderWidth: 1.3, tripleBorder: true, tripleBorderWidth: 0.8 },
+};
+Object.assign(FRAME_DEFS, MANOR_FRAME_DEFS);
+
 const DEFAULT_DEF = {
   borderWidth: 2, gap: 1, decorations: [],
 };

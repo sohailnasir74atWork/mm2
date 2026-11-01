@@ -1783,7 +1783,10 @@ const renderTradeItem = useCallback((trade) => {
   const tradePercentage = Math.abs(((tradeRatio - 1) * 100).toFixed(0));
   const isProfit = tradeRatio > 1;
   const neutral = tradeRatio === 1;
-  const formattedTime = trade.timestamp ? dayjs(trade.timestamp.toDate()).fromNow() : t('mystuff.unknown');
+  // Same guard as the trade feed: a numeric timestamp has no .toDate().
+  const formattedTime = trade.timestamp
+    ? dayjs(typeof trade.timestamp?.toDate === 'function' ? trade.timestamp.toDate() : trade.timestamp).fromNow()
+    : t('mystuff.unknown');
   const isGG = trade.isSharkMode === 'GG';
 
   const groupedHasItems = groupTradeItems(trade.hasItems || []);

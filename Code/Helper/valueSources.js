@@ -103,6 +103,21 @@ export const feedMeta = (raw) =>
     ? raw.meta
     : null;
 
+/**
+ * When the chosen list last changed, as a Date, or null.
+ *
+ * Prefers the source site's own stamp (`meta.sources[source].siteUpdatedAt`,
+ * published by the pipeline from 2026-10-30: mm2values.com showed 10/25 while
+ * our build ran on 10/30) over `generatedAt`, the time our build ran. Takes the
+ * stored `meta` block, not the feed — `data` / `suprime` are kept unwrapped.
+ */
+export const sourceUpdatedAt = (meta, source) => {
+  const at = meta?.sources?.[source]?.siteUpdatedAt || meta?.generatedAt;
+  if (!at) return null;
+  const d = new Date(at);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
 /** Newest generatedAt across the feeds, as a Date, or null if none carry one. */
 export const newestGeneratedAt = (...raws) => {
   let newest = null;
@@ -160,6 +175,10 @@ const applyNameRules = (name) =>
 //   "Chroma Constellation" / "Gold Constellation" — different finishes.
 //   Anything whose year differs ("Santa (2017)" / "Santa (2018)",
 //     "Brains 2019" / "Brains (2022)") — separate collectibles.
+//   "Curse Knife" / "Cursed (Knife)" — removed 2026-10-30. MM2's Curse Knife is
+//     a Rare (2 X T1 Rare); Supreme's Cursed (Knife) is the 2024 Legendary
+//     (x4 T1 Legendaries). The knife pairing finds the real twin, Supreme's
+//     Rare "Curse" (Halloween 2022, x3 T1 Rares).
 const NAME_ALIASES = new Map([
   ['Silver Hallows', 'Silver Hallow'],
   ['Bronze Hallows', 'Bronze Hallow'],
@@ -172,7 +191,6 @@ const NAME_ALIASES = new Map([
   ['Bronze Travelers Axe', "Bronze Traveler's"],
   ['Moonlight Gun', 'Moonlight'],
   ['Balloons Gun', 'Balloons'],
-  ['Curse Knife', 'Cursed (Knife)'],
 ].map(([from, to]) => [baseKey(applyNameRules(from)), baseKey(applyNameRules(to))]));
 
 /**
@@ -321,6 +339,7 @@ export const isSummable = (item) => {
 // 54 are absent from Supreme entirely, 54 are unpriced there, and 45 are
 // bundle-tier. The UI has to say so rather than showing a silent zero.
 
+// name key → every Supreme record with that key, in feed order.
 let supremePriceIndex = new Map();
 
 /**
@@ -329,41 +348,93 @@ let supremePriceIndex = new Map();
  * knife and an Untradables effect, and so are Blizzard, Bloom, Celestial and
  * ~120 others. Same text, different things — only the category separates them.
  *
- * This is a trading calculator, so the tradable record wins, and a priced one
- * beats an unpriced one. Without an explicit rule the winner is whichever the
- * JSON happened to list first; that currently gives the right answer only
- * because `Untradables` is the last key in the feed.
+ * So the item's own category decides (findSupremeRecord). This rank only
+ * settles what is left: the tradable record wins, a priced one beats an
+ * unpriced one, and a Set never beats a single item. "Sun Set" (Sunrise +
+ * Sunset, 1,450) reduces to the same key as the Sunset knife (650), and Sets
+ * is the first key in the feed — so the knife was quoted at the set's price
+ * (reported 2026-10-30). Same for Chroma Sun Set (14,000) / Chroma Sunset.
  */
 const supremeRecordRank = (record) => {
   if (!record) return -1;
   if (record.category === 'Untradables') return 0;
+  if (record.category === 'Sets') return 0.5;
   if (record.valueConfidence === VALUE_CONFIDENCE.OBSERVED) return 3;
   if (record.valueConfidence === VALUE_CONFIDENCE.MODELED) return 2;
   return 1;
 };
 
+const bestRecord = (records) => {
+  let best = null;
+  for (const r of records) {
+    if (!best || supremeRecordRank(r) > supremeRecordRank(best)) best = r;
+  }
+  return best;
+};
+
+/** Upper-case category of a pool row, grid item, trade item or saved item. */
+const itemCategoryKey = (item) =>
+  categoryKey(item?.category || item?.Category || item?.type || item?.Type);
+
+// MM2 writes "Flowerwood Knife" where Supreme writes "Flowerwood" and keeps
+// "Flowerwood Gun" for the gun — ~25 such knives priced "not listed". A blind
+// suffix drop collides (see the name rules above), so this runs only after an
+// exact miss, only inside the item's own category, and only when exactly one
+// record there answers to the bare name.
+const KNIFE_SUFFIX = /\s*\(?knife\)?\s*$/i;
+
+/**
+ * The same name in two categories is two items: Vintage Laser (8) is not the
+ * Godly Laser (22), Common Cane Knife (0.0045) is not the Rare one (525). 48
+ * MM2 items were priced from the wrong one (2026-10-30), so only a record in
+ * the item's own category may price it.
+ *
+ * When there is none, the answer is "not listed" — never the nearest record
+ * elsewhere. Borrowing one priced the Rare Rainbow (3 X T1 Uncommon) at the
+ * Godly Rainbow's 400 and the Common Spider at the Godly's 10, and labelled
+ * tradable Pumpkin, Cursed and Camo "Untradable" after their effects. The one
+ * legitimate cross-category pairing — each site lists the item once, under
+ * different categories, e.g. MM2 Pets "Chroma Fire Bat" / Supreme Chromas — is
+ * decided in buildItemPool, which sees both catalogues, and travels on the row
+ * as supremeCategory / supremeName.
+ */
+const findSupremeRecord = (item) => {
+  const name = item?.name || item?.Name;
+
+  if (item?.supremeCategory) {
+    const paired = supremePriceIndex.get(normalizeName(item.supremeName || name)) || [];
+    const want = categoryKey(item.supremeCategory);
+    const same = paired.filter((r) => categoryKey(r.category) === want);
+    return same.length ? bestRecord(same) : null;
+  }
+
+  const cat = itemCategoryKey(item);
+  const exact = supremePriceIndex.get(normalizeName(name));
+  if (exact) {
+    // Old trade items can carry no category at all; rank is all there is.
+    if (!cat) return bestRecord(exact);
+    const same = exact.filter((r) => categoryKey(r.category) === cat);
+    if (same.length) return bestRecord(same);
+  }
+
+  if (!cat || !KNIFE_SUFFIX.test(String(name || ''))) return null;
+  const bare = supremePriceIndex.get(normalizeName(String(name).replace(KNIFE_SUFFIX, ''))) || [];
+  const same = bare.filter((r) => categoryKey(r.category) === cat);
+  return same.length === 1 && plausiblePair(item, same[0]) ? same[0] : null;
+};
+
 /** Called once per Supreme fetch, with the UNWRAPPED categories object. */
 export const indexSupremePrices = (supremeData) => {
   const next = new Map();
-  if (supremeData && typeof supremeData === 'object') {
-    for (const [category, tiers] of Object.entries(supremeData)) {
-      if (!tiers || typeof tiers !== 'object') continue;
-      for (const [tier, items] of Object.entries(tiers)) {
-        if (!Array.isArray(items)) continue;
-        for (const item of items) {
-          if (!item || !item.name) continue;
-          const key = normalizeName(item.name);
-          // Category and tier are not on the item itself, but they are what
-          // says WHY something has no price — an award is not an untradable.
-          const record = { ...item, category, tier };
-          const held = next.get(key);
-          if (!held || supremeRecordRank(record) > supremeRecordRank(held)) {
-            next.set(key, record);
-          }
-        }
-      }
-    }
-  }
+  eachItem(supremeData, (item, category, tier) => {
+    const key = normalizeName(item.name);
+    // Category and tier are not on the item itself, but they are what
+    // says WHY something has no price — an award is not an untradable.
+    const record = { ...item, category, tier };
+    const held = next.get(key);
+    if (held) held.push(record);
+    else next.set(key, [record]);
+  });
   supremePriceIndex = next;
   return next.size;
 };
@@ -468,7 +539,7 @@ export const priceOf = (item, source = DEFAULT_VALUE_SOURCE) => {
     };
   }
 
-  const match = supremePriceIndex.get(normalizeName(item.name || item.Name));
+  const match = findSupremeRecord(item);
   if (!match) {
     return {
       value: 0, valueConfidence: VALUE_CONFIDENCE.NONE, valueText: '',
@@ -623,6 +694,10 @@ const poolEntry = (item, category, tier, inMM2) => ({
   changePct: item.changePct || null,
   stability: item.stability || null,
   range: item.range || null,
+  // Set by buildItemPool when this MM2 row's Supreme twin is filed under
+  // another category or spelling ("Chroma Fire Bat": MM2 Pets, Supreme Chromas).
+  supremeCategory: null,
+  supremeName: null,
 });
 
 const eachItem = (data, fn) => {
@@ -638,20 +713,89 @@ const eachItem = (data, fn) => {
   }
 };
 
+// Deduped by category AND name. By name alone, 58 MM2 rows were dropped
+// because an earlier category used the same name — 7 of the 10 Vintages
+// (Laser, Ghost, Shadow, Prince, Phaser, Golden, Cowboy) never reached the
+// picker (reported 2026-10-30).
+const poolKey = (category, name) => `${categoryKey(category)}|${normalizeName(name)}`;
+
+// The two pairings below are inferred from names, so a real price has to
+// agree roughly before they are trusted: within 4× (every such pair on
+// 2026-10-30 was, most at 1×). Below 1 both lists only rank items in bundles
+// ("x3 T1 Rares") and disagree by up to 50× on the same item of the same year
+// (Penguin Knife 2025: MM2 "2 X (T1) Legend", Supreme "x1 T1 Uncommon"), so
+// two bundle-tier values say nothing about identity and are not compared.
+const PAIR_MAX_RATIO = 4;
+const plausiblePair = (mm2Row, supremeItem) => {
+  const a = Number(mm2Row?.Value) || 0;
+  const b = Number(supremeItem?.value) || 0;
+  if (!(a > 0) || !(b > 0)) return true;
+  if (a < 1 && b < 1) return true;
+  return Math.max(a, b) / Math.min(a, b) <= PAIR_MAX_RATIO;
+};
+
 export const buildItemPool = (mm2Data, supremeData) => {
   const pool = new Map();
+  // name key → MM2 category keys holding it, to place a Supreme row that the
+  // two sites file under different categories.
+  const mm2Cats = new Map();
 
   eachItem(mm2Data, (item, category, tier) => {
-    const key = normalizeName(item.name);
-    // First tier wins, matching both indexes. 131 MM2 names span >1 tier.
+    const key = poolKey(category, item.name);
+    // First tier wins inside a category. 131 MM2 names span >1 tier.
     if (!pool.has(key)) pool.set(key, poolEntry(item, category, tier, true));
+    const name = normalizeName(item.name);
+    if (!mm2Cats.has(name)) mm2Cats.set(name, new Set());
+    mm2Cats.get(name).add(categoryKey(category));
+  });
+
+  // Tradable Supreme categories per name, for the same question from the
+  // other side.
+  const supremeCats = new Map();
+  const supremeKeyCount = new Map();
+  eachItem(supremeData, (item, category) => {
+    if (category === 'Untradables' || category === 'Sets') return;
+    const name = normalizeName(item.name);
+    if (!supremeCats.has(name)) supremeCats.set(name, new Set());
+    supremeCats.get(name).add(categoryKey(category));
+    const key = poolKey(category, item.name);
+    supremeKeyCount.set(key, (supremeKeyCount.get(key) || 0) + 1);
   });
 
   eachItem(supremeData, (item, category, tier) => {
-    const key = normalizeName(item.name);
-    const held = pool.get(key);
+    const name = normalizeName(item.name);
+    let held = pool.get(poolKey(category, item.name));
+
+    // Each site lists the item once, in different categories: the same item,
+    // filed differently. Merge it into MM2's row instead of listing it twice.
+    // Not for Sets ("Sun Set" is a bundle, not the Sunset knife) and not when
+    // either site lists the name in more than one category.
+    if (!held && category !== 'Sets' && category !== 'Untradables') {
+      const inMM2 = mm2Cats.get(name);
+      const inSupreme = supremeCats.get(name);
+      if (inMM2 && inMM2.size === 1 && inSupreme && inSupreme.size === 1) {
+        const twin = pool.get(`${[...inMM2][0]}|${name}`);
+        if (twin && plausiblePair(twin, item)) held = twin;
+      }
+    }
+
+    // Supreme "Flowerwood" is MM2 "Flowerwood Knife" — the pool side of the
+    // knife fallback in findSupremeRecord, under the same conditions.
+    const key = poolKey(category, item.name);
+    if (!held && category !== 'Sets' && category !== 'Untradables'
+      && supremeKeyCount.get(key) === 1 && !supremeKeyCount.has(`${key}knife`)) {
+      const knife = pool.get(`${key}knife`);
+      if (knife && knife.inMM2 && plausiblePair(knife, item)) held = knife;
+    }
 
     if (held) {
+      // Paired under another category or spelling: say which Supreme record,
+      // because findSupremeRecord only looks in the row's own category.
+      if (held.inMM2 && !held.supremeCategory
+        && (categoryKey(held.category) !== categoryKey(category) || normalizeName(held.name) !== name)) {
+        held.supremeCategory = category;
+        held.supremeName = item.name;
+      }
       // Already held by MM2, which owns the artwork and the baseline value.
       // But origin / change / stability are Supreme-only fields, and 787 items
       // are in BOTH catalogues — without this they would keep MM2's row and
@@ -667,10 +811,34 @@ export const buildItemPool = (mm2Data, supremeData) => {
     // Untradables cannot be traded, so they have no business in a calculator —
     // but only skip them when they are not already held by a tradable MM2 row.
     if (category === 'Untradables') return;
-    pool.set(key, poolEntry(item, category, tier, false));
+    pool.set(poolKey(category, item.name), poolEntry(item, category, tier, false));
   });
 
   return [...pool.values()];
+};
+
+/**
+ * Lookup from a saved item (inventory, wishlist, trade) back to its pool row:
+ * the row in the item's own category first, then the first row with that
+ * name — which is what a name-only .find() returned before the pool kept
+ * same-named items apart. Build once per pool; call per item.
+ */
+export const poolLookup = (pool) => {
+  const byKey = new Map();
+  const byName = new Map();
+  for (const row of pool || []) {
+    if (!row?.name) continue;
+    const key = poolKey(row.category, row.name);
+    if (!byKey.has(key)) byKey.set(key, row);
+    const name = normalizeName(row.name);
+    if (!byName.has(name)) byName.set(name, row);
+  }
+  return (item) => {
+    const name = item?.name || item?.Name;
+    if (!name) return null;
+    const cat = itemCategoryKey(item);
+    return (cat && byKey.get(`${cat}|${normalizeName(name)}`)) || byName.get(normalizeName(name)) || null;
+  };
 };
 
 /**

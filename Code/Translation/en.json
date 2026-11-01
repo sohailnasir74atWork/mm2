@@ -272,7 +272,8 @@
       "missing_items_error": "Please add at least one item to both sides of the trade.",
       "values_reloaded": "Values updated!",
       "reload_error": "Failed to refresh",
-      "awards_not_tradable": "Leaderboard awards and untradable items can't be traded. Remove: {{items}}"
+      "awards_not_tradable": "Leaderboard awards and untradable items can't be traded. Remove: {{items}}",
+      "values_not_loaded": "{{source}} values didn't load, so this trade can't be priced. Tap ↻ under the calculator, then try again."
     },
     "my_inventory": "My Inventory",
     "add_to_inventory": "Add Items to Inventory",
@@ -296,7 +297,7 @@
     "share_message": "Check out MM2 Values!",
     "language": "Language",
     "pro": "PRO",
-    "mini_games": "Mini Games",
+    "mini_games": "Mini games",
     "soon": "Soon",
     "made_with_love": "Made with ❤️ for MM2 traders",
     "daily_stars": "Daily Stars",
@@ -1934,7 +1935,9 @@
     "reports_desc": "Report a problem or share an idea",
     "signin_cosmetics": "Sign in to see your cosmetics.",
     "signin_eggs": "Sign in to open eggs.",
-    "trade_match_desc": "Find who has the item you want"
+    "trade_match_desc": "Find who has the item you want",
+    "fantasy_desc": "Pick the movers, win stars",
+    "manor_desc": "Flashlight hide-and-seek, win rare skins"
   },
   "reports": {
     "title": "Complaints & ideas",
@@ -2015,6 +2018,8 @@
     "filter_pets": "PETS",
     "their_side_harder": "Their side is harder to trade on",
     "your_side_harder": "Your side is harder to trade on",
+    "no_verdict_incomplete": "No WIN/FAIR/LOSE yet: some items here have no {{source}} price (marked ? or —).",
+    "no_verdict_no_data": "{{source}} values didn't load. Tap ↻ below to try again.",
     "value_label": "Value: {{value}}",
     "duration_minutes_one": "{{count}} minute",
     "duration_minutes_other": "{{count}} minutes",
@@ -2217,7 +2222,15 @@
       "lilac_whisper": "💜 Lilac Whisper",
       "buttercream": "🧈 Buttercream",
       "rose_velvet": "🌹 Rose Velvet",
-      "moonbeam": "🌙 Moonbeam"
+      "moonbeam": "🌙 Moonbeam",
+      "manor_classic": "Candle Wax",
+      "manor_moth": "Moth Grey",
+      "manor_mint": "Mint Lantern",
+      "manor_frost": "Frost Halo",
+      "manor_coral": "Coral Glow",
+      "manor_neon": "Neon Ghost",
+      "manor_ember": "Ember Trail",
+      "manor_void": "Void Prism"
     },
     "eggs": {
       "common_egg": "Common Egg",

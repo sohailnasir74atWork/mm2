@@ -24,6 +24,13 @@ const drawings = {
     <Path d="m16 4 4 8 9 1-6.5 6 1.5 9-8-4-8 4 1.5-9L3 13l9-1Z" fill="currentColor" fillOpacity={0.13} />
     <Path d="m16 4 4 8 9 1-6.5 6 1.5 9-8-4-8 4 1.5-9L3 13l9-1Z" />
   </>,
+  // Lights Out Manor: a lantern with its light cone.
+  lantern: <>
+    <Path d="M9 27 16 15l7 12Z" fill="currentColor" fillOpacity={0.12} stroke="none" />
+    <Rect x="12" y="7" width="8" height="9" rx="2" fill="currentColor" fillOpacity={0.14} />
+    <Rect x="12" y="7" width="8" height="9" rx="2" />
+    <Path d="M14 7V5h4v2m-2 4v2M9 27l7-11 7 11" />
+  </>,
   trophy: <>
     <Path d="M10 5h12v9a6 6 0 0 1-12 0Z" fill="currentColor" fillOpacity={0.14} />
     <Path d="M10 5h12v9a6 6 0 0 1-12 0ZM10 8H5v3a5 5 0 0 0 5 5m12-8h5v3a5 5 0 0 1-5 5m-6 4v6m-5 2h10" />

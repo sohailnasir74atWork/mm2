@@ -1,8 +1,9 @@
 /**
  * MoreHubScreen.jsx
  * The More tab's home: one card per tool. Same layout as Adopt Me's More hub
- * (adoptme-jan7/Code/More/MoreHubScreen.jsx): a full-width hero card, then a
- * two-column grid.
+ * (adoptme-jan7/Code/More/MoreHubScreen.jsx): a two-column grid. The
+ * Mystery Egg hero card that opened it moved to Home's Mini games row
+ * (owner, 2026-10-31), with Lights Out Manor and Fantasy League.
  *
  * News, Complaints & ideas and the Admin inbox are Adopt Me's screens, ported
  * 2026-10-13 and pushed onto the More stack (./MoreNavigator). The other cards
@@ -22,7 +23,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import FontAwesome from 'react-native-vector-icons/FontAwesome6';
-import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { useGlobalState } from '../GlobelStats';
 import { useThemeColors } from '../Helper/themeColors';
@@ -59,6 +59,7 @@ const MoreHubScreen = ({ navigation, selectedTheme }) => {
 
   const cards = useMemo(() => {
     const list = [
+      // Lights Out Manor and Fantasy League are on Home (Mini games), not here.
       { key: 'news', icon: 'news', accent: 'amber', title: t('tabs.news'), desc: t('more_hub.news_desc'), screen: 'MoreNews' },
       { key: 'reports', icon: 'report', accent: 'coral', title: t('reports.title'), desc: t('more_hub.reports_desc'), screen: 'MoreReport' },
       { key: 'birthdays', icon: 'cake', accent: 'rose', title: t('birthdays.title'), desc: t('more_hub.birthdays_desc'), screen: 'Birthdays' },
@@ -82,8 +83,6 @@ const MoreHubScreen = ({ navigation, selectedTheme }) => {
     else navigation.navigate(card.screen);
   };
 
-  const hero = { key: 'egg', screen: 'MysteryEggScreen', signIn: t('more_hub.signin_eggs') };
-
   return (
     // The inset pads the outer view, not the scroll content: Android is
     // edge-to-edge, so padded content would scroll up under the status bar.
@@ -97,38 +96,6 @@ const MoreHubScreen = ({ navigation, selectedTheme }) => {
           <Text style={[styles.headerTitle, { color: C.text }]}>{t('tabs.more')}</Text>
           <Text style={[styles.headerSub, { color: C.textSecondary }]}>{t('more_hub.subtitle')}</Text>
         </View>
-
-        {/* Hero: cosmetics, the one tool here that is about fun rather than data. */}
-        <TouchableOpacity
-          style={styles.hero}
-          onPress={() => open(hero)}
-          activeOpacity={0.88}
-          accessibilityRole="button"
-          accessibilityLabel={t('home.win_cosmetics')}
-        >
-          <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none" viewBox="0 0 100 100">
-            <Defs>
-              <LinearGradient id="moreHero" x1="0" y1="0" x2="1" y2="1">
-                <Stop offset="0" stopColor="#6A5ACD" />
-                <Stop offset="0.55" stopColor="#8B4FC9" />
-                <Stop offset="1" stopColor="#C2417F" />
-              </LinearGradient>
-            </Defs>
-            <Rect x="0" y="0" width="100" height="100" fill="url(#moreHero)" />
-          </Svg>
-          <View pointerEvents="none" style={styles.heroGlow} />
-          <View style={styles.flex1}>
-            <Text style={styles.heroTitle}>{t('home.cosmetics_hero_title')}</Text>
-            <Text style={styles.heroSub} numberOfLines={2}>{t('home.cosmetics_hero_sub')}</Text>
-            <View style={styles.heroBtn}>
-              <Text style={styles.heroBtnText}>{t('home.win_cosmetics')}</Text>
-              <FontAwesome name="arrow-right" size={11} color="#5B3FB0" style={flipInRTL} />
-            </View>
-          </View>
-          <View pointerEvents="none" style={styles.heroIcon}>
-            <HomeIcon name="egg" size={84} color="rgba(255,255,255,0.9)" />
-          </View>
-        </TouchableOpacity>
 
         {chunkPairs(cards).map((row) => (
           <View key={row[0].key} style={styles.row}>
@@ -176,23 +143,6 @@ const styles = StyleSheet.create({
   header: { marginBottom: 16 },
   headerTitle: { fontSize: 28, fontFamily: FONT_BOLD, letterSpacing: -0.3 },
   headerSub: { fontSize: 13, fontFamily: FONT_REGULAR, marginTop: 2 },
-
-  hero: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    padding: 18, paddingRight: 10, borderRadius: 22, marginBottom: 12, overflow: 'hidden',
-  },
-  heroGlow: {
-    position: 'absolute', right: -30, top: -40, width: 170, height: 170, borderRadius: 85,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  heroTitle: { color: '#FFFFFF', fontSize: 20, fontFamily: FONT_BOLD, letterSpacing: -0.3 },
-  heroSub: { color: 'rgba(255,255,255,0.88)', fontSize: 12.5, fontFamily: FONT_REGULAR, lineHeight: 17, marginTop: 4 },
-  heroBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-    marginTop: 12, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: '#FFFFFF',
-  },
-  heroBtnText: { color: '#5B3FB0', fontSize: 12.5, fontFamily: FONT_BOLD },
-  heroIcon: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '12deg' }] },
 
   row: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   card: { flex: 1, minHeight: 148, padding: 14, borderRadius: 20, borderWidth: 1, overflow: 'hidden' },

@@ -2594,5 +2594,30 @@
     "title": "Lights Out Manor",
     "ad_title": "No video right now",
     "ad_unavailable": "Try again in a minute."
+  },
+  "trade_scanner": {
+    "button": "Scan a trade with camera",
+    "new": "NEW",
+    "title": "Scan a trade",
+    "intro": "Point your camera at the trade window on your PC, or pick a screenshot. We read every item on both offers and check the trade.",
+    "privacy": "Photos are read on your phone and never uploaded.",
+    "pick": "Screenshot",
+    "camera": "Camera",
+    "camera_tip": "Hold steady, fill the photo with the trade window, avoid glare.",
+    "working": "Reading your trade…",
+    "none": "No trade window found. Fit the whole trade window, with YOUR OFFER and THEIR OFFER, in the photo and try again.",
+    "you_give": "You give",
+    "you_get": "You get",
+    "swap": "Swap sides",
+    "not_right": "Not right? Pick:",
+    "remove": "Remove",
+    "use": "Use in calculator",
+    "review_tip": "YOUR OFFER = you give. Tap an item to fix it.",
+    "max_side": "Only the first {{max}} items per side fit in the calculator.",
+    "win": "Win",
+    "lose": "Lose",
+    "fair": "Fair",
+    "check": "Check",
+    "correct": "Correct"
   }
 }

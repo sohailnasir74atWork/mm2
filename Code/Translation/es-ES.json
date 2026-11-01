@@ -2035,5 +2035,30 @@
     "pill_looking": "Lo busco",
     "mystuff_hint": "Los objetos marcados Para tradear salen en Trade Match. Toca la etiqueta para dejar un objeto en Privado.",
     "home_cta": "Buscar matches"
+  },
+  "trade_scanner": {
+    "button": "Escanear un intercambio con la cámara",
+    "new": "NUEVO",
+    "title": "Escanear intercambio",
+    "intro": "Apunta la cámara a la ventana de intercambio de tu PC o elige una captura. Leemos cada objeto de las dos ofertas y revisamos el intercambio.",
+    "privacy": "Las fotos se leen en tu móvil y nunca se suben.",
+    "pick": "Captura",
+    "camera": "Cámara",
+    "camera_tip": "Sujeta el móvil quieto, llena la foto con la ventana y evita reflejos.",
+    "working": "Leyendo tu intercambio…",
+    "none": "No se ha encontrado ninguna ventana de intercambio. Encuadra toda la ventana, con YOUR OFFER y THEIR OFFER, y vuelve a intentarlo.",
+    "you_give": "Das",
+    "you_get": "Recibes",
+    "swap": "Cambiar lados",
+    "not_right": "¿No es correcto? Elige:",
+    "remove": "Quitar",
+    "use": "Usar en la calculadora",
+    "review_tip": "YOUR OFFER = lo que das. Toca un objeto para corregirlo.",
+    "max_side": "Solo caben los primeros {{max}} objetos por lado en la calculadora.",
+    "win": "Ganas",
+    "lose": "Pierdes",
+    "fair": "Justo",
+    "check": "Revisa",
+    "correct": "Correcto"
   }
 }

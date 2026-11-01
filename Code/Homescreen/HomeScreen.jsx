@@ -28,6 +28,7 @@ import PostAdManager from '../Ads/PostAd';
 import BannerAdComponent from '../Ads/bannerAds';
 import Share from 'react-native-share';
 import ShareTradeModal from '../Trades/ShareTradeModal';
+import TradeScannerModal from '../TradeScanner/TradeScannerModal';
 import TradeCompletion from '../Engagement/TradeCompletion';
 import { maybeAskForReview } from '../AppHelper/reviewPrompt';
 import { addDoc, collection, serverTimestamp, doc, getDoc, setDoc } from '@react-native-firebase/firestore';
@@ -138,6 +139,7 @@ const HomeScreen = ({ selectedTheme }) => {
   // const [wantsItems, setWantsItems] = useState(INITIAL_ITEMS);
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
   const [selectedSection, setSelectedSection] = useState(null);
+  const [scannerVisible, setScannerVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const { triggerHapticFeedback } = useHaptic();
   const { localState, updateLocalState } = useLocalState();
@@ -396,6 +398,43 @@ const HomeScreen = ({ selectedTheme }) => {
     ]
   );
 
+
+  // Trade Scanner (Code/TradeScanner): catalogue rows read off the in-game
+  // trade window, stored the way selectItem() stores a picked item; both
+  // sides replace the calculator's (totals follow from the items).
+  // Same rule as summarizeItems(): only observed prices count toward a total.
+  const scannedValue = useCallback((record) => {
+    const priced = priceOf(record, valueSource);
+    return isSummable(priced) ? priced.value : 0;
+  }, [valueSource]);
+
+  const applyScannedTrade = useCallback(({ mine, theirs }) => {
+    const maxSide = GRID_STEPS[GRID_STEPS.length - 1];
+    const toItems = (rows) => rows.slice(0, maxSide).map((record) => {
+      const value = Number(record.Value || 0);
+      return { ...record, selectedValue: value, Value: value };
+    });
+    const has = toItems(mine);
+    const wants = toItems(theirs);
+    const step = Math.max(0, GRID_STEPS.findIndex((n) => n >= Math.max(has.length, wants.length)));
+    const size = GRID_STEPS[step];
+    const pad = (items) => [...items, ...createEmptySlots(size - items.length)];
+    setSelectedSection(null);
+    setGridStepIndex(step);
+    setHasItems(pad(has));
+    setWantsItems(pad(wants));
+    setScannerVisible(false);
+  }, []);
+
+  const renderScanButton = () => (
+    <TouchableOpacity style={styles.scanButton} onPress={() => { triggerHapticFeedback('impactLight'); setScannerVisible(true); }} activeOpacity={0.8}>
+      <Icon name="camera" size={18} color="white" />
+      <Text style={styles.scanButtonText}>{t('trade_scanner.button', { defaultValue: 'Scan a trade with camera' })}</Text>
+      <View style={styles.scanNewBadge}>
+        <Text style={styles.scanNewText}>{t('trade_scanner.new', { defaultValue: 'NEW' })}</Text>
+      </View>
+    </TouchableOpacity>
+  );
 
   const handleCellPress = useCallback((index, isHas) => {
     const items = isHas ? hasItems : wantsItems;
@@ -1143,6 +1182,7 @@ const HomeScreen = ({ selectedTheme }) => {
       <GestureHandlerRootView>
         <View style={styles.container} key={language}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: bannerBottomPos + 80 }}>
+            {renderScanButton()}
             <ViewShot ref={viewRef} style={styles.screenshotView}>
               {config.isNoman && (
                 <View style={styles.summaryContainer}>
@@ -1598,6 +1638,18 @@ const HomeScreen = ({ selectedTheme }) => {
           <BannerAdComponent collapsible />
         </View>
       )}
+      <TradeScannerModal
+        visible={scannerVisible}
+        onClose={() => setScannerVisible(false)}
+        onApply={applyScannedTrade}
+        records={fruitRecords}
+        maxPerSide={GRID_STEPS[GRID_STEPS.length - 1]}
+        isDarkMode={isDarkMode}
+        imageFor={getImageUrl}
+        valueFor={scannedValue}
+        verdictFor={wflStatus}
+        formatValue={formatValue}
+      />
       <ShareTradeModal
         visible={isShareModalVisible}
         onClose={() => setIsShareModalVisible(false)}
@@ -2115,6 +2167,33 @@ const getStyles = (isDarkMode, isGG) =>
       paddingVertical: 10,
       paddingHorizontal: SCREEN_GUTTER,
       flex: 1,
+    },
+    scanButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: config.colors.secondary,
+      borderRadius: 12,
+      paddingVertical: 11,
+      marginHorizontal: SCREEN_GUTTER, // lines up with screenshotView below
+      marginTop: 10,
+    },
+    scanButtonText: {
+      color: 'white',
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    scanNewBadge: {
+      backgroundColor: '#29AB87',
+      borderRadius: 8,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+    },
+    scanNewText: {
+      color: 'white',
+      fontSize: 10,
+      fontWeight: '800',
     },
 
 

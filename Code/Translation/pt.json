@@ -2059,5 +2059,30 @@
     "pill_looking": "Procurando",
     "mystuff_hint": "Itens marcados Para troca aparecem no Trade Match. Toque na etiqueta para deixar um item Privado.",
     "home_cta": "Achar trocas"
+  },
+  "trade_scanner": {
+    "button": "Escanear troca com a câmera",
+    "new": "NOVO",
+    "title": "Escanear troca",
+    "intro": "Aponte a câmera para a janela de troca no seu PC ou escolha uma captura. Lemos cada item das duas ofertas e avaliamos a troca.",
+    "privacy": "As fotos são lidas no seu celular e nunca enviadas.",
+    "pick": "Captura",
+    "camera": "Câmera",
+    "camera_tip": "Segure firme, preencha a foto com a janela e evite reflexos.",
+    "working": "Lendo sua troca…",
+    "none": "Nenhuma janela de troca encontrada. Enquadre a janela inteira, com YOUR OFFER e THEIR OFFER, e tente de novo.",
+    "you_give": "Você dá",
+    "you_get": "Você recebe",
+    "swap": "Trocar lados",
+    "not_right": "Não está certo? Escolha:",
+    "remove": "Remover",
+    "use": "Usar na calculadora",
+    "review_tip": "YOUR OFFER = o que você dá. Toque num item para corrigir.",
+    "max_side": "Só cabem os primeiros {{max}} itens por lado na calculadora.",
+    "win": "Ganha",
+    "lose": "Perde",
+    "fair": "Justa",
+    "check": "Verifique",
+    "correct": "Correto"
   }
 }

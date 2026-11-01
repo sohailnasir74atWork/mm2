@@ -2143,5 +2143,30 @@
     "pill_looking": "Gesucht",
     "mystuff_hint": "Items mit „Zum Traden“ erscheinen bei Trade Match. Tippe auf das Label, um ein Item privat zu halten.",
     "home_cta": "Matches finden"
+  },
+  "trade_scanner": {
+    "button": "Trade mit der Kamera scannen",
+    "new": "NEU",
+    "title": "Trade scannen",
+    "intro": "Richte die Kamera auf das Trade-Fenster auf deinem PC oder wähle einen Screenshot. Wir lesen jedes Item in beiden Angeboten und prüfen den Trade.",
+    "privacy": "Fotos werden auf deinem Handy gelesen und nie hochgeladen.",
+    "pick": "Screenshot",
+    "camera": "Kamera",
+    "camera_tip": "Ruhig halten, Trade-Fenster bildfüllend, Spiegelungen vermeiden.",
+    "working": "Dein Trade wird gelesen…",
+    "none": "Kein Trade-Fenster gefunden. Nimm das ganze Fenster mit YOUR OFFER und THEIR OFFER ins Bild und versuch es noch einmal.",
+    "you_give": "Du gibst",
+    "you_get": "Du bekommst",
+    "swap": "Seiten tauschen",
+    "not_right": "Nicht richtig? Wähle:",
+    "remove": "Entfernen",
+    "use": "Im Rechner nutzen",
+    "review_tip": "YOUR OFFER = du gibst. Tippe auf ein Item, um es zu korrigieren.",
+    "max_side": "Nur die ersten {{max}} Items pro Seite passen in den Rechner.",
+    "win": "Gewinn",
+    "lose": "Verlust",
+    "fair": "Fair",
+    "check": "Prüfen",
+    "correct": "Stimmt"
   }
 }

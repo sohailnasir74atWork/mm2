@@ -2221,6 +2221,10 @@
     "lose": "Pierdes",
     "fair": "Justo",
     "check": "Revisa",
-    "correct": "Correcto"
+    "correct": "Correcto",
+    "beta": "Prueba: este escáner aún está en pruebas y puede equivocarse. Revisa cada objeto antes de tradear.",
+    "crop_tip": "Arrastra las esquinas solo alrededor de la ventana de trade: YOUR OFFER y THEIR OFFER. Recorta todo lo demás.",
+    "retake": "Elegir otra",
+    "scan_area": "Escanear esta zona"
   }
 }

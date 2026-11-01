@@ -2083,6 +2083,10 @@
     "lose": "Perde",
     "fair": "Justa",
     "check": "Verifique",
-    "correct": "Correto"
+    "correct": "Correto",
+    "beta": "Teste: este scanner ainda está em teste e pode errar. Confira cada item antes de trocar.",
+    "crop_tip": "Arraste os cantos só em volta da janela de troca: YOUR OFFER e THEIR OFFER. Corte todo o resto.",
+    "retake": "Escolher outra",
+    "scan_area": "Escanear esta área"
   }
 }

@@ -2618,6 +2618,10 @@
     "lose": "Lose",
     "fair": "Fair",
     "check": "Check",
-    "correct": "Correct"
+    "correct": "Correct",
+    "beta": "Testing: this scanner is still being tested and can make mistakes. Check every item before you trade.",
+    "crop_tip": "Drag the corners around the trade window only: YOUR OFFER and THEIR OFFER. Cut away everything else.",
+    "retake": "Pick again",
+    "scan_area": "Scan this area"
   }
 }

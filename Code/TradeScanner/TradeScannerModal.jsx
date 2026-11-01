@@ -1,6 +1,7 @@
 /**
  * MM2 Trade Scanner (2026-11-01): photograph the in-game trade window on a PC
- * screen with the camera, or pick a screenshot; read the item names printed
+ * screen with the camera, or pick a screenshot;
+ * crop it to the trade window (CropBox, required); read the item names printed
  * on the tiles on the device, let the user fix anything, then fill the
  * calculator (HomeScreen) with them.
  *
@@ -10,8 +11,8 @@
  * Compact bottom sheet, calculator-style review: two 3-column sides, one
  * result bar, a fix strip for the tapped item.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Image, ActivityIndicator, ScrollView, Pressable } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Image, ActivityIndicator, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import config from '../Helper/Environment';
 import { trackGrowthEvent } from '../Helper/growthAnalytics';
 import { readTextLines } from './textReader';
+import CropBox, { FULL_CROP } from './CropBox';
 import { buildTrade, normalize } from './tradeMatch';
 
 // No base64: only the native text reader looks at the picture.
@@ -33,7 +35,10 @@ const FAIR = '#F5A623';
 export default function TradeScannerModal({ visible, onClose, onApply, records, maxPerSide, isDarkMode, imageFor, valueFor, verdictFor, formatValue }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const [stage, setStage] = useState('intro'); // intro | working | review | none
+  const { height: screenHeight } = useWindowDimensions();
+  const [stage, setStage] = useState('intro'); // intro | crop | working | review | none
+  const [picked, setPicked] = useState(null); // { asset, source } waiting in the crop step
+  const crop = useRef(FULL_CROP);
   const [result, setResult] = useState(null); // { mine: [pick], theirs: [pick], cut }
   const [openPick, setOpenPick] = useState(null); // 'mine:0'
 
@@ -48,6 +53,7 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
     if (!visible) {
       setStage('intro');
       setResult(null);
+      setPicked(null);
       setOpenPick(null);
     }
   }, [visible]);
@@ -63,10 +69,21 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
       return;
     }
     if (!asset?.uri) return;
-    setStage('working');
+    // Always through the crop step: extra things around the trade window
+    // are what give wrong items.
+    crop.current = FULL_CROP;
+    setPicked({ asset, source });
     setOpenPick(null);
-    const text = await readTextLines(asset.uri);
-    const trade = buildTrade({ lines: text.lines, width: asset.width || 1000, catalog });
+    setStage('crop');
+  }, []);
+
+  const scanCropped = useCallback(async () => {
+    if (!picked) return;
+    const { asset, source } = picked;
+    const frame = crop.current;
+    setStage('working');
+    const text = await readTextLines(asset.uri, frame);
+    const trade = buildTrade({ lines: text.lines, width: text.width || (asset.width || 1000) * frame.w, catalog });
     const all = [...trade.mine, ...trade.theirs];
     trackGrowthEvent('trade_scan', {
       source,
@@ -74,6 +91,7 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
       found: all.length,
       unsure: all.filter((p) => !p.sure).length,
       text_reader: text.ok ? 1 : 0,
+      crop_area: Math.round(frame.w * frame.h * 100),
     });
     if (!all.length) { setStage('none'); return; }
     setResult({
@@ -82,7 +100,7 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
       cut: trade.mine.length > maxPerSide || trade.theirs.length > maxPerSide,
     });
     setStage('review');
-  }, [catalog, maxPerSide]);
+  }, [picked, catalog, maxPerSide]);
 
   const recordOf = useCallback((p) => byName.get(normalize(p.name)), [byName]);
   const pickValue = useCallback((p) => {
@@ -225,6 +243,13 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
           </TouchableOpacity>
         </View>
 
+        <View style={styles.beta}>
+          <Icon name="flask" size={14} color="#F5A623" />
+          <Text style={[styles.betaText, { color: fg }]}>
+            {t('trade_scanner.beta', { defaultValue: 'Testing: this scanner is still being tested and can make mistakes. Check every item before you trade.' })}
+          </Text>
+        </View>
+
         {(stage === 'intro' || stage === 'none') && (
           <View>
             <View style={[styles.infoRow, { backgroundColor: card }]}>
@@ -238,6 +263,31 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
             <Text style={[styles.note, { color: sub }]}>{t('trade_scanner.camera_tip', { defaultValue: 'Hold steady, fill the photo with the trade window, avoid glare.' })}</Text>
             {sourceButtons(t('trade_scanner.camera', { defaultValue: 'Camera' }), t('trade_scanner.pick', { defaultValue: 'Screenshot' }))}
             <Text style={[styles.note, styles.center, { color: sub }]}>{t('trade_scanner.privacy', { defaultValue: 'Photos are read on your phone and never uploaded.' })}</Text>
+          </View>
+        )}
+
+        {stage === 'crop' && picked && (
+          <View>
+            <Text style={[styles.cropTip, { color: fg }]}>
+              {t('trade_scanner.crop_tip', { defaultValue: 'Drag the corners around the trade window only: YOUR OFFER and THEIR OFFER. Cut away everything else.' })}
+            </Text>
+            <CropBox
+              uri={picked.asset.uri}
+              imageWidth={picked.asset.width}
+              imageHeight={picked.asset.height}
+              maxHeight={Math.round(screenHeight * 0.5)}
+              color={accent}
+              onChange={(frame) => { crop.current = frame; }}
+            />
+            <View style={styles.footer}>
+              <TouchableOpacity style={[styles.iconBtn, { borderColor: sub }]} onPress={() => captureAndScan(picked.source)} accessibilityLabel={t('trade_scanner.retake', { defaultValue: 'Pick again' })}>
+                <Icon name={picked.source === 'camera' ? 'camera-outline' : 'image-outline'} size={20} color={fg} />
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, styles.grow, { backgroundColor: accent }]} onPress={scanCropped} activeOpacity={0.8}>
+                <Icon name="crop" size={17} color="#fff" />
+                <Text style={styles.btnText}>{t('trade_scanner.scan_area', { defaultValue: 'Scan this area' })}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -325,6 +375,9 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 12, padding: 12 },
   infoText: { flex: 1, fontSize: 14, lineHeight: 19, fontWeight: '600' },
   noGrow: { flex: 0 },
+  beta: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 8, paddingVertical: 5, paddingHorizontal: 8, marginBottom: 8, backgroundColor: 'rgba(245,166,35,0.15)' },
+  betaText: { flex: 1, fontSize: 11, lineHeight: 15, fontWeight: '600' },
+  cropTip: { fontSize: 13, lineHeight: 18, fontWeight: '600', marginBottom: 8 },
   note: { fontSize: 12, lineHeight: 16, marginTop: 8 },
   center: { textAlign: 'center' },
   sourceRow: { flexDirection: 'row', gap: 10, marginTop: 12 },

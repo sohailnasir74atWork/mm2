@@ -2214,6 +2214,10 @@
     "lose": "Perdant",
     "fair": "Équitable",
     "check": "Vérifie",
-    "correct": "Correct"
+    "correct": "Correct",
+    "beta": "Test : ce scanner est encore en test et peut se tromper. Vérifie chaque objet avant d'échanger.",
+    "crop_tip": "Fais glisser les coins autour de la fenêtre d'échange uniquement : YOUR OFFER et THEIR OFFER. Coupe tout le reste.",
+    "retake": "Choisir à nouveau",
+    "scan_area": "Scanner cette zone"
   }
 }

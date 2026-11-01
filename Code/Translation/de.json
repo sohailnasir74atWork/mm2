@@ -2167,6 +2167,10 @@
     "lose": "Verlust",
     "fair": "Fair",
     "check": "Prüfen",
-    "correct": "Stimmt"
+    "correct": "Stimmt",
+    "beta": "Test: Dieser Scanner wird noch getestet und kann Fehler machen. Prüfe jedes Item, bevor du tradest.",
+    "crop_tip": "Ziehe die Ecken nur um das Trade-Fenster: YOUR OFFER und THEIR OFFER. Schneide alles andere weg.",
+    "retake": "Neu wählen",
+    "scan_area": "Diesen Bereich scannen"
   }
 }

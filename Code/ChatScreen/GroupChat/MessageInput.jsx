@@ -72,7 +72,9 @@ const MessageInput = ({
   const { triggerHapticFeedback } = useHaptic();
   const { t } = useTranslation();
   const { localState } = useLocalState();
-  const { theme, isAdmin } = useGlobalState();
+  const { theme, isAdmin, user } = useGlobalState();
+  // Admins and moderators skip every content filter (links, emails, words)
+  const isStaffSender = !!isAdmin || !!user?.isModerator;
   const isDark = theme === 'dark';
   const insets = useSafeAreaInsets();
   // Emoji sheet (a Modal): its last row clears the nav bar / home indicator.
@@ -100,8 +102,8 @@ const MessageInput = ({
 
     // ✅ Comprehensive content moderation check
     if (trimmedInput) {
-      // Admins may post links; Trader.jsx blocks links for everyone else
-      const validation = validateContent(trimmedInput, { skipLinkCheck: !!isAdmin });
+      // Staff skip the filter; Trader.jsx blocks links for everyone else
+      const validation = validateContent(trimmedInput, { skipAll: isStaffSender });
       if (!validation.isValid) {
         showMessage({
           message: validation.reason || t('private_chat.inappropriate_content'),
@@ -144,7 +146,7 @@ const MessageInput = ({
       console.error('Error sending message:', error);
       setIsSending(false);
     }
-  }, [input, hasFruits, selectedEmoji, replyTo, handleSendMessage, onCancelReply, setInput, setSelectedFruits, setSelectedEmoji, localState?.isPro, isAdmin, messageCount, triggerHapticFeedback, t]);
+  }, [input, hasFruits, selectedEmoji, replyTo, handleSendMessage, onCancelReply, setInput, setSelectedFruits, setSelectedEmoji, localState?.isPro, isStaffSender, messageCount, triggerHapticFeedback, t]);
 
   // ✅ Memoize selectEmoji
   const selectEmoji = useCallback((emojiUrl) => {

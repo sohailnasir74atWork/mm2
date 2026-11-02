@@ -665,8 +665,8 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
     return;
   }
 
-  // Profanity check
-  if (trimmedInput && leoProfanity.check(trimmedInput)) {
+  // Profanity check (admins and moderators are not filtered)
+  if (trimmedInput && !isStaffSender && leoProfanity.check(trimmedInput)) {
     Alert.alert(t('home.alert.error'), t('misc.inappropriateLanguage'));
     return;
   }
@@ -712,9 +712,9 @@ const handleSendMessage = async (replyToArg, trimmedInputArg, fruits, emojiUrl) 
     }
   }
 
-  // Link check: only admins may post links in the public chat (Pro no longer bypasses)
+  // Link check: only admins and moderators may post links in the public chat (Pro no longer bypasses)
   const containsLink = trimmedInput ? LINK_REGEX.test(trimmedInput) : false;
-  if (containsLink && !isAdmin) {
+  if (containsLink && !isStaffSender) {
     Alert.alert(
       t('home.alert.error'),
       t('misc.adminOnlyLinks', { defaultValue: 'Only admins can send links.' }),

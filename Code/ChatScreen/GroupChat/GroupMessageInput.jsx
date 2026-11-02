@@ -30,7 +30,9 @@ const GroupMessageInput = ({
   const [imageUris, setImageUris] = useState([]); // Array to hold up to 3 images
 
   const { localState } = useLocalState();
-  const { theme, user } = useGlobalState();
+  const { theme, user, isAdmin } = useGlobalState();
+  // Admins and moderators skip every content filter (links, emails, words)
+  const isStaffSender = !!isAdmin || !!user?.isModerator;
   const isDark = theme === 'dark';
   const { t } = useTranslation();
   const styles = useMemo(() => getStyles(isDark), [isDark]);
@@ -112,7 +114,7 @@ const GroupMessageInput = ({
     // before anything is sent or the input is cleared. Mirrors the public-chat
     // and private-chat inputs so every send path enforces the same filter.
     if (textToSend) {
-      const validation = validateContent(textToSend);
+      const validation = validateContent(textToSend, { skipAll: isStaffSender });
       if (!validation.isValid) {
         showMessage({
           message: validation.reason || t('private_chat.inappropriate_content'),
@@ -186,6 +188,7 @@ const GroupMessageInput = ({
     uploadToBunny,
     replyTo,
     onCancelReply,
+    isStaffSender,
     t,
   ]);
 

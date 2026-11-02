@@ -41,7 +41,9 @@ const PrivateMessageInput = ({
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
 
   const { localState } = useLocalState();
-  const { theme } = useGlobalState();
+  const { theme, user, isAdmin } = useGlobalState();
+  // Admins and moderators skip every content filter (links, emails, words)
+  const isStaffSender = !!isAdmin || !!user?.isModerator;
   const isDark = theme === 'dark';
   const { t } = useTranslation();
   // Quick-messages sheet (a Modal): clears the nav bar / home indicator.
@@ -139,7 +141,7 @@ const PrivateMessageInput = ({
 
     // ✅ Comprehensive content moderation check
     if (trimmedInput) {
-      const validation = validateContent(trimmedInput);
+      const validation = validateContent(trimmedInput, { skipAll: isStaffSender });
       if (!validation.isValid) {
         Alert.alert(t('home.alert.error'), validation.reason || t('private_chat.inappropriate_content'));
         return;
@@ -212,7 +214,7 @@ const PrivateMessageInput = ({
     } finally {
       setIsSending(false); // ✅ always reset
     }
-  }, [input, imageUris, selectedFruits, isSending, onSend, onCancelReply, replyTo, setSelectedFruits, localState?.isPro, uploadToBunny]);
+  }, [input, imageUris, selectedFruits, isSending, onSend, onCancelReply, replyTo, setSelectedFruits, localState?.isPro, uploadToBunny, isStaffSender]);
 
   // ✅ Memoize hasFruits and hasContent
   const hasFruits = useMemo(() =>

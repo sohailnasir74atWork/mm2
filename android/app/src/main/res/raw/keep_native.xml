@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  shrinkResources keeps for resources that JS looks up by NAME at runtime
+  (getIdentifier), which the resource shrinker cannot see:
+  notifee smallIcon 'ic_notification' / 'ic_launcher' (Code/Helper/*Notifications.js,
+  valueAlerts.js) and the bootsplash logo. JS-bundled images are covered by the
+  raw/keep.xml that the React Native gradle plugin generates per build.
+  Not named keep.xml: that name is taken by the generated file.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notification,@mipmap/ic_launcher,@mipmap/ic_launcher_round,@drawable/bootsplash_logo,@drawable/rn_edit_text_material" />

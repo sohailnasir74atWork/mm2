@@ -13,16 +13,24 @@ import { initReactI18next } from "react-i18next";
 import * as RNLocalize from "react-native-localize";
 import { createMMKV } from "react-native-mmkv";
 
-// Import translation files
-import en from "./Code/Translation/en.json";
-import pt from "./Code/Translation/pt.json";
-import es from "./Code/Translation/es.json"; // Latin American Spanish
-import esES from "./Code/Translation/es-ES.json"; // Spain; falls back to es, then en
-import fr from "./Code/Translation/fr.json";
-import de from "./Code/Translation/de.json";
-import ru from "./Code/Translation/ru.json";
-import ar from "./Code/Translation/ar.json";
-import ja from "./Code/Translation/ja.json";
+// Translation files, required on demand. Together they are ~1.2 MB of
+// strings; evaluating all nine on every cold start cost low-end phones JS time
+// before the first screen (2026-11-03), though a player only ever reads one
+// language plus the English fallback. A switch loads the new one first
+// (ensureLanguageLoaded, called by setAppLanguage and LanguageProvider).
+const LOCALE_LOADERS = {
+  en: () => require("./Code/Translation/en.json"),
+  pt: () => require("./Code/Translation/pt.json"),
+  es: () => require("./Code/Translation/es.json"), // Latin American Spanish
+  'es-ES': () => require("./Code/Translation/es-ES.json"), // Spain; falls back to es, then en
+  fr: () => require("./Code/Translation/fr.json"),
+  de: () => require("./Code/Translation/de.json"),
+  ru: () => require("./Code/Translation/ru.json"),
+  ar: () => require("./Code/Translation/ar.json"),
+  ja: () => require("./Code/Translation/ja.json"),
+};
+// i18next resolves es-ES → es → en, so es-ES needs es loaded too.
+const bundlesFor = (lng) => (lng === 'es-ES' ? ['es-ES', 'es', 'en'] : [lng, 'en']);
 
 // Initialize MMKV storage
 const storage = createMMKV();
@@ -78,17 +86,11 @@ i18n
   .use(initReactI18next)
   .init({
     compatibilityJSON: "v3",
-    resources: {
-      en: { translation: en },
-      pt: { translation: pt },
-      es: { translation: es },
-      'es-ES': { translation: esES },
-      fr: { translation: fr },
-      de: { translation: de },
-      ru: { translation: ru },
-      ar: { translation: ar },
-      ja: { translation: ja },
-    },
+    resources: Object.fromEntries(
+      bundlesFor(initialLanguage)
+        .filter((code) => LOCALE_LOADERS[code])
+        .map((code) => [code, { translation: LOCALE_LOADERS[code]() }])
+    ),
     lng: initialLanguage, // Set initial language
     fallbackLng: "en", // Default fallback language
     interpolation: {
@@ -140,7 +142,16 @@ const reloadForDirection = () => {
 };
 
 // Function to update language and store in MMKV
+export const ensureLanguageLoaded = (lng) => {
+  bundlesFor(lng).forEach((code) => {
+    if (LOCALE_LOADERS[code] && !i18n.hasResourceBundle(code, 'translation')) {
+      i18n.addResourceBundle(code, 'translation', LOCALE_LOADERS[code]());
+    }
+  });
+};
+
 export const setAppLanguage = (languageCode) => {
+  ensureLanguageLoaded(languageCode);
   i18n.changeLanguage(languageCode);
   storage.set("appLanguage", languageCode);
   trackGrowthEvent("app_language_selected", {language: languageCode});

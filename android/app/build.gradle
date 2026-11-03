@@ -140,6 +140,9 @@ android {
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
+            // Drops resources no code or XML references (as Adopt Me and Blox).
+            // Resources looked up by name from JS are kept in res/raw/keep_native.xml.
+            shrinkResources enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             // Upload native debug symbols so native crashes (SIGSEGV, SIGABRT
             // from libc.so, Hermes, or any .so) arrive symbolicated. Without

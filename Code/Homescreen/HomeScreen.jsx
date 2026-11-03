@@ -53,6 +53,10 @@ const NOTICE_CAUTION_FG = '#8A5A12';
 
 const createEmptySlots = (count) => Array(count).fill(null);
 
+// Trade Scanner is hidden until its recognition model is trained; flip to
+// true in the release that ships the trained model.
+const TRADE_SCANNER_ENABLED = false;
+
 
 
 // ✅ MM2: Removed VALUE_TYPES, MODIFIERS, and hideBadge - MM2 doesn't use these
@@ -1211,7 +1215,7 @@ const HomeScreen = ({ selectedTheme }) => {
       <GestureHandlerRootView>
         <View style={styles.container} key={language}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: bannerBottomPos + 80 }}>
-            {renderScanButton()}
+            {TRADE_SCANNER_ENABLED && renderScanButton()}
             <ViewShot ref={viewRef} style={styles.screenshotView}>
               {config.isNoman && (
                 <View style={styles.summaryContainer}>
@@ -1683,18 +1687,20 @@ const HomeScreen = ({ selectedTheme }) => {
           <BannerAdComponent collapsible />
         </View>
       )}
-      <TradeScannerModal
-        visible={scannerVisible}
-        onClose={() => setScannerVisible(false)}
-        onApply={applyScannedTrade}
-        records={fruitRecords}
-        maxPerSide={GRID_STEPS[GRID_STEPS.length - 1]}
-        isDarkMode={isDarkMode}
-        imageFor={getImageUrl}
-        valueFor={scannedValue}
-        verdictFor={wflStatus}
-        formatValue={formatValue}
-      />
+      {TRADE_SCANNER_ENABLED && (
+        <TradeScannerModal
+          visible={scannerVisible}
+          onClose={() => setScannerVisible(false)}
+          onApply={applyScannedTrade}
+          records={fruitRecords}
+          maxPerSide={GRID_STEPS[GRID_STEPS.length - 1]}
+          isDarkMode={isDarkMode}
+          imageFor={getImageUrl}
+          valueFor={scannedValue}
+          verdictFor={wflStatus}
+          formatValue={formatValue}
+        />
+      )}
       <ShareTradeModal
         visible={isShareModalVisible}
         onClose={() => setIsShareModalVisible(false)}

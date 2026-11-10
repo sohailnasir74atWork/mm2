@@ -517,6 +517,9 @@ export default function SettingsScreen({ selectedTheme }) {
   const { updateLocalState, localState, mySubscriptions } = useLocalState()
   const [isPermissionGranted, setIsPermissionGranted] = useState(false);
   const [showOfferWall, setShowofferWall] = useState(false);
+  // Which spot opened the wall (paywall_trigger in growthAnalytics.js).
+  const [offerTrigger, setOfferTrigger] = useState(null);
+  const openOfferWall = (spot) => { setOfferTrigger(spot); setShowofferWall(true); };
   const { language, changeLanguage } = useLanguage();
   const [ownedPets, setOwnedPets] = useState([]);
 const [wishlistPets, setWishlistPets] = useState([]);
@@ -775,7 +778,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
           {
             text: t('trade.upgrade'),
             style: 'default',
-            onPress: () => setShowofferWall(true),
+            onPress: () => openOfferWall('setting_flag'),
           },
         ]
       );
@@ -818,7 +821,7 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
           {
             text: t('trade.upgrade'),
             style: 'default',
-            onPress: () => setShowofferWall(true),
+            onPress: () => openOfferWall('setting_online_status'),
           },
         ]
       );
@@ -2764,7 +2767,7 @@ const formatPlanName = (plan) => {
           ) : (
             <TouchableOpacity
               activeOpacity={0.85}
-              onPress={() => setShowofferWall(true)}
+              onPress={() => openOfferWall('setting_pro_card')}
               style={{ flexDirection: 'row', alignItems: 'center', padding: 14, marginTop: 12, borderRadius: 14, backgroundColor: config.colors.primary }}
             >
               <View style={{ flex: 1, minWidth: 0 }}>
@@ -3008,7 +3011,7 @@ const formatPlanName = (plan) => {
       </Modal>
 
      
-      <SubscriptionScreen visible={showOfferWall} onClose={() => setShowofferWall(false)} track='Setting' oneWallOnly={single_offer_wall} showoffer={!single_offer_wall}/>
+      <SubscriptionScreen trigger={offerTrigger} visible={showOfferWall} onClose={() => setShowofferWall(false)} track='Setting' oneWallOnly={single_offer_wall} showoffer={!single_offer_wall}/>
       <SignInDrawer
         visible={openSingnin}
         onClose={() => setOpenSignin(false)}

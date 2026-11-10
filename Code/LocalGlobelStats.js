@@ -7,7 +7,7 @@ import config from './Helper/Environment';
 import { useTranslation } from 'react-i18next';
 
 import { showErrorMessage, showSuccessMessage } from './Helper/MessageHelper';
-import { trackProPurchase } from './Helper/growthAnalytics';
+import { trackProPurchase, trackPurchaseStart, trackPurchaseFail } from './Helper/growthAnalytics';
 import { isProGrantActive, onProGrantChange, startProGrants } from './Helper/proGrant';
 
 const storage = createMMKV();
@@ -114,6 +114,12 @@ export const LocalStateProvider = ({ children }) => {
     user_name: storage.getString('user_name') || 'Anonymous',
     translationUsage: safeParseJSON('translationUsage', { count: 0, date: new Date().toDateString() }),
     favorites: safeParseJSON('favorites', []),
+    // Calculator picker RECENT chip: the last 12 distinct items added to the
+    // calculator, newest first, as { id, name, category } (the picker looks
+    // each one up in the live pool, so values stay current). Device only.
+    recentItems: safeParseJSON('recentItems', []),
+    // Values screen layout: 'grid' (two cards per row) | 'list' (compact rows).
+    valuesView: storage.getString('valuesView') || 'grid',
     imgurl: storage.getString('imgurl') || 'https://elvebredd.com',
     imgurlGG: storage.getString('imgurlGG') || 'https://adoptmevalues.gg',
     isGG: storage.getBoolean('isGG') ?? false,
@@ -360,9 +366,10 @@ export const LocalStateProvider = ({ children }) => {
     }
   };
   // Handle in-app purchase
-  const purchaseProduct = async (packageToPurchase, setLoading, track) => {
+  const purchaseProduct = async (packageToPurchase, setLoading, track, trigger) => {
     setLoading(true);
     try {
+      trackPurchaseStart(packageToPurchase, track, trigger);
       const { customerInfo } = await Purchases.purchasePackage(packageToPurchase);
       const entitlements = customerInfo.entitlements.active;
       const proKey = Object.keys(entitlements).find(
@@ -380,10 +387,12 @@ export const LocalStateProvider = ({ children }) => {
           : []
       );
 
-      if (proStatus) trackProPurchase(packageToPurchase, track);
+      if (proStatus) trackProPurchase(packageToPurchase, track, trigger, customerInfo);
+      else trackPurchaseFail(packageToPurchase, track, trigger, null);
 
       showSuccessMessage(t('home.alert.success'), t('paywall.purchase_completed'));
     } catch (error) {
+      trackPurchaseFail(packageToPurchase, track, trigger, error);
       if (!error.userCancelled) {
         // console.error('❌ Purchase Error:', error);
         showErrorMessage(t('home.alert.error'), t('paywall.purchase_failed'));

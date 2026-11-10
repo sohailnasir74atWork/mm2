@@ -216,7 +216,8 @@ const Backdrop = ({ P }) => (
   </Svg>
 );
 
-const SubscriptionScreen = ({ visible, onClose, track }) => {
+// `trigger` names the exact spot that opened the wall (growthAnalytics.js).
+const SubscriptionScreen = ({ visible, onClose, track, trigger }) => {
   // App.js nests a SafeAreaProvider inside its padded root SafeAreaView, so on
   // iOS useSafeAreaInsets() reads 0 anywhere inside the app. This Modal covers
   // the whole window, so it needs the window's own insets — otherwise the logo
@@ -354,7 +355,7 @@ const SubscriptionScreen = ({ visible, onClose, track }) => {
 
   // ── Analytics: one view per open ──
   useEffect(() => {
-    if (visible) trackPaywallView(track);
+    if (visible) trackPaywallView(track, trigger);
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Close once Pro arrives (purchase or restore) ──
@@ -436,9 +437,9 @@ const SubscriptionScreen = ({ visible, onClose, track }) => {
   }, [visible]);
 
   const handleClose = useCallback(() => {
-    trackPaywallClose(track);
+    trackPaywallClose(track, trigger);
     onCloseRef.current?.();
-  }, [track]);
+  }, [track, trigger]);
 
   const handleSelect = useCallback((pkg) => {
     triggerHapticFeedback('impactLight');
@@ -451,9 +452,9 @@ const SubscriptionScreen = ({ visible, onClose, track }) => {
     // The Play sheet backgrounds the app; coming back must not open an ad.
     AppOpenAdManager.skipNextForeground();
     // Success flips localState.isPro, and the effect above closes the wall.
-    // purchaseProduct logs pro_purchase with `track`.
-    await purchaseProduct(selectedPkg, setLoading, track);
-  }, [selectedPkg, loading, purchaseProduct, track, triggerHapticFeedback]);
+    // purchaseProduct logs paywall_purchase_start / _fail and pro_purchase.
+    await purchaseProduct(selectedPkg, setLoading, track, trigger);
+  }, [selectedPkg, loading, purchaseProduct, track, trigger, triggerHapticFeedback]);
 
   // restorePurchases() swallows its result, so ask RevenueCat afterwards: a
   // Restore tap that silently does nothing reads as a broken button.

@@ -70,6 +70,7 @@ import {
 } from '@react-native-firebase/firestore';
 import { saveTrade, unsaveTrade, fetchSavedTradeRefs } from './tradeHelpers';
 import { resolveItemImage, VALUE_SOURCE } from '../Helper/valueSources';
+import { requestCounterOffer } from '../CounterOffer/counterOffer';
 
 // Initialize dayjs plugins
 dayjs.extend(relativeTime);
@@ -107,6 +108,9 @@ const TradeList = ({ route }) => {
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [showofferwall, setShowofferwall] = useState(false);
+  // Which spot opened the wall (paywall_trigger in growthAnalytics.js).
+  const [offerTrigger, setOfferTrigger] = useState(null);
+  const openOfferWall = (spot) => { setOfferTrigger(spot); setShowofferwall(true); };
   const [remainingFeaturedTrades, setRemainingFeaturedTrades] = useState([]);
   // const [openShareModel, setOpenShareModel] = useState(false);
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
@@ -413,7 +417,7 @@ const TradeList = ({ route }) => {
         }),
         [
           { text: t("trade.cancel"), style: "cancel" },
-          { text: t("trade.upgrade"), onPress: () => setShowofferwall(true) },
+          { text: t("trade.upgrade"), onPress: () => openOfferWall('trade_boost_limit') },
         ]
       );
       return;
@@ -468,7 +472,7 @@ const TradeList = ({ route }) => {
           { text: t("trade.cancel"), style: "cancel" },
           {
             text: t("trade.upgrade"),
-            onPress: () => setShowofferwall(true),
+            onPress: () => openOfferWall('trade_feature'),
           },
         ]
       );
@@ -1589,6 +1593,18 @@ const TradeList = ({ route }) => {
 
       callbackfunction();
     };
+    // Counter: open the calculator pre-filled with this trade, mirrored for
+    // the viewer (CounterOffer/counterOffer.js). Signed-in only, like Chat.
+    const isOwnTrade = !!user?.id && item.userId === user.id;
+    const handleCounter = () => {
+      if (!user?.id) {
+        setIsSigninDrawerVisible(true);
+        return;
+      }
+      triggerHapticFeedback('impactLight');
+      requestCounterOffer({ trade: item, poster: selectedUser });
+      navigation.navigate('Calculator');
+    };
     return (
       <View style={[styles.tradeItem, item.isFeatured && styles.featuredTradeItem]}>
 
@@ -1769,7 +1785,7 @@ const TradeList = ({ route }) => {
               })}
             </View>
           ) : (
-            <TouchableOpacity style={styles.dealContainerSingle} onPress={() => handleOpenProfile(item)}>
+            <TouchableOpacity style={styles.dealContainerSingle} onPress={() => (isOwnTrade ? handleOpenProfile(item) : handleCounter())}>
               <Text style={styles.dealText}>{t('settings.give_offer')}</Text>
             </TouchableOpacity>
           )}
@@ -1838,7 +1854,7 @@ const TradeList = ({ route }) => {
               })}
             </View>
           ) : (
-            <TouchableOpacity style={styles.dealContainerSingle} onPress={() => handleOpenProfile(item)}>
+            <TouchableOpacity style={styles.dealContainerSingle} onPress={() => (isOwnTrade ? handleOpenProfile(item) : handleCounter())}>
               <Text style={styles.dealText}>{t('settings.give_offer')}</Text>
             </TouchableOpacity>
           )}
@@ -1965,6 +1981,22 @@ const TradeList = ({ route }) => {
               hitSlop={8}
             >
               <Icon name={savedTradeRefs[item.id] ? 'bookmark' : 'bookmark-outline'} size={12} color="#F59E0B" />
+            </TouchableOpacity>
+          )}
+
+          {/* Counter sits beside Chat at the same height; neutral, since Chat
+              already carries the brand colour. Hidden on your own trades. */}
+          {!isOwnTrade && (
+            <TouchableOpacity
+              onPress={handleCounter}
+              style={styles.counterBtn}
+              activeOpacity={0.8}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('counter_offer.counter', { defaultValue: 'Counter' })}
+            >
+              <Icon name="swap-horizontal" size={11} color={isDarkMode ? '#e2e8f0' : '#334155'} />
+              <Text style={styles.counterBtnText}>{t('counter_offer.counter', { defaultValue: 'Counter' })}</Text>
             </TouchableOpacity>
           )}
 
@@ -2177,7 +2209,7 @@ const TradeList = ({ route }) => {
         </View>
       )}
 
-      <SubscriptionScreen visible={showofferwall} onClose={() => setShowofferwall(false)} track='Trade' />
+      <SubscriptionScreen trigger={offerTrigger} visible={showofferwall} onClose={() => setShowofferwall(false)} track='Trade' />
      
       <ProfileBottomDrawer
           isVisible={isDrawerVisible}
@@ -2624,6 +2656,20 @@ const getStyles = (isDarkMode) =>
       height: CHAT_PILL_HEIGHT,
       borderRadius: 999,
       backgroundColor: isDarkMode ? '#1e293b' : '#f1f5f9',
+    },
+    counterBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      height: CHAT_PILL_HEIGHT,
+      paddingHorizontal: 9,
+      gap: 4,
+      borderRadius: 999,
+      backgroundColor: isDarkMode ? '#334155' : '#f1f5f9',
+    },
+    counterBtnText: {
+      color: isDarkMode ? '#e2e8f0' : '#334155',
+      fontWeight: '700',
+      fontSize: 10,
     },
     boost:{
       justifyContent:'flex-start', paddingVertical:2, paddingHorizontal:5, borderRadius:3, alignItems:'center', margin:4

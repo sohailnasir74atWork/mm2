@@ -855,6 +855,11 @@
     "remove_selected_title_other": "Remover {{count}} itens?"
   },
   "paywall": {
+    "cta_trial": "Começar teste grátis",
+    "exit_badge": "OFERTA ÚNICA",
+    "exit_title": "Espera! {{percent}}% de desconto, só desta vez",
+    "exit_subtitle": "Este preço só aparece uma vez. Se fechar, ele some.",
+    "exit_cta": "Quero meu desconto",
     "title": "Seja Pro",
     "subtitle": "Sem anúncios. Suas trocas no topo. Selo dourado ao lado do seu nome.",
     "noads_title": "Zero anúncios.",

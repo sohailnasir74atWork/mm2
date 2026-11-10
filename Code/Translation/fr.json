@@ -1609,6 +1609,11 @@
     "btnBackToLevels": "Retour aux niveaux 🗺️"
   },
   "paywall": {
+    "cta_trial": "Commencer l'essai gratuit",
+    "exit_badge": "OFFRE UNIQUE",
+    "exit_title": "Attends ! -{{percent}} %, juste cette fois",
+    "exit_subtitle": "Ce prix n'apparaît qu'une seule fois. Si tu fermes, il disparaît.",
+    "exit_cta": "Profiter de la réduction",
     "title": "Passe à Pro",
     "subtitle": "Zéro pub. Tes trades en haut. Un badge doré à côté de ton pseudo.",
     "noads_title": "Zéro pub.",

@@ -1401,6 +1401,11 @@
     "btnBackToLevels": "レベル選択へ 🗺️"
   },
   "paywall": {
+    "cta_trial": "無料トライアルを開始",
+    "exit_badge": "1回限りのオファー",
+    "exit_title": "ちょっと待って！今だけ{{percent}}%オフ",
+    "exit_subtitle": "この価格は一度しか表示されません。閉じると消えます。",
+    "exit_cta": "割引を受け取る",
     "title": "Proになろう",
     "subtitle": "広告なし。トレードは上位に。名前の横に金のバッジ。",
     "noads_title": "広告は一切なし",

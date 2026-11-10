@@ -33,7 +33,8 @@ import {
   resolveItemImage, buildItemPool, unwrapFeed, priceOf, displayValueText,
   DEFAULT_VALUE_SOURCE, categoryKey, VALUE_SOURCE, poolLookup,
 } from '../Helper/valueSources';
-import ValueCard from './ValueCard';
+import ValueCard, { ValueRow } from './ValueCard';
+import ItemDetailSheet, { getStabilityColor } from './ItemDetailSheet';
 import { SCREEN_GUTTER } from '../Helper/layout';
 
 
@@ -44,20 +45,9 @@ import { SCREEN_GUTTER } from '../Helper/layout';
 
 
 
-// ✅ Helper function to get stability color
-const getStabilityColor = (stability) => {
-  if (!stability || stability === 'N/A') return '#888';
-  const s = stability.toLowerCase();
-  if (s === 'stable') return '#34C759';
-  if (s === 'doing well' || s === 'recovering') return '#30D158';
-  if (s === 'overpaid for' || s === 'peaking') return '#007AFF';
-  if (s === 'fluctuating') return '#FF9500';
-  if (s === 'underpaid for') return '#FF6B35';
-  if (s === 'decreasing') return '#FF3B30';
-  return '#888';
-};
+// Stability colour now lives in ItemDetailSheet.jsx (card and sheet agree).
 
-const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSelectedFruits, onRequestClose, fromSetting, ownedPets, setOwnedPets, wishlistPets, setWishlistPets, owned, route }) => {
+const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSelectedFruits, onRequestClose, fromSetting, ownedPets, setOwnedPets, wishlistPets, setWishlistPets, owned, route, inTab }) => {
   // Seeded from route params so Home's search bar lands the user on results.
   // The screen is also embedded (chat picker, settings) with no route at all.
   const [searchText, setSearchText] = useState(() => route?.params?.q || '');
@@ -103,7 +93,14 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
   const [refreshing, setRefreshing] = useState(false);
   const [itemSelections, setItemSelections] = useState({});
   const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [sortOrder, setSortOrder] = useState('none'); // 'asc', 'desc', or 'none'
+  const [sortOrder, setSortOrder] = useState('none'); // 'asc', 'desc', 'demand' (high→low) or 'none'
+  // Browse mode: a card tap opens this item's details (ItemDetailSheet).
+  // The pickers (chat, My Stuff) keep tap-to-add.
+  const [detailItem, setDetailItem] = useState(null);
+  const isBrowseMode = !fromChat && !fromSetting;
+  // Grid (two cards a row) or list (one compact row an item), browse mode
+  // only — the chat / My Stuff pickers keep the grid. Saved on the device.
+  const isListView = isBrowseMode && localState?.valuesView === 'list';
 
 
   // ✅ MM2 Categories - matching HomeScreen (without INVENTORY for ValueScreen)
@@ -232,7 +229,20 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
     });
 
     // Apply sort
-    if (sortOrder !== 'none') {
+    if (sortOrder === 'demand') {
+      // Demand high → low; items with no demand rating go last. Ties keep the
+      // value order (high first) so equal-demand items still read sensibly.
+      const keyed = filtered.map((item) => {
+        const d = Number(item.demand);
+        return {
+          item,
+          d: item.demand != null && Number.isFinite(d) ? d : -1,
+          v: displayValueText(item, valueSource) ? 0 : (priceOf(item, valueSource).value || 0),
+        };
+      });
+      keyed.sort((a, b) => b.d - a.d || b.v - a.v);
+      filtered = keyed.map((k) => k.item);
+    } else if (sortOrder !== 'none') {
       // Computed ONCE per item: the comparator used to format and re-parse
       // both values on every comparison (~30k calls for a full catalogue
       // sort). The key is the number, never the display text: toLocaleString
@@ -309,6 +319,11 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
       const imageUrl = getImageUrl(item);
 
       const handlePress = () => {
+        if (isBrowseMode) {
+          triggerHapticFeedback('impactLight');
+          setDetailItem(item);
+          return;
+        }
         const priced = priceOf(item, valueSource);
         const fruitObj = {
           Name: item.name,
@@ -343,8 +358,9 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
         }
       };
 
+      const Card = isListView ? ValueRow : ValueCard;
       return (
-        <ValueCard
+        <Card
           item={item}
           imageUrl={imageUrl}
           primary={formatFor(item, valueSource)}
@@ -354,7 +370,6 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
           stabilityColor={getStabilityColor(item.stability)}
           isDarkMode={isDarkMode}
           onPress={handlePress}
-          disabled={!fromChat && !fromSetting}
         />
       );
     },
@@ -371,6 +386,9 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
       // was created, so an item added after toggling would be priced from the
       // old catalogue.
       valueSource,
+      isBrowseMode,
+      isListView,
+      triggerHapticFeedback,
     ]
   );
 
@@ -513,13 +531,17 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
             <TouchableOpacity
               style={styles.filterButton}
               onPress={() => {
+                // Sort → Low → High → Demand → Sort (off).
                 setSortOrder(prev =>
-                  prev === 'asc' ? 'desc' : prev === 'desc' ? 'none' : 'asc'
+                  prev === 'asc' ? 'desc' : prev === 'desc' ? 'demand' : prev === 'demand' ? 'none' : 'asc'
                 );
               }}
             >
-              <Text style={styles.filterText}>
-                {sortOrder === 'asc' ? t('value.low') : sortOrder === 'desc' ? t('value.high') : t('value.filter')}
+              <Text style={styles.filterText} numberOfLines={1}>
+                {sortOrder === 'asc' ? t('value.low')
+                  : sortOrder === 'desc' ? t('value.high')
+                    : sortOrder === 'demand' ? t('values_view.sort_demand', { defaultValue: '▲ Demand' })
+                      : t('value.filter')}
               </Text>
             </TouchableOpacity>
             {!fromChat && !fromSetting && (
@@ -551,7 +573,8 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
           {/* Catalogue switch. Shared with the calculator's toggle (both read
               localState.valueSource); every card also shows the other
               catalogue's figure small, so both are always visible. */}
-          <View style={[styles.sourceSwitch, { marginHorizontal: SCREEN_GUTTER }]}>
+          <View style={[styles.switchRow, { marginHorizontal: SCREEN_GUTTER }]}>
+          <View style={[styles.sourceSwitch, styles.sourceSwitchFlex]}>
             {[VALUE_SOURCE.SUPREME, VALUE_SOURCE.MM2].map((src) => {
               const active = valueSource === src;
               return (
@@ -569,6 +592,23 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
                 </TouchableOpacity>
               );
             })}
+          </View>
+          {isBrowseMode && (
+            <TouchableOpacity
+              style={styles.viewToggle}
+              onPress={() => {
+                triggerHapticFeedback('impactLight');
+                updateLocalState('valuesView', isListView ? 'grid' : 'list');
+              }}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={isListView
+                ? t('values_view.show_grid', { defaultValue: 'Show as grid' })
+                : t('values_view.show_list', { defaultValue: 'Show as list' })}
+            >
+              <Icon name={isListView ? 'grid-outline' : 'list-outline'} size={20} color={isDarkMode ? '#cbd5e1' : '#475569'} />
+            </TouchableOpacity>
+          )}
           </View>
 
           {fromChat && (
@@ -602,14 +642,16 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
           )}
           {(fromChat && chatPetSource === 'mine' ? myPetsView : filteredData).length > 0 ? (
             <FlatList
+              // numColumns cannot change on a mounted FlatList.
+              key={isListView ? 'list' : 'grid'}
               data={fromChat && chatPetSource === 'mine' ? myPetsView : filteredData}
               keyExtractor={(item) => item.id || item.name}
               renderItem={renderItem}
               showsVerticalScrollIndicator={false}
               removeClippedSubviews={false}
-              numColumns={2}
-              columnWrapperStyle={{ justifyContent: 'space-between', paddingHorizontal: SCREEN_GUTTER }}
-              contentContainerStyle={{ paddingBottom: 180 }}
+              numColumns={isListView ? 1 : 2}
+              columnWrapperStyle={isListView ? undefined : { justifyContent: 'space-between', paddingHorizontal: SCREEN_GUTTER }}
+              contentContainerStyle={isListView ? styles.listContentList : styles.listContentGrid}
               refreshing={refreshing}
               onRefresh={handleRefresh}
               maxToRenderPerBatch={10}
@@ -634,15 +676,28 @@ const ValueScreen = React.memo(({ selectedTheme, fromChat, selectedFruits, setSe
             </Text>
           )}
           {/* Full-screen page: rows stop above the Android nav bar. Embedded
-              in PetModal's sheet, the sheet pads it instead. */}
-          {!fromChat && !fromSetting && <ScreenBottomBanner ad={false} />}
+              in PetModal's sheet, the sheet pads it instead. inTab (the
+              Calculator tab's Values view, CalculatorTab.jsx): the tab bar
+              already sits above the nav bar. */}
+          {isBrowseMode && !inTab && <ScreenBottomBanner ad={false} />}
         </View>
         <CodesDrawer isVisible={isDrawerVisible} toggleModal={toggleDrawer} codes={codesData} />
       </GestureHandlerRootView>
+      {/* inTab: flush on the tab bar, where the calculator's own banner sits,
+          so switching Calculator | Values never moves the ad. */}
       {!localState.isPro && !fromChat && (
-        <View style={{ position: 'absolute', bottom: bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
+        <View style={{ position: 'absolute', bottom: inTab ? 0 : bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
           <BannerAdComponent collapsible />
         </View>
+      )}
+      {isBrowseMode && (
+        <ItemDetailSheet
+          visible={!!detailItem}
+          item={detailItem}
+          imageUrl={detailItem ? getImageUrl(detailItem) : ''}
+          isDarkMode={isDarkMode}
+          onClose={() => setDetailItem(null)}
+        />
       )}
     </>
   );
@@ -651,6 +706,15 @@ export const getStyles = (isDarkMode) => StyleSheet.create({
   // MM2 | Supreme segmented switch
   sourceSwitch: {
     flexDirection: 'row', padding: 4, borderRadius: 14, marginBottom: 12,
+    backgroundColor: isDarkMode ? config.colors.surfaceDark : '#e9ebf1',
+  },
+  listContentGrid: { paddingBottom: 180 },
+  listContentList: { paddingBottom: 180, paddingHorizontal: SCREEN_GUTTER },
+  // Source switch + grid/list toggle share one row.
+  switchRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  sourceSwitchFlex: { flex: 1 },
+  viewToggle: {
+    width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
     backgroundColor: isDarkMode ? config.colors.surfaceDark : '#e9ebf1',
   },
   sourceSwitchBtn: { flex: 1, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },

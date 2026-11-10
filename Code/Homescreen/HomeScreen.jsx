@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, FlatList, TextInput, Image, Pressable, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, FlatList, TextInput, Image, Pressable, Platform, ActivityIndicator, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -30,6 +30,8 @@ import BannerAdComponent from '../Ads/bannerAds';
 import Share from 'react-native-share';
 import ShareTradeModal from '../Trades/ShareTradeModal';
 import TradeScannerModal from '../TradeScanner/TradeScannerModal';
+import SlotActionSheet from './SlotActionSheet';
+import ItemDetailSheet from '../ValuesScreen/ItemDetailSheet';
 import TradeCompletion from '../Engagement/TradeCompletion';
 import { maybeAskForReview } from '../AppHelper/reviewPrompt';
 import { addDoc, collection, serverTimestamp, doc, getDoc, setDoc } from '@react-native-firebase/firestore';
@@ -39,6 +41,15 @@ import { matchesItemName } from '../Helper/itemSearch';
 import { trackTradePosted } from '../Helper/growthAnalytics';
 import { timeAgo } from '../Helper/timeAgo';
 import { calculatorVerdict, STATUS_LETTER, tradeStatus as wflStatus } from '../Helper/tradeStatus';
+import CounterOfferBanner from '../CounterOffer/CounterOfferBanner';
+import {
+  takeCounterRequest,
+  subscribeCounterRequest,
+  subscribeCounterSent,
+  mirrorTradeForCounter,
+  buildTradeOffer,
+} from '../CounterOffer/counterOffer';
+import { mm2VariantOf } from '../Helper/counterOfferMM2';
 
 const GRID_STEPS = [4, 8, 12, 16];
 
@@ -53,9 +64,10 @@ const NOTICE_CAUTION_FG = '#8A5A12';
 
 const createEmptySlots = (count) => Array(count).fill(null);
 
-// Trade Scanner is hidden until its recognition model is trained; flip to
-// true in the release that ships the trained model.
-const TRADE_SCANNER_ENABLED = false;
+// Trade Scanner (2026-11-06): back on with the downloaded AI scanner
+// (Code/TradeScanner/scannerUpdate.js). Builds before 1.6.15 (59) keep it
+// hidden (1.6.14 set this false while no model existed).
+const TRADE_SCANNER_ENABLED = true;
 
 
 
@@ -75,6 +87,7 @@ const excludedLabel = (summary, t) => {
 // Category chips: the constants drive filtering, only these three get a
 // translated label (rarity names are MM2 game terms and stay as they are).
 const CATEGORY_LABEL_KEYS = {
+  RECENT: 'picker.recent',
   INVENTORY: 'calc.filter_inventory',
   ALL: 'calc.filter_all',
   PETS: 'calc.filter_pets',
@@ -124,8 +137,33 @@ const formatValue = (value) => {
   return numValue.toLocaleString();
 };
 
-const HomeScreen = ({ selectedTheme }) => {
-  const { theme, user, firestoreDB, appdatabase, single_offer_wall, reload } = useGlobalState();
+// Picker tiles are a third of the sheet wide: "500,000,000" does not fit on
+// one line at a readable size, "500M" does. Below 1 (bundle-tier ranks) the
+// plain formatter already writes 0.33.
+const formatCompact = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 1000) return formatValue(value);
+  const unit = (d, u) => { const x = n / d; return (x >= 100 || x % 1 === 0 ? x.toFixed(0) : x.toFixed(1).replace(/\.0$/, '')) + u; };
+  if (n >= 1e9) return unit(1e9, 'B');
+  if (n >= 1e6) return unit(1e6, 'M');
+  return unit(1e3, 'K');
+};
+
+// RECENT chip: the last 12 distinct items added to the calculator, newest
+// first, stored on the device (localState.recentItems). Only what is needed to
+// find the row again — values are always read from the live pool.
+const RECENT_MAX = 12;
+const recentKey = (it) => it?.id || `${it?.category || ''}|${it?.name || ''}`;
+const withRecent = (list, item) => {
+  if (!item?.name) return list;
+  const entry = { id: item.id || null, name: item.name || item.Name, category: item.category || item.Category || '' };
+  const key = recentKey(entry);
+  const rest = (Array.isArray(list) ? list : []).filter((r) => recentKey(r) !== key);
+  return [entry, ...rest].slice(0, RECENT_MAX);
+};
+
+const HomeScreen = ({ selectedTheme, hideBanner = false }) => {
+  const { theme, user, firestoreDB, appdatabase, single_offer_wall, reload, isUserBlocked, isAdmin } = useGlobalState();
   const tradesCollection = collection(firestoreDB, 'trades_new');
   const [gridStepIndex, setGridStepIndex] = useState(0); // 0 -> 9, 1 -> 12, 2 -> 15, 3 -> 18
   const [hasItems, setHasItems] = useState(() => createEmptySlots(GRID_STEPS[0]));
@@ -260,10 +298,12 @@ const HomeScreen = ({ selectedTheme }) => {
   }, [reload, refreshing, triggerHapticFeedback, t]);
 
 
-  // ✅ MM2 Categories
+  // ✅ MM2 Categories. RECENT leads, and only once something was added.
+  const hasRecent = (localState.recentItems || []).length > 0;
   const CATEGORIES = useMemo(() => {
-    return ['INVENTORY', 'ALL', 'ANCIENT', 'UNIQUE', 'CHROMA', 'GODLY', 'LEGEND', 'RARE', 'UNCOMMON', 'COMMON', 'VINTAGE', 'PETS'];
-  }, []);
+    const base = ['INVENTORY', 'ALL', 'ANCIENT', 'UNIQUE', 'CHROMA', 'GODLY', 'LEGEND', 'RARE', 'UNCOMMON', 'COMMON', 'VINTAGE', 'PETS'];
+    return hasRecent ? ['RECENT', ...base] : base;
+  }, [hasRecent]);
 
   // The list being priced must actually be on this device: on a fresh install
   // whose Supreme fetch failed, every item read "Not listed", both totals were
@@ -367,6 +407,11 @@ const HomeScreen = ({ selectedTheme }) => {
   );
 
 
+  // Newest first, deduped, capped at 12 — see withRecent above.
+  const recordRecent = useCallback((item) => {
+    updateLocalState('recentItems', withRecent(localState.recentItems, item));
+  }, [localState.recentItems, updateLocalState]);
+
   const selectItem = useCallback(
     (item) => {
       if (!item || !selectedSection) return;
@@ -400,6 +445,7 @@ const HomeScreen = ({ selectedTheme }) => {
 
       // This will also expand 9→12→15→18 if needed
       maybeExpandGrid(nextHasItems, nextWantsItems);
+      recordRecent(item);
 
       setIsDrawerVisible(false);
     },
@@ -409,6 +455,7 @@ const HomeScreen = ({ selectedTheme }) => {
       selectedSection,
       triggerHapticFeedback,
       maybeExpandGrid,
+      recordRecent,
     ]
   );
 
@@ -440,6 +487,74 @@ const HomeScreen = ({ selectedTheme }) => {
     setScannerVisible(false);
   }, []);
 
+  // ── Slot options (SlotActionSheet) ──────────────────────────────────────
+  // Totals are derived from the grids, so moving items is the whole job.
+  const [slotSheet, setSlotSheet] = useState(null); // { index, isHas } | null
+  const [detailTarget, setDetailTarget] = useState(null); // slot item shown in ItemDetailSheet
+  const slotItem = slotSheet ? (slotSheet.isHas ? hasItems : wantsItems)[slotSheet.index] : null;
+  const closeSlotSheet = useCallback(() => setSlotSheet(null), []);
+
+  const removeSlot = useCallback(() => {
+    if (!slotSheet || !slotItem) return;
+    const { index, isHas } = slotSheet;
+    const next = [...(isHas ? hasItems : wantsItems)];
+    next[index] = null;
+    if (isHas) setHasItems(next); else setWantsItems(next);
+    triggerHapticFeedback('impactLight');
+    setSlotSheet(null);
+  }, [slotSheet, slotItem, hasItems, wantsItems, triggerHapticFeedback]);
+
+  // Puts the item (or a copy) into the first free slot of a side; the grid
+  // grows 4 → 8 → 12 → 16 like a normal pick. False when that side is full.
+  const placeInSide = useCallback((item, toHas, fromIndex) => {
+    const nextHas = [...hasItems];
+    const nextWants = [...wantsItems];
+    if (fromIndex != null) (toHas ? nextWants : nextHas)[fromIndex] = null;
+    const target = toHas ? nextHas : nextWants;
+    const free = target.indexOf(null);
+    if (free === -1) return false;
+    target[free] = item;
+    maybeExpandGrid(nextHas, nextWants);
+    return true;
+  }, [hasItems, wantsItems, maybeExpandGrid]);
+
+  const moveSlot = useCallback(() => {
+    if (!slotSheet || !slotItem) return;
+    const { index, isHas } = slotSheet;
+    if (!placeInSide(slotItem, !isHas, index)) {
+      showErrorMessage(t('home.alert.error'), t('slot_sheet.side_full', { defaultValue: 'That side is full.' }));
+      return;
+    }
+    triggerHapticFeedback('impactLight');
+    setSlotSheet(null);
+  }, [slotSheet, slotItem, placeInSide, triggerHapticFeedback, t]);
+
+  const sideHasRoom = useCallback((isHas) => {
+    const side = isHas ? hasItems : wantsItems;
+    return side.includes(null) || gridStepIndex < GRID_STEPS.length - 1;
+  }, [hasItems, wantsItems, gridStepIndex]);
+
+  const addAnotherSlot = useCallback(() => {
+    if (!slotSheet || !slotItem) return;
+    if (!placeInSide({ ...slotItem }, slotSheet.isHas)) return;
+    triggerHapticFeedback('impactLight');
+    setSlotSheet(null);
+  }, [slotSheet, slotItem, placeInSide, triggerHapticFeedback]);
+
+  const openSlotDetails = useCallback(() => {
+    if (!slotItem) return;
+    setDetailTarget(slotItem);
+    setSlotSheet(null);
+  }, [slotItem]);
+
+  const tradeIsEmpty = !hasItems.some(Boolean) && !wantsItems.some(Boolean);
+  const swapSides = useCallback(() => {
+    if (tradeIsEmpty) return;
+    triggerHapticFeedback('impactMedium');
+    setHasItems(wantsItems);
+    setWantsItems(hasItems);
+  }, [tradeIsEmpty, hasItems, wantsItems, triggerHapticFeedback]);
+
   const renderScanButton = () => (
     <TouchableOpacity style={styles.scanButton} onPress={() => { triggerHapticFeedback('impactLight'); setScannerVisible(true); }} activeOpacity={0.8}>
       <Icon name="camera" size={18} color="white" />
@@ -456,15 +571,10 @@ const HomeScreen = ({ selectedTheme }) => {
     const callbackfunction = () => { };
 
     if (items[index]) {
+      // A filled slot opens its options (SlotActionSheet) instead of removing
+      // the item outright — one stray tap used to lose a pick.
       triggerHapticFeedback('impactLight');
-      const updatedItems = [...items];
-      updatedItems[index] = null;
-
-      if (isHas) {
-        setHasItems(updatedItems);
-      } else {
-        setWantsItems(updatedItems);
-      }
+      setSlotSheet({ index, isHas });
     } else {
       triggerHapticFeedback('impactLight');
       setSelectedSection(isHas ? 'has' : 'wants');
@@ -552,6 +662,139 @@ const HomeScreen = ({ selectedTheme }) => {
     return (owned) => (owned?.id && byId.get(owned.id)) || byNameAndCategory(owned);
   }, [fruitRecords]);
 
+  // ── Counter offer (CounterOffer/counterOffer.js) ────────────────────────
+  // A feed "Counter" hands over the poster's trade. It loads mirrored — Me
+  // (I give) = what the poster wants, You (I get) = what the poster offers —
+  // rebuilt from the current catalogue rows the way selectItem() builds a
+  // pick, so the totals are the CURRENT source's (Supreme or MM2). While
+  // `counter` is set a banner names the poster and Create / Log / Share become
+  // one "Send counter offer", which opens the DM and posts a trade_offer.
+  const [counter, setCounter] = useState(null); // { tradeId, poster, trade }
+  const [counterRequest, setCounterRequest] = useState(null);
+  const sentOfferIdRef = useRef(null);
+
+  // Grid sized like maybeExpandGrid would leave it: 4 → 8 → 12 → 16, with a
+  // free slot on the fuller side unless already at 16.
+  const loadSides = useCallback((has, wants) => {
+    const most = Math.max(has.length, wants.length);
+    const found = GRID_STEPS.findIndex((n) => n > most);
+    const step = found === -1 ? GRID_STEPS.length - 1 : found;
+    const size = GRID_STEPS[step];
+    const pad = (items) => [...items, ...createEmptySlots(Math.max(0, size - items.length))];
+    setSelectedSection(null);
+    setGridStepIndex(step);
+    setHasItems(pad(has));
+    setWantsItems(pad(wants));
+  }, []);
+
+  const applyCounterRequest = useCallback((req) => {
+    const maxSide = GRID_STEPS[GRID_STEPS.length - 1];
+    const toSlot = (tradeItem) => {
+      const name = tradeItem?.name || tradeItem?.Name || '';
+      // Trade rows store name / type (category) / value / image only; the
+      // pool row (same category first) carries both catalogues' prices.
+      const record = findPoolRow({ ...tradeItem, name, category: tradeItem?.category || tradeItem?.type })
+        || { name, Name: name, type: tradeItem?.type || null, category: tradeItem?.type || '', image: tradeItem?.image || '' };
+      const value = Number(record.Value || 0);
+      return { ...record, selectedValue: value, Value: value };
+    };
+    const mirrored = mirrorTradeForCounter(req.trade);
+    loadSides(mirrored.give.slice(0, maxSide).map(toSlot), mirrored.get.slice(0, maxSide).map(toSlot));
+    setCounter({ tradeId: req.trade?.id || null, poster: req.poster, trade: req.trade });
+    triggerHapticFeedback('impactLight');
+  }, [findPoolRow, loadSides, triggerHapticFeedback]);
+
+  // Take the request now (this tab mounts lazily) and whenever a new one comes.
+  useEffect(() => {
+    const take = () => {
+      const req = takeCounterRequest();
+      if (req?.trade) setCounterRequest(req);
+    };
+    take();
+    return subscribeCounterRequest(take);
+  }, []);
+
+  // Waits for the catalogue so the prices are real. Asks before replacing a
+  // trade the user was building.
+  useEffect(() => {
+    if (!counterRequest || fruitRecords.length === 0) return;
+    const req = counterRequest;
+    setCounterRequest(null);
+    if (!hasItems.some(Boolean) && !wantsItems.some(Boolean)) {
+      applyCounterRequest(req);
+      return;
+    }
+    Alert.alert(
+      t('counter_offer.replace_title', { defaultValue: 'Replace your current trade?' }),
+      t('counter_offer.replace_body', { defaultValue: 'The counter offer will replace the items in your calculator.' }),
+      [
+        { text: t('counter_offer.replace_keep', { defaultValue: 'Keep mine' }), style: 'cancel' },
+        { text: t('counter_offer.replace_confirm', { defaultValue: 'Replace' }), style: 'destructive', onPress: () => applyCounterRequest(req) },
+      ],
+    );
+  }, [counterRequest, fruitRecords.length, hasItems, wantsItems, applyCounterRequest, t]);
+
+  // The chat confirmed the offer landed: leave counter mode with a clean calculator.
+  useEffect(() => subscribeCounterSent((offerId) => {
+    if (!offerId || offerId !== sentOfferIdRef.current) return;
+    sentOfferIdRef.current = null;
+    setCounter(null);
+    loadSides([], []);
+  }), [loadSides]);
+
+  // Cancel keeps the items: the user may still post or share them.
+  const cancelCounter = useCallback(() => {
+    triggerHapticFeedback('impactLight');
+    sentOfferIdRef.current = null;
+    setCounter(null);
+  }, [triggerHapticFeedback]);
+
+  const handleSendCounter = useCallback(() => {
+    if (!counter) return;
+    if (!user?.id) {
+      setIsSigninDrawerVisible(true);
+      return;
+    }
+    if (isUserBlocked) {
+      showErrorMessage(t('chat.access_denied'), t('chat.banned_message'));
+      return;
+    }
+    const giveSlots = hasItems.filter(Boolean);
+    const getSlots = wantsItems.filter(Boolean);
+    if (giveSlots.length === 0 && getSlots.length === 0) {
+      showErrorMessage(t('home.alert.error'), t('home.alert.missing_items_error'));
+      return;
+    }
+    if (verdict.reason === 'no_data') {
+      showErrorMessage(t('home.alert.error'), t('home.alert.values_not_loaded', { source: sourceLabel }));
+      return;
+    }
+    // Priced by the catalogue on screen, like a posted trade (mapTradeItem):
+    // an unpriced item travels at 0 and is flagged, never as a made-up number.
+    const forOffer = (slot) => {
+      const priced = priceOf(slot, valueSource);
+      const ok = isSummable(priced);
+      return { ...slot, selectedValue: ok ? priced.value : 0, offerUnpriced: !ok };
+    };
+    triggerHapticFeedback('impactMedium');
+    const offer = buildTradeOffer({
+      id: `co_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
+      tradeId: counter.tradeId,
+      give: giveSlots.map(forOffer),
+      get: getSlots.map(forOffer),
+      valueSource,
+      valueUnit: null,
+      variantOf: mm2VariantOf,
+    });
+    sentOfferIdRef.current = offer.id;
+    // Same screen as the feed's chat door, so the trade-chat switch applies.
+    navigation.navigate('Trade', {
+      screen: 'PrivateChatTrade',
+      initial: false,
+      params: { selectedUser: counter.poster, item: counter.trade, pendingOffer: offer },
+    });
+  }, [counter, user?.id, isUserBlocked, hasItems, wantsItems, verdict.reason, sourceLabel, valueSource, navigation, t, triggerHapticFeedback]);
+
   // ✅ MM2: Simplified filteredData (no value types/modifiers needed)
   const filteredData = useMemo(() => {
     let list;
@@ -571,27 +814,38 @@ const HomeScreen = ({ selectedTheme }) => {
           seen.add(item.id);
           return true;
         });
+    } else if (selectedPetType === 'RECENT') {
+      // Same lookup as INVENTORY, so a recent pick shows today's value.
+      const seen = new Set();
+      list = (localState.recentItems || [])
+        .map((r) => findPoolRow(r))
+        .filter((item) => item && !seen.has(item.id) && seen.add(item.id));
     } else {
       list = fruitRecords;
     }
-    return list
+    const filtered = list
       .filter(item => {
         if (!item) return false;
         const matchesSearch = !!item.name && matchesItemName(item.name, debouncedSearchText);
         const matchesType = selectedPetType === 'INVENTORY' ||
+          selectedPetType === 'RECENT' ||
           selectedPetType === 'ALL' ||
           // categoryKey folds Supreme's plurals ("Godlies") into the chip's name.
           selectedPetType === categoryKey(item.Category) ||
           selectedPetType === categoryKey(item.type);
         return matchesSearch && matchesType;
-      })
-      .sort((a, b) => (b.Value || 0) - (a.Value || 0));
+      });
+    // RECENT keeps its newest-first order; every other list is by value.
+    return selectedPetType === 'RECENT'
+      ? filtered
+      : filtered.sort((a, b) => (b.Value || 0) - (a.Value || 0));
   }, [
     fruitRecords,
     findPoolRow,
     debouncedSearchText,
     selectedPetType,
     localState.ownedPets,
+    localState.recentItems,
   ]);
   // ✅ MM2: Removed badge handlers - MM2 doesn't use badges
 
@@ -637,6 +891,7 @@ const HomeScreen = ({ selectedTheme }) => {
 
       targetArray[nextEmptyIndex] = selectedItem;
       maybeExpandGrid(nextHasItems, nextWantsItems);
+      recordRecent(item);
       setIsDrawerVisible(false);
     };
 
@@ -681,11 +936,13 @@ const HomeScreen = ({ selectedTheme }) => {
         </TouchableOpacity>
       </View>
     );
-  }, [selectedSection, hasItems, wantsItems, maybeExpandGrid, triggerHapticFeedback, toggleFavorite, isDarkMode, getImageUrl, t, valueSource]);
+  }, [selectedSection, hasItems, wantsItems, maybeExpandGrid, triggerHapticFeedback, toggleFavorite, isDarkMode, getImageUrl, t, valueSource, recordRecent]);
 
   // ✅ MM2: Simplified grid item render
   const renderGridItem = useCallback(({ item }) => {
     const imageUrl = getImageUrl(item);
+    const priced = priceOf(item, valueSource);
+    const hasDemand = item.demand != null && item.demand !== 'N/A';
     const isFavorite = (localState.favorites || []).some(
       fav => (fav.id && fav.id === item.id) ||
         (fav.name && fav.name.toLowerCase() === (item.name || item.Name)?.toLowerCase())
@@ -717,20 +974,20 @@ const HomeScreen = ({ selectedTheme }) => {
         <Text numberOfLines={1} style={styles.gridItemText}>
           {item.name || item.Name}
         </Text>
+        {/* Value and demand share one line (11px), so the tile is no taller
+            than when they were two lines at 9px and 8px. */}
         <Text numberOfLines={1} style={styles.gridItemValue}>
           {/* The source's own words when it has no real price — "Priceless",
               "Award only", "x3 T1 Legendaries" — all beat a derived 0.024.
               See Code/Helper/valueSources.js. */}
-          {displayValueText(item, valueSource) || formatValue(priceOf(item, valueSource).value)}
+          {displayValueText(item, valueSource) || formatCompact(priced.value)}
+          {hasDemand ? <Text style={styles.gridItemDemand}>{`  ${item.demand}/10`}</Text> : null}
         </Text>
-        {priceOf(item, valueSource).referenceValue ? (
-          <Text numberOfLines={1} style={[styles.referenceValue, { textAlign: 'center' }]}>
-            MM2: {formatValue(priceOf(item, valueSource).referenceValue)}
+        {priced.referenceValue ? (
+          <Text numberOfLines={1} style={[styles.referenceValue, styles.gridItemReference]}>
+            MM2: {formatCompact(priced.referenceValue)}
           </Text>
         ) : null}
-        {item.demand != null && item.demand !== 'N/A' && (
-          <Text style={styles.gridItemDemand}>{item.demand}/10</Text>
-        )}
         {isAddingToFavorites && (
           <TouchableOpacity
             style={styles.favoriteButton}
@@ -1215,7 +1472,13 @@ const HomeScreen = ({ selectedTheme }) => {
       <GestureHandlerRootView>
         <View style={styles.container} key={language}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: bannerBottomPos + 80 }}>
-            {TRADE_SCANNER_ENABLED && renderScanButton()}
+            {counter ? (
+              <CounterOfferBanner
+                name={counter.poster?.sender}
+                onCancel={cancelCounter}
+                isDarkMode={isDarkMode}
+              />
+            ) : (TRADE_SCANNER_ENABLED && renderScanButton())}
             <ViewShot ref={viewRef} style={styles.screenshotView}>
               {config.isNoman && (
                 <View style={styles.summaryContainer}>
@@ -1370,7 +1633,15 @@ const HomeScreen = ({ selectedTheme }) => {
 
               <View style={styles.labelContainer}>
                 <Text style={styles.offerLabel}>{t('home.me')}</Text>
-                <Text style={styles.dividerText}></Text>
+                <TouchableOpacity
+                  style={[styles.swapButton, tradeIsEmpty && styles.swapButtonIdle]}
+                  onPress={swapSides}
+                  hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('slot_sheet.swap_sides', { defaultValue: 'Swap sides' })}
+                >
+                  <Icon name="swap-horizontal" size={16} color={config.colors.primary} />
+                </TouchableOpacity>
                 <Text style={styles.offerLabel}>{t('home.you')}</Text>
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -1490,6 +1761,19 @@ const HomeScreen = ({ selectedTheme }) => {
                 </View>
               )}
             </ViewShot>
+            {counter ? (
+              <View style={styles.counterSendRow}>
+                <TouchableOpacity
+                  style={styles.counterSendButton}
+                  onPress={handleSendCounter}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                >
+                  <Icon name="paper-plane" size={16} color="#ffffff" />
+                  <Text style={styles.counterSendText}>{t('counter_offer.send', { defaultValue: 'Send counter offer' })}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
             <View style={styles.createtrade}>
               <TouchableOpacity
                 style={styles.createtradeButton}
@@ -1513,6 +1797,7 @@ const HomeScreen = ({ selectedTheme }) => {
                 <Text style={styles.tradeBtnText} numberOfLines={1}>{t('home.share_trade')}</Text>
               </TouchableOpacity>
             </View>
+            )}
             {/* Remove Ads button removed 2026-09-27 (owner): the Pro offer
                 lives in Settings, not under the calculator. */}
 
@@ -1682,11 +1967,33 @@ const HomeScreen = ({ selectedTheme }) => {
         </View>
         <SubscriptionScreen visible={showofferwall} onClose={() => setShowofferwall(false)} track='Home' oneWallOnly={single_offer_wall} showoffer={!single_offer_wall} />
       </GestureHandlerRootView>
-      {!localState.isPro && (
+      {/* hideBanner: Values is showing in this tab (CalculatorTab.jsx) and has its own banner. */}
+      {!localState.isPro && !hideBanner && (
         <View style={{ position: 'absolute', bottom: bannerBottomPos, left: 0, right: 0, alignItems: 'center', zIndex: 5 }}>
           <BannerAdComponent collapsible />
         </View>
       )}
+      <SlotActionSheet
+        visible={!!slotItem}
+        item={slotItem}
+        imageUrl={slotItem ? getImageUrl(slotItem) : ''}
+        valueText={slotItem ? (displayValueText(slotItem, valueSource) || formatValue(priceOf(slotItem, valueSource).value)) : ''}
+        sideLabel={slotSheet ? t(slotSheet.isHas ? 'home.me' : 'home.you') : ''}
+        isDarkMode={isDarkMode}
+        onClose={closeSlotSheet}
+        onRemove={removeSlot}
+        onMove={moveSlot}
+        onAddAnother={addAnotherSlot}
+        canAddAnother={!!slotSheet && sideHasRoom(slotSheet.isHas)}
+        onDetails={openSlotDetails}
+      />
+      <ItemDetailSheet
+        visible={!!detailTarget}
+        item={detailTarget}
+        imageUrl={detailTarget ? getImageUrl(detailTarget) : ''}
+        isDarkMode={isDarkMode}
+        onClose={() => setDetailTarget(null)}
+      />
       {TRADE_SCANNER_ENABLED && (
         <TradeScannerModal
           visible={scannerVisible}
@@ -1699,6 +2006,7 @@ const HomeScreen = ({ selectedTheme }) => {
           valueFor={scannedValue}
           verdictFor={wflStatus}
           formatValue={formatValue}
+          tester={!!(isAdmin || user?.isModerator || user?.isBabyMod)}
         />
       )}
       <ShareTradeModal
@@ -1925,6 +2233,18 @@ const getStyles = (isDarkMode, isGG) =>
       color: '#999',
       paddingHorizontal: 5,
     },
+    swapButton: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      marginBottom: 5,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: config.colors.primary + '1A',
+    },
+    swapButtonIdle: {
+      opacity: 0.4,
+    },
     summaryBox: {
       width: '48%',
       padding: 5,
@@ -2115,14 +2435,18 @@ const getStyles = (isDarkMode, isGG) =>
       color: isDarkMode ? '#fff' : '#333',
     },
     gridItemValue: {
-      fontSize: 9,
+      fontSize: 11,
+      marginTop: 1,
       color: isDarkMode ? '#aaa' : '#666',
       fontWeight: '600',
     },
     gridItemDemand: {
-      fontSize: 8,
+      fontSize: 10,
       color: '#FF6B00',
       fontWeight: '700',
+    },
+    gridItemReference: {
+      textAlign: 'center',
     },
     badgeContainer: {
       flexDirection: 'row',
@@ -2250,6 +2574,25 @@ const getStyles = (isDarkMode, isGG) =>
 
     // 3-segment pill: Create | Log | Share. Segments flex so they fit small
     // screens; only the outer two carry the rounded corners.
+    // Counter mode: one primary action in place of Create / Log / Share.
+    counterSendRow: {
+      paddingHorizontal: 16,
+      marginTop: 8,
+    },
+    counterSendButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 12,
+      borderRadius: 14,
+      backgroundColor: config.colors.primary,
+    },
+    counterSendText: {
+      color: '#ffffff',
+      fontSize: 15,
+      fontWeight: '700',
+    },
     createtrade: {
       flexDirection: 'row',
       justifyContent: 'center',

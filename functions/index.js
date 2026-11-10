@@ -173,6 +173,11 @@ for (const [name, fn] of Object.entries(emailPrivacy)) exports[name] = fn;
 // builds have aged out — docs/BUNNY_UPLOAD_ROLLOUT_2026-10-11.md.
 exports.uploadImage = require('./uploadImage').uploadImage;
 
+// ── Trade Scanner "Send picture" (2026-11-06) ──────────────────────────
+// Picture + scan JSON to Bunny scan-reports/mm2/, no user id stored. Same
+// BUNNY_STORAGE_KEY secret as uploadImage.
+exports.uploadScanReport = require('./uploadScanReport').uploadScanReport;
+
 // ── Birthdays (2026-10-13, BIRTHDAYS_PLAN.md) ──────────────────────────
 // Firebase port of Blox Fruit's birthdays. Index triggers, seven HTTPS
 // endpoints the app calls with an ID token, and two daily schedules. All

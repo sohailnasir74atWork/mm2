@@ -79,7 +79,52 @@ const ValueCard = ({
   );
 };
 
+/**
+ * ValueRow — the Values screen's list view: one compact row per item (40px
+ * image, name, the selected catalogue's value, demand chip). Same props as
+ * ValueCard so the screen swaps one for the other; the other catalogue's
+ * figure and the stability chip stay on the card and in the detail sheet.
+ */
+export const ValueRow = memo(function ValueRow({ item, imageUrl, primary, isDarkMode, onPress, disabled }) {
+  const { t } = useTranslation();
+  const c = isDarkMode
+    ? { card: config.colors.surfaceDark, well: '#0d2137', text: '#e8ecf1', sub: '#8a95a5', line: 'rgba(255,255,255,0.07)' }
+    : { card: '#ffffff', well: '#f1f3f8', text: '#1c1e21', sub: '#65707e', line: 'rgba(0,0,0,0.07)' };
+  const hasDemand = present(item.demand);
+  return (
+    <TouchableOpacity
+      style={[s.row, { backgroundColor: c.card, borderColor: c.line }]}
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.8}
+    >
+      <View style={[s.rowWell, { backgroundColor: c.well }]}>
+        {!!imageUrl && <Image resizeMethod="resize" source={{ uri: imageUrl }} style={s.rowImage} resizeMode="contain" />}
+      </View>
+      <View style={s.rowText}>
+        <Text style={[s.rowName, { color: c.text }]} numberOfLines={1}>{item.name}</Text>
+        <Text style={s.rowValue} numberOfLines={1}>{primary}</Text>
+      </View>
+      {hasDemand && (
+        <View style={[s.chip, { backgroundColor: c.well }]}>
+          <Text style={[s.chipText, { color: c.sub }]} numberOfLines={1}>{t('value.demand_chip', { value: item.demand })}</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+});
+
 const s = StyleSheet.create({
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginBottom: 6, paddingVertical: 8, paddingHorizontal: 10,
+    borderRadius: 14, borderWidth: StyleSheet.hairlineWidth,
+  },
+  rowWell: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  rowImage: { width: 34, height: 34 },
+  rowText: { flex: 1, minWidth: 0 },
+  rowName: { fontSize: 14, fontFamily: 'Lato-Bold' },
+  rowValue: { fontSize: 13, fontFamily: 'Lato-Bold', color: config.colors.primary, marginTop: 1 },
   card: {
     width: CARD_W, marginBottom: CARD_GAP,
     borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 10,

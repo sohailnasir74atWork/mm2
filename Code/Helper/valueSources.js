@@ -38,6 +38,8 @@ import i18n from 'i18next';
  * the 1,219 unique Supreme names match an MM2 item, and all 787 of those MM2
  * items have a real image — so roughly two thirds of Supreme renders for free.
  * The remainder resolve to '' and the caller falls back to its empty state.
+ * (2026-11-04: a Set with no art of its own now borrows its first part's MM2
+ * art — see setPartImage — which covers 105 of the 112 artless Sets.)
  *
  * ── What is NOT solved here ───────────────────────────────────────────────
  *
@@ -278,8 +280,32 @@ export const resolveItemImage = (item) => {
   if (/^https?:\/\//.test(raw)) return raw;
   if (!isSupremeAsset(raw)) return `${MM2_IMAGE_BASE}/${raw}`;
 
-  const matched = mm2ImageIndex.get(normalizeName(item.name || item.Name));
+  const key = normalizeName(item.name || item.Name);
+  const matched = mm2ImageIndex.get(key) || setPartImage(key);
   return matched ? `${MM2_IMAGE_BASE}/${matched}` : '';
+};
+
+/**
+ * A Supreme Set has no art of its own anywhere we can link, but it lists its
+ * parts (`containsParts`), and those are ordinary knives and guns the MM2
+ * catalogue does have art for. Show the first part that has one: "Chroma Ever
+ * Set" shows Chroma Evergreen. Only reached when no item of that name has
+ * art, and only for records that really list parts, so nothing else changes.
+ * Measured on the 2026-11-04 feeds: 105 of the 112 artless Sets resolve
+ * (the pool's artless rows go 226 -> 121).
+ * Read at call time, so the order the two feeds are indexed in does not matter.
+ */
+const setPartImage = (key) => {
+  const records = supremePriceIndex.get(key);
+  if (!records) return '';
+  for (const record of records) {
+    if (!Array.isArray(record.containsParts)) continue;
+    for (const part of record.containsParts) {
+      const img = part && part.name ? mm2ImageIndex.get(normalizeName(part.name)) : null;
+      if (img) return img;
+    }
+  }
+  return '';
 };
 
 // ── Value confidence ───────────────────────────────────────────────────────

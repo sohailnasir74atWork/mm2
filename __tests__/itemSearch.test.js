@@ -29,3 +29,10 @@ test('spacing and punctuation differences between catalogues still match', () =>
   expect(matchesItemName('Gold LogChopper', 'log chopper')).toBe(true);
   expect(matchesItemName('Log Chopper', 'logchoppers')).toBe(false);
 });
+
+test('a partial word matches from the start of a word', () => {
+  expect(matchesItemName('Knife', 'kni')).toBe(true);
+  expect(matchesItemName('Chroma Luger', 'chro')).toBe(true);
+  expect(matchesItemName('Flowerwood Knife', 'kni')).toBe(true);
+  expect(matchesItemName('Chroma Luger', 'lugx')).toBe(false);
+});

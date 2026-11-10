@@ -31,12 +31,12 @@ no placement, so don't sum both.
 |---|---|---|
 | `trade_post` | interstitial · tradePost | trade posted (HomeScreen) — always shows, outside policy |
 | `feed_post` | interstitial · feedPost | design post or status posted — always shows, outside policy |
-| `review` | interstitial · reviewPost | rating/review saved (PrivateChat) — always shows, outside policy (owner, 2026-11-01). Borrows the trade-post AdMob unit until `andriodReviewInterstitial` / `IOsReviewInterstitial` are set in Environment.js |
+| `review` | interstitial · reviewPost | REMOVED 2026-11-04 (owner, revenue LOG "Ad diet"); no longer prepared or shown. |
 | `group_chat` / `private_chat` / `trader_chat` | interstitial · interstitial | every Nth chat message |
 | `post_chat` | interstitial · interstitial | messaging a post's author (PostCard) |
 | `trade_share` | interstitial · interstitial | trade shared |
 | `manor_round` | interstitial · interstitial | Manor rounds |
-| `tab:<Route>` | interstitial · interstitial | natural breaks (only counted once past the caps) |
+| `tab:<Route>` | interstitial · interstitial | natural breaks (only counted once past the caps); tab switches REMOVED 2026-11-04 (owner, revenue LOG "Ad diet"). |
 | `action` | interstitial · interstitial | unlabelled call sites (HomeScreen 1151, ArrowGame) |
 | `trade_feature`, `mystery_egg`, `mystery_egg_free_hatch`, `reward` | rewarded · rewarded | "watch a video" buttons (Manor / Fantasy League rewarded still `reward`) |
 | `launch` / `return` | app_open · openapp | cold start / foreground return (counted at present only) |

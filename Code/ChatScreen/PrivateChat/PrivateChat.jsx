@@ -8,7 +8,7 @@ import {
   TouchableOpacity,  TextInput,  
 
 } from 'react-native';
-import { useFocusEffect, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useRoute, useNavigation } from '@react-navigation/native';
 import { getStyles } from '../Style';
 import PrivateMessageInput from './PrivateMessageInput';
 import PrivateMessageList from './PrivateMessageList';
@@ -25,7 +25,6 @@ import config from '../../Helper/Environment';
 import ConditionalKeyboardWrapper from '../../Helper/keyboardAvoidingContainer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BannerAdComponent from '../../Ads/bannerAds';
-import PostAdManager from '../../Ads/PostAd';
 
 import PetModal from './PetsModel';
 import {
@@ -37,6 +36,19 @@ import {
 import ProfileBottomDrawer from '../GroupChat/BottomDrawer';
 import { resolveItemImage } from '../../Helper/valueSources';
 import TranslateTip from '../TranslateTip';
+import {
+  isTradeOffer,
+  offerFallbackText,
+  canApplyOfferAction,
+  notifyCounterSent,
+} from '../../CounterOffer/counterOffer';
+import {
+  mm2VariantText,
+  isOfferStatusReply,
+  buildOfferStatusReply,
+  offerStatusReplyText,
+  foldOfferStatuses,
+} from '../../Helper/counterOfferMM2';
 
 
 
@@ -65,10 +77,6 @@ const PrivateChatScreen = ({route, bannedUsers, isDrawerVisible, setIsDrawerVisi
   const [canRate, setCanRate] = useState(false);
 const [hasRated, setHasRated] = useState(false);
 const [showRatingModal, setShowRatingModal] = useState(false);
-  // Warm the review ad while the user writes, so it is ready on submit.
-  useEffect(() => {
-    if (showRatingModal) PostAdManager.prepare('review');
-  }, [showRatingModal]);
 const [rating, setRating] = useState(0);
 const [petModalVisible, setPetModalVisible] = useState(false);
 const [selectedFruits, setSelectedFruits] = useState([]); 
@@ -306,9 +314,7 @@ showSuccessMessage(
       setReviewText('');
       setStartRating(false);
 
-      // Review ad: always shown after a saved rating/review, like a posted
-      // trade (PostAd.js; it skips Pro users itself). Owner, 2026-11-01.
-      PostAdManager.show('review');
+      // No ad after a rating/review (owner decision 2026-11-04, revenue LOG "Ad diet").
   
     } catch (error) {
       console.error("Rating error:", error);
@@ -507,7 +513,15 @@ showSuccessMessage(
   const getImageUrl = resolveItemImage;
 
   // ✅ Memoize sendMessage
-  const sendMessage = useCallback(async (text, image, fruits, replyToMsg) => {
+  // `offer` (5th arg): a trade_offer payload from the calculator's counter
+  // flow (CounterOffer/counterOffer.js), stored as the message's `tradeOffer`
+  // child with a readable `text` fallback for app versions that predate it.
+  // `offerStatus` (6th arg): a status reply for an offer (Helper/counterOfferMM2.js).
+  // Neither clears what is typed in the box. Resolves true once stored.
+  const sendMessage = useCallback(async (text, image, fruits, replyToMsg, offer = null, offerStatus = null) => {
+    const isOffer = isTradeOffer(offer);
+    const isStatusReply = !isOffer && isOfferStatusReply(offerStatus);
+    const isOfferMessage = isOffer || isStatusReply;
     // Guard for a stale screen — the input is already disabled when this door
     // is shut, so this only fires if the switch flipped while the chat was open.
     if (chatBlockedBy) {
@@ -524,7 +538,9 @@ showSuccessMessage(
       return;
     }
 
-    const trimmedText = (text || '').trim(); // safe guard
+    // An offer's text is built from catalogue names, not typed, so it skips
+    // the input's content filter by construction.
+    const trimmedText = isOffer ? offerFallbackText(offer, t, mm2VariantText) : (text || '').trim(); // safe guard
     // Handle both single image (string) and multiple images (array)
     const hasImage = !!image && (typeof image === 'string' || (Array.isArray(image) && image.length > 0));
     const hasFruits = Array.isArray(fruits) && fruits.length > 0;
@@ -536,7 +552,7 @@ showSuccessMessage(
     }
   
     // Block only if there's no text, no image AND no fruits
-    if (!trimmedText && !hasImage && !hasFruits) {
+    if (!trimmedText && !hasImage && !hasFruits && !isOfferMessage) {
       showErrorMessage(t("home.alert.error"), t("chat.cannot_empty"));
       return;
     }
@@ -558,7 +574,8 @@ showSuccessMessage(
     // Currently, blocked users can still send messages (they're just filtered on receiver's side)
     // See BLOCK_FUNCTIONALITY_ANALYSIS.md for details and recommended solution
 
-    setInput(''); // clear input, image & fruits already cleared in PrivateMessageInput
+    // An offer / status reply does not come from the box; whatever is typed stays.
+    if (!isOfferMessage) setInput(''); // clear input, image & fruits already cleared in PrivateMessageInput
   
     const timestamp = Date.now();
     const chatId = [myUserId, selectedUserId].sort().join('_');
@@ -591,15 +608,20 @@ showSuccessMessage(
       }
     }
   
-    if (hasFruits) {
+    if (hasFruits && !isOfferMessage) {
       messageData.fruits = fruits;       // 👈 your array of selected fruits
     }
+
+    // Counter offer: its own child, so older builds (which only read text /
+    // fruits / images) show the text fallback and nothing else.
+    if (isOffer) messageData.tradeOffer = offer;
+    if (isStatusReply) messageData.offerStatus = offerStatus;
 
     // Reply: a small snapshot rides in the same write, so the bubble can show
     // the quote without reading the original message. Text is cut to 120
     // chars and images/items are stored as counts — every byte here is
     // downloaded again each time the chat is opened.
-    if (replyToMsg && replyToMsg.id != null) {
+    if (!isOfferMessage && replyToMsg && replyToMsg.id != null) {
       const replyImages = Array.isArray(replyToMsg.imageUrls)
         ? replyToMsg.imageUrls.length
         : (replyToMsg.imageUrl ? 1 : 0);
@@ -617,7 +639,9 @@ showSuccessMessage(
     const imageCount = Array.isArray(image) ? image.length : (image ? 1 : 0);
     const photosCountStr = imageCount > 1 ? t('private_chat.multiple_photos', { count: imageCount }) : t('private_chat.single_photo');
     const petsCountStr = hasFruits ? (fruits.length === 1 ? t('private_chat.pets_count_singular', { count: fruits.length }) : t('private_chat.pets_count_plural', { count: fruits.length })) : '';
-    const lastMessagePreview = trimmedText || (hasImage ? photosCountStr : hasFruits ? petsCountStr : '');
+    const lastMessagePreview = isOffer
+      ? t('counter_offer.preview', { defaultValue: '🔁 Counter offer' })
+      : (trimmedText || (hasImage ? photosCountStr : hasFruits ? petsCountStr : ''));
   
     try {
       // Save the message
@@ -649,12 +673,61 @@ showSuccessMessage(
         unreadCount: isReceiverInChat ? 0 : increment(1),
       });
   
-      setReplyTo(null);
+      if (!isOfferMessage) setReplyTo(null);
+      return true;
     } catch (error) {
       console.error("Error sending message:", error);
       Alert.alert(t('home.alert.error'), t('private_chat.send_failed'));
+      return false;
     }
   }, [myUserId, selectedUserId, appdatabase, selectedUser, user, t, chatBlockedBy, chatType, isUserBlocked]);
+
+  // ── Counter offer (CounterOffer/counterOffer.js, Helper/counterOfferMM2.js) ──
+  // The calculator opens this chat with route.params.pendingOffer. Sent once,
+  // after the partner's availability and the first page have loaded, so a closed door is caught
+  // (sendMessage's chatBlockedBy guard) before anything is written.
+  const navigation = useNavigation();
+  const pendingOffer = route?.params?.pendingOffer;
+  const sentOfferIdsRef = useRef(new Set());
+  useEffect(() => {
+    if (!isTradeOffer(pendingOffer) || !myUserId || !selectedUserId) return;
+    if (theirAvailability === null) return;
+    // After the first page has loaded: a reset load landing after the send
+    // would replace the list and drop the just-sent offer from the screen.
+    if (loading) return;
+    if (sentOfferIdsRef.current.has(pendingOffer.id)) return;
+    sentOfferIdsRef.current.add(pendingOffer.id);
+    navigation.setParams({ pendingOffer: undefined });
+    sendMessage(null, null, [], null, pendingOffer).then((ok) => {
+      if (ok) notifyCounterSent(pendingOffer.id);
+    });
+  }, [pendingOffer, myUserId, selectedUserId, theirAvailability, loading, sendMessage, navigation]);
+
+  // Accept / Decline / Cancel / Mark completed / Didn't happen. The RTDB rule
+  // lets only a message's sender write it, so a status change is a small
+  // reply message; the card's status is the fold of those replies (earliest
+  // valid one wins a race). child_added fires locally at once, so the card
+  // updates without waiting for the server.
+  const handleOfferAction = useCallback(async (message, action) => {
+    const offer = message?.tradeOffer;
+    if (!isTradeOffer(offer) || message?.id == null || !myUserId) return;
+    const viewerIsSender = message.senderId === myUserId;
+    if (!canApplyOfferAction(offer, action, viewerIsSender)) return;
+    if (isUserBlocked) {
+      showErrorMessage(t('chat.access_denied'), t('chat.banned_message'));
+      return;
+    }
+    const ok = await sendMessage(
+      offerStatusReplyText(action, t), null, [], null, null,
+      buildOfferStatusReply({ offerId: offer.id, msgId: message.id, action }),
+    );
+    if (ok === false) {
+      showErrorMessage(t('home.alert.error'), t('counter_offer.update_failed', { defaultValue: "Couldn't update the offer. Try again." }));
+    }
+  }, [myUserId, isUserBlocked, sendMessage, t]);
+
+  // Offer rows carry the status their replies add up to.
+  const displayMessages = useMemo(() => foldOfferStatuses(messages), [messages]);
   
   
 
@@ -856,7 +929,7 @@ useEffect(() => {
 ) : (
   // We have messages → always render the list, no matter what `loading` is
   <PrivateMessageList
-    messages={messages}
+    messages={displayMessages}
     userId={myUserId}
     handleLoadMore={handleLoadMore}
     refreshing={refreshing}
@@ -869,6 +942,7 @@ useEffect(() => {
     hasRated={hasRated}
     setShowRatingModal={setShowRatingModal}
     otherLastRead={(localState?.showReadReceipts ?? true) ? otherLastRead : null}
+    onOfferAction={isChatUnavailable ? null : handleOfferAction}
   />
 )}
 

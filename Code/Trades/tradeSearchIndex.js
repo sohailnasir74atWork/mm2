@@ -12,17 +12,26 @@
  *   "knife" cannot find "Flowerwood Knife". Storing each word as its own
  *   element makes word-level search work with one index and one query.
  *
- * Known limit: this gives whole-word matching, not prefix matching. "kni" will
- * not find "Knife". Firestore cannot do substring search without a separate
- * search service, and the alternative — downloading trades and filtering on
- * the device — is what the indexed query replaced. The screen also matches
- * already-loaded trades locally, which covers most short partial queries
- * without a single extra read.
+ * Prefixes (2026-11-04, batch 2): array-contains is still exact per element,
+ * so a partial word only matches if the partial word is itself stored. Each
+ * word now also stores its prefixes from 3 letters ("kni", "knif" for
+ * "knife"; "chr" … "chrom" for "chroma"), so "kni" finds "Knife" in the
+ * server query too. Only trades created from this version carry them: older
+ * documents keep whole-word tokens, and match a partial word only through
+ * the local pass over trades already loaded on screen (tradeMatchesLocally),
+ * which never needed tokens. Two-letter prefixes are not stored — they would
+ * match nearly everything — so "kn" is local-only on every trade.
+ * Firestore cannot do substring search without a separate search service.
  */
 
 // Firestore creates one index entry per array element. Thirty is far below any
 // limit and is more tokens than a 20-item trade can realistically need.
 const MAX_TOKENS = 30;
+// Prefix tokens come after every full name and word, in a separate budget, so
+// they can never push a whole word out. 120 strings of a few letters each is
+// ~1 KB on the document and far below Firestore's 40,000 index entries.
+const MAX_PREFIX_TOKENS = 120;
+const MIN_PREFIX = 3;
 
 /** Normalise one item name the same way the query normalises the search term. */
 export const normalizeSearchTerm = (value) =>
@@ -35,7 +44,8 @@ export const normalizeSearchTerm = (value) =>
  * Build the token array for one side of a trade.
  *
  * @param {Array} items  hasItems or wantsItems — objects with a `name`
- * @returns {string[]}   lowercase full names plus their individual words
+ * @returns {string[]}   lowercase full names, their individual words, then
+ *                       each word's prefixes of 3+ letters
  */
 export const buildSearchTokens = (items) => {
   if (!Array.isArray(items)) return [];
@@ -58,7 +68,20 @@ export const buildSearchTokens = (items) => {
     if (tokens.size >= MAX_TOKENS) break;
   }
 
-  return Array.from(tokens).slice(0, MAX_TOKENS);
+  const base = Array.from(tokens).slice(0, MAX_TOKENS);
+
+  // Second pass: prefixes of the words already indexed, shortest first per
+  // word, so the most-typed prefixes survive the cap.
+  const all = new Set(base);
+  let added = 0;
+  for (const token of base) {
+    if (token.includes(' ')) continue;
+    for (let n = MIN_PREFIX; n < token.length && added < MAX_PREFIX_TOKENS; n++) {
+      const prefix = token.slice(0, n);
+      if (!all.has(prefix)) { all.add(prefix); added++; }
+    }
+  }
+  return Array.from(all);
 };
 
 /**

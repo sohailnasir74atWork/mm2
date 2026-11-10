@@ -33,7 +33,12 @@ import config from '../Helper/Environment';
 import { useThemeColors } from '../Helper/themeColors';
 import {
   buildItemPool, unwrapFeed, priceOf, isSummable, DEFAULT_VALUE_SOURCE, poolLookup,
+  resolveItemImage, sourceUpdatedAt, VALUE_SOURCE,
 } from '../Helper/valueSources';
+import { timeAgo } from '../Helper/timeAgo';
+import ItemDetailSheet from '../ValuesScreen/ItemDetailSheet';
+import MarketSnapshotCard from './MarketSnapshotCard';
+import { buildMarketSnapshot } from './marketSnapshot';
 import { setAppLanguage } from '../../i18n';
 import { useLanguage } from '../Translation/LanguageProvider';
 import { useNavigation, useFocusEffect, useIsFocused } from '@react-navigation/native';
@@ -201,6 +206,13 @@ const HomeTabScreen = ({ selectedTheme }) => {
   }, [findInPool, valueSource]);
 
   const portfolio = useMemo(() => owned.reduce((s, p) => s + lookupVal(p), 0), [owned, lookupVal]);
+
+  // Market card: Supreme's per-item change since its last update, from the
+  // feed already on the device (./marketSnapshot.js). Null → no card.
+  const market = useMemo(() => buildMarketSnapshot(parsedData), [parsedData]);
+  const marketAt = sourceUpdatedAt(localState?.suprimeMeta, VALUE_SOURCE.SUPREME);
+  const marketUpdated = marketAt ? t('calc.updated_ago', { time: timeAgo(marketAt, t) }) : '';
+  const [moverItem, setMoverItem] = useState(null);
 
   const submitSearch = () => {
     const q = homeQuery.trim();
@@ -444,6 +456,16 @@ const HomeTabScreen = ({ selectedTheme }) => {
           })}
         </View>
 
+        {/* ── Market ── what moved at Supreme's last update. Under the games so
+            the tools and games keep the first screen; hidden with no data. */}
+        <MarketSnapshotCard
+          snapshot={market}
+          updatedText={marketUpdated}
+          colors={C}
+          dark={dark}
+          onOpenItem={setMoverItem}
+        />
+
         {/* ── Footer ── */}
         <Text style={[$.footer, { color: C.textSecondary }]}>{t('home.made_with_love')}</Text>
 
@@ -456,6 +478,14 @@ const HomeTabScreen = ({ selectedTheme }) => {
 
       {/* ── Modals ── */}
       <DailyStarRewards visible={showDailyStars} onClose={() => setShowDailyStars(false)} db={appdatabase} uid={user?.id} isDarkMode={dark} />
+
+      <ItemDetailSheet
+        visible={!!moverItem}
+        item={moverItem}
+        imageUrl={moverItem ? resolveItemImage(moverItem) : ''}
+        isDarkMode={dark}
+        onClose={() => setMoverItem(null)}
+      />
 
       <SignInDrawer visible={signinVis} onClose={() => setSigninVis(false)} selectedTheme={selectedTheme} screen="Home" message={signinMsg} />
 

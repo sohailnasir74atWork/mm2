@@ -1,7 +1,7 @@
 import fs from 'fs';
 import {
   buildItemPool, indexSupremePrices, priceOf, poolLookup, unwrapFeed, categoryKey, VALUE_SOURCE,
-  sourceUpdatedAt,
+  sourceUpdatedAt, indexMM2Images, resolveItemImage,
 } from '../Code/Helper/valueSources';
 
 jest.mock('i18next', () => ({ t: (k) => k }));
@@ -138,4 +138,21 @@ const live = process.env.MM2_FEED && process.env.SUPREME_FEED;
     supremeOnly: pool.filter((r) => !r.inMM2).length,
     missingOnSupreme: pool.filter((r) => r.inMM2 && priceOf(r, S).missing).length,
   }));
+});
+
+test('an artless Supreme Set borrows the MM2 art of its first part that has one', () => {
+  indexMM2Images({ Chroma: { 'Tier 1': [{ name: 'Chroma Evergun', image: 'img/CEvergun.png' }] } });
+  indexSupremePrices({
+    Sets: { 'Tier 1': [{
+      name: 'Chroma Ever Set', image: '/media/N_A.webp',
+      containsParts: [{ name: 'Chroma Evergreen' }, { name: 'Chroma Evergun' }],
+    }] },
+    Uniques: { 'Tier 1': [{ name: 'Corrupt', image: '/media/N_A.webp' }] },
+  });
+  expect(resolveItemImage({ name: 'Chroma Ever Set', image: '/media/N_A.webp' }))
+    .toBe('https://mm2values.com/img/CEvergun.png');
+  // No parts, no MM2 twin: still the empty state.
+  expect(resolveItemImage({ name: 'Corrupt', image: '/media/N_A.webp' })).toBe('');
+  // A stored absolute URL still wins.
+  expect(resolveItemImage({ name: 'Chroma Ever Set', image: 'https://x.test/a.png' })).toBe('https://x.test/a.png');
 });

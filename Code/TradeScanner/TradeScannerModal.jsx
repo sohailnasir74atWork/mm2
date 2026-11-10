@@ -5,14 +5,21 @@
  * on the tiles on the device, let the user fix anything, then fill the
  * calculator (HomeScreen) with them.
  *
- * Names: the native text reader (textReader.js). Sides and Chroma / stack
- * counts: tradeMatch.js. The picture never leaves the phone.
+ * 2026-11-06, as the Blox and Adopt Me apps: the scanner (slot finder page +
+ * AI slot model) is downloaded from the CDN on first use (scannerUpdate.js;
+ * the sheet shows the version, an Update alert and the download progress).
+ * Slots: hidden WebView running matcher.js. Item per slot: the AI model
+ * (tileModel.js) with the name the native text reader (textReader.js) read
+ * on the bar; joined in tradeMatch.js. The picture stays on the phone unless
+ * the user taps Send picture (scanReportUpload.js).
  *
  * Compact bottom sheet, calculator-style review: two 3-column sides, one
  * result bar, a fix strip for the tapped item.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Image, ActivityIndicator, ScrollView, Pressable, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Image, ActivityIndicator, ScrollView, Pressable, Platform, useWindowDimensions } from 'react-native';
+import { WebView } from 'react-native-webview';
+import DeviceInfo from 'react-native-device-info';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
@@ -22,11 +29,16 @@ import { trackGrowthEvent } from '../Helper/growthAnalytics';
 import { readTextLines } from './textReader';
 import CropBox, { FULL_CROP } from './CropBox';
 import { buildTrade, normalize } from './tradeMatch';
+import { uploadScanReport } from '../Helper/scanReportUpload';
+import { activeScanner, activeScannerHtml, activeScannerVersion, fetchLatestScanner, installScanner, loadInstalledScanner, NEEDS_MODEL } from './scannerUpdate';
+import { downloadBytes, scannerState } from './scannerRelease';
+import { classifyTiles } from './tileModel';
 
-// No base64: only the native text reader looks at the picture.
-const PICK_OPTIONS = { mediaType: 'photo', maxWidth: 2400, maxHeight: 2400, quality: 0.92 };
+const SCAN_TIMEOUT_MS = 20000;
+// base64: the scanner page decodes the picture in the WebView.
+const PICK_OPTIONS = { mediaType: 'photo', includeBase64: true, maxWidth: 2400, maxHeight: 2400, quality: 0.92 };
 // The app declares no CAMERA permission, so the system camera needs none.
-const CAMERA_OPTIONS = { ...PICK_OPTIONS, maxWidth: 3000, maxHeight: 3000, saveToPhotos: false, cameraType: 'back' };
+const CAMERA_OPTIONS = { ...PICK_OPTIONS, maxWidth: 2600, maxHeight: 2600, saveToPhotos: false, cameraType: 'back' };
 
 const WIN = '#29AB87';
 const LOSE = '#FF3B30';
@@ -61,7 +73,7 @@ const scanStats = (r) => {
   };
 };
 
-export default function TradeScannerModal({ visible, onClose, onApply, records, maxPerSide, isDarkMode, imageFor, valueFor, verdictFor, formatValue }) {
+export default function TradeScannerModal({ visible, onClose, onApply, records, maxPerSide, isDarkMode, imageFor, valueFor, verdictFor, formatValue, tester }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
@@ -71,6 +83,20 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
   const [result, setResult] = useState(null); // { mine: [pick], theirs: [pick], cut }
   const [openPick, setOpenPick] = useState(null); // 'mine:0'
   const [feedback, setFeedback] = useState(null); // null | 'wrong' | 'done'
+  const web = useRef(null);
+  const ready = useRef(false);
+  const pending = useRef(null); // { id, resolve, reject, timer }
+  const queued = useRef(null);
+  // Send this scan to us: the picture + what the scan read.
+  const [report, setReport] = useState(null); // null | 'sending' | 'sent' | 'failed'
+  const lastScan = useRef(null);
+  const wrongReason = useRef(null);
+  // The scanner (page + slot model) is downloaded, not in the app:
+  // installed = what this phone has, latest = what it should have.
+  const [pageHtml, setPageHtml] = useState(null);
+  const [installed, setInstalled] = useState(() => activeScanner());
+  const [latest, setLatest] = useState(undefined); // undefined = looking
+  const [download, setDownload] = useState(null); // null | { progress } | 'failed' | { done: version }
 
   const byName = useMemo(() => {
     const map = new Map();
@@ -79,14 +105,87 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
   }, [records]);
   const catalog = useMemo(() => new Map([...byName].map(([k, r]) => [k, r.name])), [byName]);
 
+  const loadPage = useCallback(async () => {
+    const html = await activeScannerHtml();
+    if (html) { ready.current = false; setPageHtml(html); }
+  }, []);
+
+  const lookUp = useCallback((force) => {
+    setLatest(undefined);
+    fetchLatestScanner({ tester: !!tester, force }).then(setLatest);
+  }, [tester]);
+
+  useEffect(() => {
+    if (!visible) return;
+    let live = true;
+    loadInstalledScanner().then((cur) => {
+      if (!live) return;
+      setInstalled(cur);
+      if (cur) loadPage();
+    });
+    lookUp(false);
+    return () => { live = false; };
+  }, [visible, lookUp, loadPage]);
+
+  const scannerStatus = latest === undefined && !installed ? 'checking' : scannerState(installed, latest || null);
+  const downloading = !!download?.progress || download?.progress === 0;
+
+  const getScanner = useCallback(async () => {
+    if (!latest || downloading) return;
+    const from = installed?.version || 0;
+    setDownload({ progress: 0 });
+    try {
+      const cur = await installScanner(latest, (progress) => setDownload({ progress }));
+      setInstalled(cur);
+      await loadPage();
+      setDownload({ done: cur.version });
+      trackGrowthEvent('trade_scanner_download', { from, to: cur.version, ok: 1 });
+    } catch {
+      setDownload('failed');
+      trackGrowthEvent('trade_scanner_download', { from, to: latest.version, ok: 0 });
+    }
+  }, [latest, installed, downloading, loadPage]);
+
   useEffect(() => {
     if (!visible) {
       setStage('intro');
       setResult(null);
       setPicked(null);
       setOpenPick(null);
+      setReport(null);
+      if (!downloading) setDownload(null);
+      ready.current = false;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
+
+  const send = useCallback((id, dataUrl, frame) => {
+    web.current?.injectJavaScript(`window.tradeScan(${JSON.stringify(id)}, ${JSON.stringify(dataUrl)}, ${JSON.stringify(frame)}); true;`);
+  }, []);
+
+  const scanPixels = useCallback((dataUrl, frame) => new Promise((resolve, reject) => {
+    const id = String(Date.now());
+    const timer = setTimeout(() => { pending.current = null; reject(new Error('timeout')); }, SCAN_TIMEOUT_MS);
+    pending.current = { id, resolve, reject, timer };
+    if (ready.current) send(id, dataUrl, frame);
+    else queued.current = { id, dataUrl, frame };
+  }), [send]);
+
+  const onMessage = useCallback((e) => {
+    let msg;
+    try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
+    if (msg.type === 'ready') {
+      ready.current = true;
+      if (queued.current) { send(queued.current.id, queued.current.dataUrl, queued.current.frame); queued.current = null; }
+      return;
+    }
+    const p = pending.current;
+    if (!p || msg.id !== p.id) return;
+    clearTimeout(p.timer);
+    pending.current = null;
+    if (msg.type === 'result') p.resolve(msg);
+    else p.reject(new Error(msg.message || 'scan'));
+  }, [send]);
 
   // source: 'camera' | 'gallery'
   const captureAndScan = useCallback(async (source) => {
@@ -98,10 +197,12 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
     } catch {
       return;
     }
-    if (!asset?.uri) return;
+    if (!asset?.uri || !asset?.base64) return;
     // Always through the crop step: extra things around the trade window
     // are what give wrong items.
     crop.current = FULL_CROP;
+    setReport(null);
+    lastScan.current = null;
     setPicked({ asset, source });
     setOpenPick(null);
     setStage('crop');
@@ -112,28 +213,57 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
     const { asset, source } = picked;
     const frame = crop.current;
     setStage('working');
-    const text = await readTextLines(asset.uri, frame);
-    const trade = buildTrade({ lines: text.lines, width: text.width || (asset.width || 1000) * frame.w, catalog });
-    const all = [...trade.mine, ...trade.theirs];
-    trackGrowthEvent('trade_scan', {
-      source,
-      window: trade.foundWindow ? 1 : 0,
-      found: all.length,
-      unsure: all.filter((p) => !p.sure).length,
-      text_reader: text.ok ? 1 : 0,
-      crop_area: Math.round(frame.w * frame.h * 100),
-    });
-    if (!all.length) { setStage('none'); return; }
-    setResult({
-      mine: withScan(trade.mine.slice(0, maxPerSide)),
-      theirs: withScan(trade.theirs.slice(0, maxPerSide)),
-      found: Math.min(trade.mine.length, maxPerSide) + Math.min(trade.theirs.length, maxPerSide),
-      source,
-      cut: trade.mine.length > maxPerSide || trade.theirs.length > maxPerSide,
-    });
-    setFeedback(null);
-    setStage('review');
-  }, [picked, catalog, maxPerSide]);
+    try {
+      const dataUrl = `data:${asset.type || 'image/jpeg'};base64,${asset.base64}`;
+      const [pixels, text] = await Promise.all([scanPixels(dataUrl, frame), readTextLines(asset.uri, frame)]);
+      // The trained slot model names each slot picture; without it (an
+      // older iOS build, any model error) the bar text alone names them.
+      const named = await classifyTiles(asset.uri, frame, pixels.slots);
+      const slots = named ? pixels.slots.map((sl, i) => ({ ...sl, candidates: named[i], model: true })) : pixels.slots;
+      const trade = buildTrade({ slots, lines: text.lines, width: pixels.width || text.width, catalog });
+      const all = [...trade.mine, ...trade.theirs];
+      lastScan.current = {
+        frame,
+        width: pixels.width,
+        height: pixels.height,
+        scannerVersion: activeScannerVersion(),
+        textReader: text.ok ? 1 : 0,
+        lines: (text.lines || []).slice(0, 80).map((l) => [l.text, Math.round(l.x), Math.round(l.y), Math.round(l.w), Math.round(l.h)]),
+        model: named ? 1 : 0,
+        slots: slots.map((sl) => ({
+          box: [sl.x0, sl.top, sl.x1, sl.nameTop, sl.nameBottom].map(Math.round),
+          top: (sl.candidates || []).slice(0, 3).map((c) => [c.name, Math.round(c.d * 1000) / 1000]),
+        })),
+      };
+      wrongReason.current = null;
+      trackGrowthEvent('trade_scan', {
+        source,
+        window: trade.foundWindow ? 1 : 0,
+        slots: pixels.slots.length,
+        found: all.length,
+        unsure: all.filter((p) => !p.sure).length,
+        text_reader: text.ok ? 1 : 0,
+        scanner_v: activeScannerVersion(),
+        model: named ? 1 : 0,
+        crop_area: Math.round(frame.w * frame.h * 100),
+      });
+      if (!all.length) { setStage('none'); return; }
+      setResult({
+        mine: withScan(trade.mine.slice(0, maxPerSide)),
+        theirs: withScan(trade.theirs.slice(0, maxPerSide)),
+        found: Math.min(trade.mine.length, maxPerSide) + Math.min(trade.theirs.length, maxPerSide),
+        source,
+        skippedInventory: trade.skippedInventory || 0,
+        cut: trade.mine.length > maxPerSide || trade.theirs.length > maxPerSide,
+      });
+      setFeedback(null);
+      setStage('review');
+    } catch (err) {
+      trackGrowthEvent('trade_scan', { source, window: 0, slots: -1, found: 0, unsure: 0, text_reader: 0 });
+      lastScan.current = { frame, error: String(err?.message || err).slice(0, 200) };
+      setStage('none');
+    }
+  }, [picked, scanPixels, catalog, maxPerSide]);
 
   const recordOf = useCallback((p) => byName.get(normalize(p.name)), [byName]);
   const pickValue = useCallback((p) => {
@@ -193,7 +323,32 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
 
   const voteReason = (reason) => {
     trackGrowthEvent('trade_scan_wrong_reason', { reason, ...scanStats(result) });
+    wrongReason.current = reason;
     setFeedback('done');
+  };
+
+  const sendReport = async () => {
+    if (!picked?.asset?.uri || report === 'sending' || report === 'sent') return;
+    setReport('sending');
+    const strip = (list) => (list || []).map((p) => ({ name: p.name, sure: !!p.sure, scanned: p.scanned }));
+    try {
+      await uploadScanReport(picked.asset.uri, {
+        v: 1,
+        app: `${DeviceInfo.getVersion()} (${DeviceInfo.getBuildNumber()})`,
+        at: new Date().toISOString(),
+        platform: Platform.OS,
+        source: picked.source,
+        stage,
+        reason: wrongReason.current,
+        image: { width: picked.asset.width, height: picked.asset.height },
+        scan: lastScan.current,
+        result: result ? { mine: strip(result.mine), theirs: strip(result.theirs), swapped: !!result.swapped } : null,
+      });
+      trackGrowthEvent('trade_scan_report', { stage, reason: wrongReason.current || '' });
+      setReport('sent');
+    } catch {
+      setReport('failed');
+    }
   };
 
   const apply = () => {
@@ -225,6 +380,140 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
       </TouchableOpacity>
     </View>
   );
+
+  const reportBox = () => (
+    <View style={[styles.reportBox, { backgroundColor: card }]}>
+      {report === 'sent' ? (
+        <Text style={[styles.feedbackText, { color: WIN }]}>{t('trade_scanner.report_sent', { defaultValue: 'Sent. Thank you, we will use it to fix the scanner.' })}</Text>
+      ) : (
+        <>
+          <Text style={[styles.note, styles.reportNote, { color: sub }]}>
+            {t('trade_scanner.report_note', { defaultValue: 'Send us this picture and what the scan read, so we can fix it. Only send pictures without private info.' })}
+          </Text>
+          <TouchableOpacity style={[styles.vote, { borderColor: accent }]} onPress={sendReport} disabled={report === 'sending'} hitSlop={6}>
+            {report === 'sending'
+              ? <ActivityIndicator size="small" color={accent} />
+              : <Icon name="paper-plane-outline" size={14} color={accent} />}
+            <Text style={[styles.voteText, { color: accent }]}>
+              {report === 'failed'
+                ? t('trade_scanner.report_retry', { defaultValue: 'Try again' })
+                : t('trade_scanner.report_send', { defaultValue: 'Send picture' })}
+            </Text>
+          </TouchableOpacity>
+        </>
+      )}
+    </View>
+  );
+
+  // Scanner download / update: one card under the testing bar.
+  const trackBg = isDarkMode ? '#334155' : '#e2e8f0';
+  const mb = (bytes) => Math.max(0.1, bytes / 1e6).toFixed(1);
+  const scannerBar = () => {
+    if (downloading) {
+      const pct = Math.round(download.progress * 100);
+      return (
+        <View style={[styles.scanBox, { backgroundColor: card }]}>
+          <View style={styles.scanRow}>
+            <ActivityIndicator size="small" color={accent} />
+            <Text style={[styles.scanTitle, { color: fg }]}>
+              {t('trade_scanner.downloading', { defaultValue: 'Downloading scanner v{{v}}… {{pct}}%', v: latest?.version, pct })}
+            </Text>
+          </View>
+          <View style={[styles.track, { backgroundColor: trackBg }]}>
+            <View style={[styles.fill, { width: `${pct}%`, backgroundColor: accent }]} />
+          </View>
+        </View>
+      );
+    }
+    if (scannerStatus === 'checking') {
+      return (
+        <View style={[styles.scanBox, styles.scanRow, { backgroundColor: card }]}>
+          <ActivityIndicator size="small" color={accent} />
+          <Text style={[styles.scanText, { color: sub }]}>{t('trade_scanner.checking', { defaultValue: 'Checking for the scanner…' })}</Text>
+        </View>
+      );
+    }
+    const failed = download === 'failed' && (
+      <Text style={[styles.scanText, { color: LOSE }]}>{t('trade_scanner.download_failed', { defaultValue: 'Download failed. Check your internet and try again.' })}</Text>
+    );
+    if (scannerStatus === 'missing') {
+      const size = mb(downloadBytes(latest, NEEDS_MODEL, null));
+      return (
+        <View style={[styles.scanBox, { backgroundColor: card }]}>
+          <View style={styles.scanRow}>
+            <Icon name="cloud-download-outline" size={26} color={accent} />
+            <View style={styles.grow}>
+              <Text style={[styles.scanTitle, { color: fg }]}>{t('trade_scanner.ai_missing_title', { defaultValue: 'Scanner AI not downloaded' })}</Text>
+              <Text style={[styles.scanText, { color: sub }]}>
+                {t('trade_scanner.ai_missing_text', { defaultValue: 'Download it once (about {{mb}} MB) to read trades on your phone.', mb: size })}
+              </Text>
+            </View>
+          </View>
+          {failed}
+          <TouchableOpacity style={[styles.btn, styles.scanBtn, { backgroundColor: accent }]} onPress={getScanner} activeOpacity={0.8}>
+            <Icon name="download" size={17} color="#fff" />
+            <Text style={styles.btnText}>{t('trade_scanner.download', { defaultValue: 'Download' })} · {size} MB</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    if (scannerStatus === 'unavailable') {
+      return (
+        <View style={[styles.scanBox, { backgroundColor: card }]}>
+          <View style={styles.scanRow}>
+            <Icon name="cloud-offline-outline" size={26} color={FAIR} />
+            <Text style={[styles.scanText, styles.grow, { color: fg }]}>
+              {t('trade_scanner.unavailable', { defaultValue: 'The scanner can\'t be downloaded right now. Check your internet and try again.' })}
+            </Text>
+          </View>
+          <TouchableOpacity style={[styles.btn, styles.scanBtn, styles.outline, { borderColor: accent }]} onPress={() => lookUp(true)} activeOpacity={0.8}>
+            <Icon name="refresh" size={17} color={accent} />
+            <Text style={[styles.btnText, { color: accent }]}>{t('trade_scanner.retry', { defaultValue: 'Try again' })}</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    if (scannerStatus === 'old') {
+      return (
+        <View style={[styles.scanBox, styles.oldBox, { borderColor: LOSE }]}>
+          <View style={styles.scanRow}>
+            <Icon name="alert-circle" size={24} color={LOSE} />
+            <View style={styles.grow}>
+              <Text style={[styles.scanTitle, { color: LOSE }]}>
+                {t('trade_scanner.update_title', { defaultValue: 'You are on an older scanner (v{{cur}})', cur: installed.version })}
+              </Text>
+              <Text style={[styles.scanText, { color: fg }]}>
+                {t('trade_scanner.update_text', { defaultValue: 'Version {{v}} is available and reads trades more accurately. Update to get the fixes.', v: latest.version })}
+              </Text>
+            </View>
+          </View>
+          {failed}
+          <TouchableOpacity style={[styles.btn, styles.scanBtn, { backgroundColor: LOSE }]} onPress={getScanner} activeOpacity={0.8}>
+            <Icon name="arrow-up-circle" size={17} color="#fff" />
+            <Text style={styles.btnText}>{t('trade_scanner.update', { defaultValue: 'Update' })} · {mb(downloadBytes(latest, NEEDS_MODEL, installed.files))} MB</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    if (scannerStatus === 'installed') {
+      return (
+        <View style={[styles.scanBox, styles.scanRow, { backgroundColor: card }]}>
+          <Icon name="scan-circle-outline" size={20} color={sub} />
+          <Text style={[styles.scanTitle, { color: fg }]}>{t('trade_scanner.version', { defaultValue: 'Scanner v{{v}}', v: installed.version })}</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={[styles.scanBox, styles.scanRow, styles.okBox]}>
+        <Icon name="checkmark-circle" size={20} color={WIN} />
+        <Text style={[styles.scanTitle, { color: WIN }]}>
+          {download?.done
+            ? t('trade_scanner.updated', { defaultValue: 'Updated to scanner v{{v}}', v: installed.version })
+            : t('trade_scanner.up_to_date', { defaultValue: 'Scanner v{{v}} · up to date', v: installed.version })}
+        </Text>
+      </View>
+    );
+  };
 
   const renderTile = (side, i) => {
     const p = result[side][i];
@@ -275,6 +564,11 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
         <View style={styles.header}>
           <Icon name="scan" size={18} color={accent} />
           <Text style={[styles.title, { color: fg }]}>{t('trade_scanner.title', { defaultValue: 'Scan a trade' })}</Text>
+          {installed && (
+            <View style={[styles.verPill, { backgroundColor: scannerStatus === 'old' ? LOSE : scannerStatus === 'current' ? WIN : sub }]}>
+              <Text style={styles.verPillText}>v{installed.version}</Text>
+            </View>
+          )}
           {stage === 'review' && result && (
             <TouchableOpacity onPress={swapSides} style={[styles.swap, { borderColor: accent }]} hitSlop={8}>
               <Icon name="swap-horizontal" size={14} color={accent} />
@@ -293,8 +587,28 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
           </Text>
         </View>
 
+        {visible && !!pageHtml && (
+          <WebView
+            ref={web}
+            // The library wraps the WebView in a flex:1 View; hide that too or
+            // it takes half the sheet.
+            containerStyle={styles.hiddenWeb}
+            style={styles.hiddenWebInner}
+            source={{ html: pageHtml }}
+            originWhitelist={['*']}
+            onMessage={onMessage}
+            javaScriptEnabled
+            domStorageEnabled={false}
+            allowFileAccess={false}
+            setSupportMultipleWindows={false}
+            onShouldStartLoadWithRequest={(req) => req.url === 'about:blank' || req.url.startsWith('data:')}
+            webviewDebuggingEnabled={__DEV__}
+          />
+        )}
+
         {(stage === 'intro' || stage === 'none') && (
           <View>
+            {scannerBar()}
             <View style={[styles.infoRow, { backgroundColor: card }]}>
               <Icon name={stage === 'none' ? 'help-circle' : 'desktop-outline'} size={26} color={stage === 'none' ? FAIR : accent} />
               <Text style={[styles.infoText, { color: fg }]}>
@@ -304,8 +618,9 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
               </Text>
             </View>
             <Text style={[styles.note, { color: sub }]}>{t('trade_scanner.camera_tip', { defaultValue: 'Hold steady, fill the photo with the trade window, avoid glare.' })}</Text>
-            {sourceButtons(t('trade_scanner.camera', { defaultValue: 'Camera' }), t('trade_scanner.pick', { defaultValue: 'Screenshot' }))}
-            <Text style={[styles.note, styles.center, { color: sub }]}>{t('trade_scanner.privacy', { defaultValue: 'Photos are read on your phone and never uploaded.' })}</Text>
+            {stage === 'none' && picked && reportBox()}
+            {installed && !downloading && sourceButtons(t('trade_scanner.camera', { defaultValue: 'Camera' }), t('trade_scanner.pick', { defaultValue: 'Screenshot' }))}
+            <Text style={[styles.note, styles.center, { color: sub }]}>{t('trade_scanner.privacy_send', { defaultValue: 'Photos are read on your phone. Nothing is uploaded unless you tap Send picture.' })}</Text>
           </View>
         )}
 
@@ -412,9 +727,14 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
               )}
             </View>
 
-            {(result.cut || !openItem) && (
+            {/* Send picture shows with the result, not only after "No"; gone after "Yes". */}
+            {!(feedback === 'done' && !wrongReason.current) && reportBox()}
+
+            {(result.skippedInventory > 0 || result.cut || !openItem) && (
               <Text style={[styles.note, { color: sub }]} numberOfLines={2}>
-                {result.cut
+                {result.skippedInventory > 0
+                  ? t('trade_scanner.inventory_skipped', { defaultValue: 'Items in your inventory list beside the trade were skipped.' })
+                  : result.cut
                   ? t('trade_scanner.max_side', { defaultValue: 'Only the first {{max}} items per side fit in the calculator.', max: maxPerSide })
                   : t('trade_scanner.review_tip', { defaultValue: 'YOUR OFFER = you give. Tap an item to fix it.' })}
               </Text>
@@ -489,4 +809,19 @@ const styles = StyleSheet.create({
   resultVerdict: { color: '#fff', fontSize: 17, fontWeight: '900', marginLeft: 8 },
   footer: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 10 },
   iconBtn: { width: 46, height: 46, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  hiddenWeb: { position: 'absolute', width: 1, height: 1, opacity: 0, left: -10, top: -10, flex: 0 },
+  hiddenWebInner: { width: 1, height: 1 },
+  reportBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, padding: 10, marginTop: 8 },
+  reportNote: { flex: 1, marginTop: 0 },
+  verPill: { borderRadius: 9, paddingHorizontal: 7, paddingVertical: 2 },
+  verPillText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  scanBox: { borderRadius: 12, padding: 10, marginBottom: 8, gap: 8 },
+  scanRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  scanTitle: { flexShrink: 1, fontSize: 13, lineHeight: 18, fontWeight: '800' },
+  scanText: { flexShrink: 1, fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  scanBtn: { paddingVertical: 10 },
+  oldBox: { backgroundColor: 'rgba(255,59,48,0.10)', borderWidth: 1.5 },
+  okBox: { backgroundColor: 'rgba(41,171,135,0.12)', paddingVertical: 7 },
+  track: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  fill: { height: 8, borderRadius: 4 },
 });

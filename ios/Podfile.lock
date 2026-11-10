@@ -3792,6 +3792,12 @@ PODS:
     - Yoga
   - SocketRocket (0.7.1):
     - ReactNativeDependencies
+  - TensorFlowLiteC (2.17.0):
+    - TensorFlowLiteC/Core (= 2.17.0)
+  - TensorFlowLiteC/Core (2.17.0)
+  - trade-ocr (1.0.0):
+    - React-Core
+    - TensorFlowLiteC (= 2.17.0)
   - Yoga (0.0.0):
     - React-Core-prebuilt
 
@@ -3914,6 +3920,7 @@ DEPENDENCIES:
   - RNSVG (from `../node_modules/react-native-svg`)
   - RNVectorIcons (from `../node_modules/react-native-vector-icons`)
   - SocketRocket (from `build/rndeps-facades/SocketRocket`)
+  - trade-ocr (from `../modules/trade-ocr`)
   - Yoga (from `build/rncore-facades/Yoga`)
 
 SPEC REPOS:
@@ -3957,6 +3964,7 @@ SPEC REPOS:
     - PurchasesHybridCommon
     - RecaptchaInterop
     - RevenueCat
+    - TensorFlowLiteC
 
 EXTERNAL SOURCES:
   boost:
@@ -4194,6 +4202,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-vector-icons"
   SocketRocket:
     :path: build/rndeps-facades/SocketRocket
+  trade-ocr:
+    :path: "../modules/trade-ocr"
   Yoga:
     :path: build/rncore-facades/Yoga
 
@@ -4354,6 +4364,8 @@ SPEC CHECKSUMS:
   RNSVG: b19f47fb2c2bb2917be6481a3e328230586101cb
   RNVectorIcons: a8adc1094f64bfebd3e279596c44620f2e1c8a40
   SocketRocket: d57b1af80c029e12a75cd9b218287c67381e4593
+  TensorFlowLiteC: eac6d689a8d391d1b202dc59e3d9165ba64aaf73
+  trade-ocr: 0152cc00c1835f2b3dbc62980132e67bf034fc1b
   Yoga: 58b502c52b14ad3c4468805d461fc37d275c2a42
 
 PODFILE CHECKSUM: 6329ba5c4bddb0cc4c712c1756e2f43de35a184a

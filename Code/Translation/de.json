@@ -2439,6 +2439,7 @@
   },
   "trade_scanner": {
     "button": "Trade mit der Kamera scannen",
+    "scan_count": "{{n}} Scans",
     "new": "NEU",
     "title": "Trade scannen",
     "intro": "Richte die Kamera auf das Trade-Fenster auf deinem PC oder wähle einen Screenshot. Wir lesen jedes Item in beiden Angeboten und prüfen den Trade.",
@@ -2447,7 +2448,7 @@
     "camera": "Kamera",
     "camera_tip": "Ruhig halten, Trade-Fenster bildfüllend, Spiegelungen vermeiden.",
     "working": "Dein Trade wird gelesen…",
-    "none": "Kein Trade-Fenster gefunden. Nimm das ganze Fenster mit YOUR OFFER und THEIR OFFER ins Bild und versuch es noch einmal.",
+    "none": "Kein Trade-Fenster gefunden. Nimm das ganze Fenster mit YOUR OFFER und THEIR OFFER ins Bild und versuch es noch einmal. Nutze ein Bild des Handelsfensters im Spiel, keinen Screenshot eines Rechners oder Inventars.",
     "you_give": "Du gibst",
     "you_get": "Du bekommst",
     "swap": "Seiten tauschen",

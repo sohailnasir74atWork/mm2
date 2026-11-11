@@ -2355,6 +2355,7 @@
   },
   "trade_scanner": {
     "button": "Escanear troca com a câmera",
+    "scan_count": "{{n}} scans",
     "new": "NOVO",
     "title": "Escanear troca",
     "intro": "Aponte a câmera para a janela de troca no seu PC ou escolha uma captura. Lemos cada item das duas ofertas e avaliamos a troca.",
@@ -2363,7 +2364,7 @@
     "camera": "Câmera",
     "camera_tip": "Segure firme, preencha a foto com a janela e evite reflexos.",
     "working": "Lendo sua troca…",
-    "none": "Nenhuma janela de troca encontrada. Enquadre a janela inteira, com YOUR OFFER e THEIR OFFER, e tente de novo.",
+    "none": "Nenhuma janela de troca encontrada. Enquadre a janela inteira, com YOUR OFFER e THEIR OFFER, e tente de novo. Use uma imagem da janela de troca do jogo, não uma captura de calculadora ou do inventário.",
     "you_give": "Você dá",
     "you_get": "Você recebe",
     "swap": "Trocar lados",

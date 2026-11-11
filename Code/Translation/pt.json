@@ -706,6 +706,10 @@
     "translate_tip_tap": "Dica: toque em qualquer mensagem para traduzi-la."
   },
   "first": {
+    "values_title": "Saiba quanto vale cada item",
+    "values_sub": "Valores reais de facas, armas e pets.",
+    "trade_title": "Publique trocas, encontre combinações",
+    "trade_sub": "Entre para trocar e conversar com outros jogadores.",
     "welcome_title": "Bem-vindo ao Fruit Values",
     "welcome_text": "Acompanhe os valores das frutas e otimize suas negociações.",
     "signin_or_guest": "Entrar ou Continuar como Convidado",
@@ -855,6 +859,13 @@
     "remove_selected_title_other": "Remover {{count}} itens?"
   },
   "paywall": {
+    "boost_caption": "O Pro coloca suas trocas no topo do feed.",
+    "trial_title": "Teste o Pro grátis por {{trial}}",
+    "sample_name": "Alex",
+    "on_top": "No topo",
+    "short_noads": "Sem anúncios",
+    "short_boost": "2 impulsos por dia",
+    "short_badge": "Selo dourado",
     "cta_trial": "Começar teste grátis",
     "exit_badge": "OFERTA ÚNICA",
     "exit_title": "Espera! {{percent}}% de desconto, só desta vez",

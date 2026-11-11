@@ -721,6 +721,10 @@
     "translate_tip_tap": "Consejo: toca cualquier mensaje para traducirlo."
   },
   "first": {
+    "values_title": "Descubre cuánto vale cada objeto",
+    "values_sub": "Valores reales de cuchillos, armas y mascotas.",
+    "trade_title": "Publica intercambios y encuentra coincidencias",
+    "trade_sub": "Inicia sesión para intercambiar y chatear.",
     "try_values": "Prueba la calculadora de valores",
     "utility_note": "Compara el valor de los objetos y revisa tus tradeos. Esta app es de apoyo y no te da objetos dentro del juego.",
     "welcome_title": "Bienvenido a Fruit Values",
@@ -1616,6 +1620,13 @@
     "btnBackToLevels": "Volver a los niveles 🗺️"
   },
   "paywall": {
+    "boost_caption": "Pro pone tus intercambios arriba del todo.",
+    "trial_title": "Prueba Pro gratis durante {{trial}}",
+    "sample_name": "Alex",
+    "on_top": "Arriba del todo",
+    "short_noads": "Sin anuncios",
+    "short_boost": "2 impulsos al día",
+    "short_badge": "Insignia dorada",
     "cta_trial": "Empezar prueba gratis",
     "exit_badge": "OFERTA ÚNICA",
     "exit_title": "¡Espera! {{percent}}% de descuento, solo esta vez",

@@ -1,55 +1,53 @@
-import {trackGrowthEvent} from '../Helper/growthAnalytics';
-import React, { useEffect, useRef, useState } from 'react';
+// OnBoardingScreen.js — the three first-run steps (MM2).
+//
+//   1. what the app does   three items and what they are worth
+//   2. your trade          a trade feed, yours third in the list; sign in
+//   3. the offer           OfferWall: the same trade on top, with Pro
+//
+// One story and one skeleton (onboardingKit.js): progress bar, title, one
+// picture, one button. Step 2 shows the trade where it sits today; step 3
+// shows the same trade on top — the only thing that changed is Pro. Owner
+// approved the flow from a mock-up on 2026-11-10.
+import { trackGrowthEvent } from '../Helper/growthAnalytics';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Dimensions,
-  StatusBar,
-  Image,
-  Modal,
+  View, Text, StyleSheet, TouchableOpacity, StatusBar, Image,
+  Animated, Easing, Platform, useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets, initialWindowMetrics } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useTranslation } from 'react-i18next';
 import { useGlobalState } from '../GlobelStats';
+import { useLocalState } from '../LocalGlobelStats';
 import SignInDrawer from '../Firebase/SigninDrawer';
 import SubscriptionScreen from '../SettingScreen/OfferWall';
 import config from '../Helper/Environment';
-import { useTranslation } from 'react-i18next';
-import {  GestureHandlerRootView } from 'react-native-gesture-handler';
-import Ionicons from 'react-native-vector-icons/Ionicons';
-import { useLocalState } from '../LocalGlobelStats';
+import {
+  unitFor, isCompact, FONT_CAP, MAX_COLUMN, kitColors,
+  ProgressBar, TradeCard, ValueRow,
+  VALUE_ROW_ITEMS, MY_TRADE_ITEMS, OTHER_TRADES, liveSampleValues,
+} from './onboardingKit';
 
-const { width } = Dimensions.get('window');
-
-const icon = config.isNoman ? require('../../assets//MM2logo.webp') : require('../../assets/MM2logo.webp');
-
+const LOGO = require('../../assets/MM2logo.webp');
+const STEPS = 3;
 
 const OnboardingScreen = ({ onFinish, selectedTheme }) => {
   const [screenIndex, setScreenIndex] = useState(0);
   const [openSignin, setOpenSignin] = useState(false);
   const { theme, user, single_offer_wall } = useGlobalState();
-  const isDarkMode = theme === 'dark' || selectedTheme === 'dark';
+  const { localState } = useLocalState();
   const { t } = useTranslation();
-  const [languageModalVisible, setLanguageModalVisible] = useState(false);
-  // const platform = Platform.OS.toLowerCase();
-  const { updateLocalState, localState } = useLocalState();
-  
+  const isDarkMode = theme === 'dark' || selectedTheme === 'dark';
 
-
-  // const languageOptions = [
-  //   { code: "en", label: t("settings.languages.en"), flag: "🇺🇸" },
-  //   { code: "fil", label: t("settings.languages.fil"), flag: "🇵🇭" },
-  //   { code: "vi", label: t("settings.languages.vi"), flag: "🇻🇳" },
-  //   { code: "pt", label: t("settings.languages.pt"), flag: "🇵🇹" },
-  //   { code: "id", label: t("settings.languages.id"), flag: "🇮🇩" },
-  //   { code: "es", label: t("settings.languages.es"), flag: "🇪🇸" },
-  //   { code: "fr", label: t("settings.languages.fr"), flag: "🇫🇷" },
-  //   { code: "de", label: t("settings.languages.de"), flag: "🇩🇪" },
-  //   { code: "ru", label: t("settings.languages.ru"), flag: "🇷🇺" },
-  //   { code: "ar", label: t("settings.languages.ar"), flag: "🇸🇦" }
-
-  // ];
-
+  // App.js nests a SafeAreaProvider inside its padded root view, so on iOS the
+  // context insets read 0 here; the window's own insets are the real ones.
+  const contextInsets = useSafeAreaInsets();
+  const insets = (Platform.OS === 'ios' && initialWindowMetrics?.insets) || contextInsets;
+  const { width: winW, height: winH } = useWindowDimensions();
+  const u = unitFor(winW);
+  const compact = isCompact(winH);
+  const C = kitColors(isDarkMode);
+  const s = useMemo(() => makeStyles(u, compact, C), [u, compact, isDarkMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNext = () => {
     if (screenIndex === 0) {
@@ -65,16 +63,15 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
   // decision 2026-09-27: the first-run offer is the most important one).
   // SubscriptionScreen calls onFinish when the paywall closes.
   const handleGuest = () => {
-    trackGrowthEvent("onboarding_guest_continue");
+    trackGrowthEvent('onboarding_guest_continue');
     setScreenIndex(2);
   };
-  
+
   // SignInDrawer calls onClose for BOTH a successful sign-in and a plain
   // dismiss (overlay tap / back button); both go on to the offer wall (owner
-  // decision 2026-09-27). It used to switch immediately, so RevenueCat's
-  // native paywall presented while the sheet was still sliding out and the
-  // two flipped over each other. Wait for the close animation first; the ref
-  // stops a double onClose from scheduling it twice.
+  // decision 2026-09-27). Wait for the sheet's close animation first, or the
+  // wall presents while the sheet is still sliding out and the two flip over
+  // each other; the ref stops a double onClose from scheduling it twice.
   const offerScheduled = useRef(false);
   const handleLoginSuccess = () => {
     setOpenSignin(false);
@@ -83,287 +80,183 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
     setTimeout(() => setScreenIndex(2), 450);
   };
 
-  // const createSlideAnimation = (direction) => {
-  //   const animatedValue = new Animated.Value(0);
-  //   Animated.loop(
-  //     Animated.sequence([
-  //       Animated.timing(animatedValue, {
-  //         toValue: direction * -width * images.length,
-  //         duration: 80000,
-  //         useNativeDriver: true
-  //       }),
-  //       Animated.timing(animatedValue, {
-  //         toValue: 0,
-  //         duration: 0,
-  //         useNativeDriver: true
-  //       })
-  //     ])
-  //   ).start();
-  //   return animatedValue;
-  // };
-
-  // const translateX1 = createSlideAnimation(1);
-  // const translateX2 = createSlideAnimation(-1);
-  // const translateX3 = createSlideAnimation(1);
-
-  // const renderSlider = (translateX, imageSubset = []) => (
-  //   <Animated.View style={{ flexDirection: 'row', transform: [{ translateX }] }}>
-  //     {(imageSubset.length > 0 ? [...imageSubset, ...imageSubset, ...imageSubset, ...imageSubset, ...imageSubset, ...imageSubset, ...imageSubset, ...imageSubset] : []).map((img, index) => (
-  //       <Image key={index} source={img} style={styles.image} />
-  //     ))}
-  //   </Animated.View>
-  // );
-
-  // const firstSliderImages = images.slice(0, 6);  // First 6 images
-  // const secondSliderImages = images.slice(6, 12); // Next 6 images
-  // const thirdSliderImages = images.slice(12, 18); // Remaining images (ensure at least 6)
-
-
-
-
-  const renderScreen = () => {
-    switch (screenIndex) {
-      case 0:
-        return (
-          <View style={styles.slide}>
-            <Image resizeMethod="resize" source={icon} style={styles.iconmain} />
-            {/* <View>
-              <View style={styles.sliderContainer}>{renderSlider(translateX1, firstSliderImages)}</View>
-              <View style={styles.sliderContainer}>{renderSlider(translateX2, secondSliderImages)}</View>
-              <View style={styles.sliderContainer}>{renderSlider(translateX3, thirdSliderImages)}</View></View> */}
-            <View>
-              {/* <View style={styles.spacer}></View> */}
-              <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>{t('first.welcome_to')}</Text>
-              <Text style={[styles.text, { color: isDarkMode ? '#ccc' : '#666' }]}>{t('first.track_pets')}</Text>
-              <Text style={[styles.text, {color: isDarkMode ? '#ccc' : '#666'}]}>
-                {t('first.utility_note')}
-              </Text>
-              <TouchableOpacity accessibilityRole="button" onPress={handleGuest} style={{padding: 14}}>
-                <Text style={{color: isDarkMode ? '#93c5fd' : '#1d4ed8', textAlign: 'center', fontWeight: '700'}}>
-                  {t('first.try_values')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        );
-      case 1:
-        return (
-          <View style={styles.slide}>
-            <Image resizeMethod="resize" source={icon} style={styles.iconmain} />
-            {/* <View>
-              <View style={styles.sliderContainer}>{renderSlider(translateX1, firstSliderImages)}</View>
-              <View style={styles.sliderContainer}>{renderSlider(translateX2, secondSliderImages)}</View>
-              <View style={styles.sliderContainer}>{renderSlider(translateX3, thirdSliderImages)}</View>
-              </View> */}
-            {/* <View style={styles.spacer}></View> */}
-            <View>
-              {!user.id && <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>{t("first.signin_or_guest")}</Text>}
-              {user?.id && (
-                <Text style={[styles.title, { color: isDarkMode ? '#fff' : '#000' }]}>
-                  {`${t('first.welcome_user')} ${user?.displayName || 'Anonymous'}`}
-
-                </Text>
-              )}
-
-              <Text style={[styles.text, { color: isDarkMode ? '#ccc' : '#666' }]}>{t("first.get_notified_text")}</Text></View>
-          </View>
-
-        );
-        case 2:
-          // if (Platform.OS === 'ios') {
-          //   useEffect(() => {
-          //     onFinish();
-          //   }, []);
-          //   return null;
-          // }
-          return <SubscriptionScreen visible={true} onClose={onFinish} track="On Boarding" oneWallOnly={single_offer_wall} showoffer={!single_offer_wall}/>;
-      default:
-        return null;
-    }
+  // ── Each step slides in from the side it comes from ──
+  const enter = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    enter.setValue(0);
+    Animated.timing(enter, { toValue: 1, duration: 360, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [screenIndex, enter]);
+  const slide = {
+    opacity: enter,
+    transform: [{ translateX: enter.interpolate({ inputRange: [0, 1], outputRange: [28, 0] }) }],
   };
 
+  // The trade the story follows: yours when signed in, a sample trader's when not.
+  const myName = (user?.id && user?.displayName) ? user.displayName : t('paywall.sample_name');
+  const myAvatar = user?.id ? (user?.avatar || null) : null;
+  const values = useMemo(() => liveSampleValues(localState), [localState?.data, localState?.suprime]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (screenIndex === 2) {
+    return (
+      <SubscriptionScreen
+        visible
+        onClose={onFinish}
+        track="On Boarding"
+        progress={{ step: 3, total: STEPS }}
+        oneWallOnly={single_offer_wall}
+        showoffer={!single_offer_wall}
+      />
+    );
+  }
+
+  const first = screenIndex === 0;
+  const signedIn = !!user?.id;
+
   return (
-    <GestureHandlerRootView style={{ paddingBottom: 50, flex: 1 }}>
-      <View style={[styles.container, { backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f2f2f7',  }]}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View style={[s.container, { backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f2f2f7' }]}>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-        {renderScreen()}
-        
 
-        {screenIndex !== 2 && <View style={styles.bottomContainer}>
-        {/* {screenIndex === 0 && (
-  
-  <TouchableOpacity
-      style={!localState.isGG ? styles.buttonOutline : styles.buttonOutline}
-      onPress={() => updateLocalState('isGG', false)}
-    >
-      <Text style={!localState.isGG ? styles.buttonTextOutline : styles.buttonTextOutline}>
-      ELVEBREDD VALUES
-      </Text>
-    </TouchableOpacity>
+        <View style={[s.page, { paddingTop: insets.top + s.pagePad.top, paddingBottom: Math.max(insets.bottom, 10) + s.pagePad.bottom }]}>
+          <ProgressBar step={screenIndex + 1} total={STEPS} u={u} isDark={isDarkMode} />
 
+          <Animated.View style={[s.body, slide]}>
+            <View style={s.head}>
+              <Image resizeMethod="resize" source={LOGO} style={s.logo} resizeMode="contain" />
+              <Text style={s.title} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={FONT_CAP}>
+                {first ? t('first.values_title') : t('first.trade_title')}
+              </Text>
+              <Text style={s.sub} numberOfLines={2} maxFontSizeMultiplier={FONT_CAP}>
+                {first
+                  ? t('first.values_sub')
+                  : (signedIn ? `${t('first.welcome_user')} ${user?.displayName || ''}`.trim() : t('first.trade_sub'))}
+              </Text>
+            </View>
 
-)} */}
- {/* {screenIndex === 0 && (
-  
-  <TouchableOpacity
-      style={localState.isGG ? styles.button : styles.buttonOutline}
-      onPress={() => updateLocalState('isGG', true)}
-    >
-      <Text style={localState.isGG ? styles.buttonText : styles.buttonTextOutline}>
-        GG VALUES
-      </Text>
-    </TouchableOpacity>
-)} */}
+            {first ? (
+              <View style={s.art}>
+                {VALUE_ROW_ITEMS.map((item) => (
+                  <ValueRow key={item.name} u={u} isDark={isDarkMode} item={item} value={values[item.name] || item.snapshot} />
+                ))}
+              </View>
+            ) : (
+              <View style={s.art}>
+                {OTHER_TRADES.map((tr) => (
+                  <TradeCard key={tr.name} u={u} isDark={isDarkMode} compact={compact} dense variant="other" name={tr.name} items={tr.items} />
+                ))}
+                <TradeCard
+                  u={u}
+                  isDark={isDarkMode}
+                  compact={compact}
+                  variant="mine"
+                  name={myName}
+                  avatar={myAvatar}
+                  items={MY_TRADE_ITEMS}
+                />
+              </View>
+            )}
+          </Animated.View>
 
-         
-          <TouchableOpacity style={styles.button} onPress={handleNext}>
-            <Text style={styles.buttonText}>{screenIndex === 1 && !user.id ? t("first.signin") : t("first.continue")}</Text>
-          </TouchableOpacity>
-          {screenIndex === 1 && !user?.id && (
-            <TouchableOpacity style={styles.buttonOutline} onPress={handleGuest}>
-              <Text style={styles.buttonTextOutline}>{t("first.guest_user")}</Text>
+          <View style={s.actions}>
+            {/* Store-facing honesty line: this is a companion app. */}
+            {first && (
+              <Text style={s.note} numberOfLines={2} maxFontSizeMultiplier={FONT_CAP}>{t('first.utility_note')}</Text>
+            )}
+            <TouchableOpacity style={s.button} onPress={handleNext} activeOpacity={0.9} accessibilityRole="button">
+              <Text style={s.buttonText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={FONT_CAP}>
+                {!first && !signedIn ? t('first.signin') : t('first.continue')}
+              </Text>
             </TouchableOpacity>
-          )}
-        </View>}
-
-        <SignInDrawer visible={openSignin} onClose={handleLoginSuccess}  selectedTheme={selectedTheme} screen='On Boarding'/>
-        <Modal visible={languageModalVisible} animationType="slide" transparent>
-          <View style={[styles.modalContainer, { backgroundColor: isDarkMode ? config.colors.backgroundDark : '#f2f2f7' }]}>
-            {/* <Text style={[styles.modalTitle, { color: isDarkMode ? 'white' : '#666' }]}>{t("settings.select_language")}</Text>
-            <FlatList
-              data={languageOptions}
-              keyExtractor={(item) => item.code}
-              showsVerticalScrollIndicator={false}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.languageOption}
-                  onPress={() => {
-                    changeLanguage(item.code);
-                    setAppLanguage(item.code);
-                    setLanguageModalVisible(false);
-
-                  }}
-                >
-                  <Text style={[styles.languageText, { color: isDarkMode ? 'white' : '#666' }]}>{item.flag} {item.label}</Text>
-                </TouchableOpacity>
-              )}
-            /> */}
+            {first ? (
+              <TouchableOpacity accessibilityRole="button" onPress={handleGuest} style={s.link} hitSlop={{ top: 6, bottom: 6, left: 12, right: 12 }}>
+                <Text style={s.linkText} numberOfLines={1} maxFontSizeMultiplier={FONT_CAP}>{t('first.try_values')}</Text>
+              </TouchableOpacity>
+            ) : (!signedIn && (
+              <TouchableOpacity style={s.buttonOutline} onPress={handleGuest} activeOpacity={0.9} accessibilityRole="button">
+                <Text style={s.buttonOutlineText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={FONT_CAP}>
+                  {t('first.guest_user')}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-          <Ionicons name="close" size={34} color={isDarkMode ? '#ccc' : '#666'} style={styles.skipButton} onPress={() => { setLanguageModalVisible(false) }} />
-        </Modal>
+        </View>
 
+        <SignInDrawer visible={openSignin} onClose={handleLoginSuccess} selectedTheme={selectedTheme} screen="On Boarding" />
       </View>
     </GestureHandlerRootView>
   );
 };
 
+const BRAND = config.colors.hasBlockGreen;
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  slide: { width: width, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20,  flex: 1, marginBottom:30 },
-  title: { fontSize: 24, fontFamily: 'Lato-Bold', marginBottom: 10, textAlign: 'center', lineHeight: 30},
-  text: { fontSize: 12, textAlign: 'center', paddingHorizontal: 20, fontFamily: 'Lato-Regular' },
-  welcomeText: { fontSize: 18, fontFamily: 'Lato-Bold', marginBottom: 10, textAlign: 'center' },
-  button: { backgroundColor: config.colors.hasBlockGreen, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, marginBottom: 10, width: '90%', alignItems: 'center', borderColor: config.colors.hasBlockGreen, borderWidth: 2, },
-  buttonText: { color: '#fff', fontSize: 14, textAlign: 'center', fontFamily: 'Lato-Bold' },
-  buttonOutline: { borderColor: config.colors.hasBlockGreen, borderWidth: 2, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, width: '90%', alignItems: 'center', marginBottom: 10 },
-  buttonTextOutline: { color: config.colors.hasBlockGreen, fontSize: 14, textAlign: 'center', fontFamily: 'Lato-Bold' },
-  skipButton: { position: 'absolute', top: 40, right: 20, zIndex: 10 },
-  skipButtonText: { fontSize: 16, fontFamily: 'Lato-Bold' },
-  image: { width: 50, height: 50, margin: 10, borderRadius: 10 },
-  bottomContainer: {
-    position: 'absolute',
-    bottom: 10,
-    width: '100%',
-    alignItems: 'center',
-  },
-  spacer: {
-    height: 100
-  },
-  benefitsContainer: {
-    width: '100%',
-    marginTop: 20,
-    alignItems: 'center',
-  },
+const makeStyles = (u, compact, C) => {
+  const z = (n) => Math.round(n * u * 2) / 2;
+  return {
+    pagePad: { top: z(14), bottom: z(10) },
+    ...StyleSheet.create({
+      container: { flex: 1 },
+      // One centred column; a tablet does not stretch it edge to edge.
+      page: { flex: 1, width: '100%', maxWidth: MAX_COLUMN, alignSelf: 'center', paddingHorizontal: z(20) },
+      // Head and picture share the free height equally, so a tall phone has no
+      // empty band and a short one no squeeze.
+      body: { flex: 1, justifyContent: 'space-evenly' },
 
-  benefitCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 5,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    width: '90%',
-    marginBottom: 10,
-  },
+      head: { alignItems: 'center' },
+      logo: { width: z(compact ? 60 : 88), height: z(compact ? 60 : 88), borderRadius: z(16) },
+      title: {
+        color: C.TEXT,
+        fontSize: z(27),
+        lineHeight: z(33),
+        fontFamily: 'Lato-Bold',
+        letterSpacing: -0.5,
+        textAlign: 'center',
+        marginTop: z(compact ? 8 : 14),
+        alignSelf: 'stretch',
+      },
+      sub: {
+        color: C.TEXT_SUB,
+        fontSize: z(15),
+        lineHeight: z(21),
+        fontFamily: 'Lato-Regular',
+        textAlign: 'center',
+        marginTop: z(6),
+      },
 
-  icon: {
-    marginRight: 12,
-  },
+      art: { gap: z(compact ? 8 : 10) },
 
-  benefitText: {
-    fontSize: 16,
-    color: '#fff',
-    fontFamily: 'Lato-Bold'
-  },
-  sliderContainer: {
-    paddingVertical: 5
-  },
-  iconmain: {
-    // position: 'absolute',
-    // top: 100,
-    borderRadius: 10,
-    width: 150,
-    alignItems: 'center',
-    height: 150,
-    // paddingTop: 50
-  },
-  languageButton: {
-    alignSelf: 'center',
-    marginTop: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#007BFF',
-  },
-  languageButtonText: {
-    fontSize: 16,
-    color: '#007BFF',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContainer: {
-    width: width,
-    height: '100%',
-    backgroundColor: 'white',
-    // borderRadius: 12,
-    padding: 20,
-    paddingTop: 80,
-
-    // alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontFamily: 'Lato-Bold',
-    marginVertical: 15,
-    alignSelf: 'center'
-  },
-  languageOption: {
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    width: '100%',
-    alignItems: 'left',
-  },
-  languageText: {
-    fontSize: 16,
-    fontFamily: 'Lato-Bold'
-  }
-
-});
+      actions: { alignItems: 'stretch' },
+      note: {
+        color: C.TEXT_MUTE,
+        fontSize: z(11.5),
+        lineHeight: z(16),
+        fontFamily: 'Lato-Regular',
+        textAlign: 'center',
+        marginBottom: z(10),
+      },
+      button: {
+        height: z(54),
+        borderRadius: z(13),
+        backgroundColor: BRAND,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: z(18),
+      },
+      buttonText: { color: '#FFFFFF', fontSize: z(17.5), fontFamily: 'Lato-Bold' },
+      buttonOutline: {
+        height: z(50),
+        borderRadius: z(13),
+        borderWidth: 2,
+        borderColor: BRAND,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: z(18),
+        marginTop: z(10),
+      },
+      buttonOutlineText: { color: C.BRAND_TEXT, fontSize: z(16), fontFamily: 'Lato-Bold' },
+      link: { alignSelf: 'center', paddingVertical: z(12) },
+      linkText: { color: C.BRAND_TEXT, fontSize: z(14.5), fontFamily: 'Lato-Bold' },
+    }),
+  };
+};
 
 export default OnboardingScreen;

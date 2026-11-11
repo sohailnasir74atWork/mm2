@@ -712,6 +712,10 @@
     "translate_tip_tap": "Tipp: Tippe auf eine Nachricht, um sie zu übersetzen."
   },
   "first": {
+    "values_title": "Wisse, was jedes Item wert ist",
+    "values_sub": "Echte Werte für Messer, Waffen und Pets.",
+    "trade_title": "Trades posten, Matches finden",
+    "trade_sub": "Melde dich an, um zu traden und zu chatten.",
     "try_values": "Probier den Werte-Rechner aus",
     "utility_note": "Vergleiche Item-Werte und checke Trades. Mit dieser Begleit-App bekommst du keine Items im Spiel.",
     "welcome_title": "Willkommen bei Fruit Values",
@@ -1593,6 +1597,13 @@
     "btnBackToLevels": "Zurück zu den Leveln 🗺️"
   },
   "paywall": {
+    "boost_caption": "Mit Pro stehen deine Trades ganz oben im Feed.",
+    "trial_title": "Teste Pro {{trial}} gratis",
+    "sample_name": "Alex",
+    "on_top": "Ganz oben",
+    "short_noads": "Keine Werbung",
+    "short_boost": "2 Boosts pro Tag",
+    "short_badge": "Gold-Abzeichen",
     "cta_trial": "Gratis testen",
     "exit_badge": "EINMALIGES ANGEBOT",
     "exit_title": "Warte! {{percent}} % Rabatt – nur dieses eine Mal",

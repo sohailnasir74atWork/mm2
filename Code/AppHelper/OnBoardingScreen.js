@@ -167,17 +167,15 @@ const OnboardingScreen = ({ onFinish, selectedTheme }) => {
                 {!first && !signedIn ? t('first.signin') : t('first.continue')}
               </Text>
             </TouchableOpacity>
-            {first ? (
-              <TouchableOpacity accessibilityRole="button" onPress={handleGuest} style={s.link} hitSlop={{ top: 6, bottom: 6, left: 12, right: 12 }}>
-                <Text style={s.linkText} numberOfLines={1} maxFontSizeMultiplier={FONT_CAP}>{t('first.try_values')}</Text>
-              </TouchableOpacity>
-            ) : (!signedIn && (
+            {/* No shortcut past the steps: everyone sees 1 → 2 → the offer
+                (owner 2026-11-11). */}
+            {!first && !signedIn && (
               <TouchableOpacity style={s.buttonOutline} onPress={handleGuest} activeOpacity={0.9} accessibilityRole="button">
                 <Text style={s.buttonOutlineText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={FONT_CAP}>
                   {t('first.guest_user')}
                 </Text>
               </TouchableOpacity>
-            ))}
+            )}
           </View>
         </View>
 
@@ -253,8 +251,6 @@ const makeStyles = (u, compact, C) => {
         marginTop: z(10),
       },
       buttonOutlineText: { color: C.BRAND_TEXT, fontSize: z(16), fontFamily: 'Lato-Bold' },
-      link: { alignSelf: 'center', paddingVertical: z(12) },
-      linkText: { color: C.BRAND_TEXT, fontSize: z(14.5), fontFamily: 'Lato-Bold' },
     }),
   };
 };

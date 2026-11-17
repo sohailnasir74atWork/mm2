@@ -35,7 +35,7 @@
  *      wish you today".
  *
  * Cap: Brevo's free plan allows 300 emails a day for the whole account,
- * shared with Adopt Me (150, 08:00 UTC) and Blox Fruits (120 planned), so MM2
+ * shared with Adopt Me (180, 08:00 UTC) and Blox Fruits (80, 09:00 UTC), so MM2
  * sends at most MAX_SENDS a UTC day, counted in RTDB so a second run the same
  * day can't go over it. Anyone past the cap gets no email (never a late one:
  * tomorrow their birthday isn't today).
@@ -64,7 +64,7 @@ if (!admin.apps.length) {
 const BREVO_API_KEY = defineSecret('BREVO_API_KEY');
 const EMAIL_UNSUB_SECRET = defineSecret('EMAIL_UNSUB_SECRET');
 
-const MAX_SENDS = 100;          // per UTC day; Brevo's free 300/day is shared (Adopt Me 150, Blox 120 planned)
+const MAX_SENDS = 25;           // per UTC day; Brevo's free 300/day is shared: Adopt Me 180, Blox 80, MM2 25, rest for tests (rebalanced 2026-11-17: Adopt Me hit 150 on 10-31; Blox peaks ~60, MM2 ~11)
 const MIN_AGE = 13;             // birthdays/core.js MIN_AGE
 const ACCOUNT_MIN_DAYS = 30;    // birthdays/core.js ACCOUNT_MIN_DAYS (gift rule)
 const AUTH_BATCH = 100;         // Firebase Auth getUsers() limit

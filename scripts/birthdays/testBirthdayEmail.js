@@ -213,7 +213,7 @@ function makeWorld({ players, extra = {}, emails = {}, disabled = [] }) {
   const w3 = makeWorld({ players: many, emails: manyEmails });
   const s3 = await run(w3.args);
   ok(s3.sent === MAX_SENDS && s3.overCap === 40, `capped at ${MAX_SENDS} (sent ${s3.sent}, over ${s3.overCap})`);
-  ok(w3.calls() === 2, `getUsers in chunks of 100 (calls ${w3.calls()})`);
+  ok(w3.calls() === Math.ceil((MAX_SENDS + 40) / 100), `getUsers in chunks of 100 (calls ${w3.calls()})`);
   const s3b = await run(w3.args);
   ok(s3b.sent === 0 && s3b.overCap === 40, `second run the same day stays under the cap (${JSON.stringify(s3b)})`);
   const s3c = await run({ ...w3.args, now: NOW + DAY });

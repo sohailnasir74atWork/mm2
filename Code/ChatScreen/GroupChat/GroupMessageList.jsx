@@ -485,7 +485,7 @@ const GroupMessageList = ({
                           variants, so it rendered 'D' on every item and meant nothing.
                           The two catalogues disagree on 70% of the items they share, so
                           a reader needs to know which one these numbers came from. */}
-                      <Text style={fruitStyles.sourceNote}>
+                      <Text style={[fruitStyles.sourceNote, { color: fruitColors.value }]}>
                         {t('chat.based_on_values', { source: sourceLabelForItems(fruits) })}
                       </Text>
                     </View>

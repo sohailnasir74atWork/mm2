@@ -1273,7 +1273,13 @@
     "remove_selected_title_one": "Retirer {{count}} objet ?",
     "remove_selected_title_many": "Retirer {{count}} objets ?",
     "remove_selected_title_other": "Retirer {{count}} objets ?",
-    "remove_selected_msg": "Ils seront retirés de ton inventaire. Tes objectifs et ton historique de trades ne sont pas touchés."
+    "remove_selected_msg": "Ils seront retirés de ton inventaire. Tes objectifs et ton historique de trades ne sont pas touchés.",
+    "sort": "Trier",
+    "sort_value_desc": "Valeur max",
+    "sort_value_asc": "Valeur min",
+    "sort_rarity": "Rareté",
+    "sort_name": "A–Z",
+    "sort_hint": "Ta liste est enregistrée dans cet ordre : les autres joueurs la voient aussi comme ça. Touche à nouveau quand tu veux pour retrier."
   },
   "feed": {
     "create_post": "Nouveau post",
@@ -2580,5 +2586,33 @@
     "sort_demand": "▲ Demande",
     "show_grid": "Afficher en grille",
     "show_list": "Afficher en liste"
+  },
+  "advisor": {
+    "title": "Que puis-je obtenir ?",
+    "entry_sub": "Vois contre quoi échanger tes objets",
+    "values_from": "Valeurs de",
+    "pick_items": "Touche les objets que tu échangerais",
+    "no_items": "Ta liste Mes affaires est vide. Cherche un objet ci-dessous.",
+    "search_placeholder": "Ajoute un autre objet, ex. Sunset",
+    "your_offer": "Ton offre",
+    "empty": "Choisis au moins un objet pour voir ce que tu peux obtenir.",
+    "swap_one": "Échanger contre un objet",
+    "swap_two": "Ou deux objets",
+    "none_single": "Aucun objet n’a une valeur proche.",
+    "none_combo": "Aucune paire d’objets n’a une valeur proche.",
+    "note": "Selon les valeurs {{source}}. Les valeurs changent, vérifie les deux côtés avant d’échanger.",
+    "demand": "Demande {{value}}/10",
+    "verdict_win": "Gagnant",
+    "verdict_fair": "Équitable",
+    "verdict_loss": "Petite perte",
+    "add_goal": "Ajouter aux objectifs",
+    "in_goals": "Dans Mes objectifs",
+    "find_players": "Trouver des joueurs",
+    "goal_added": "Ajouté à Mes objectifs",
+    "goal_added_hint": "Trade Match cherchera les joueurs qui l’ont.",
+    "goal_failed": "Impossible d’enregistrer cet objectif. Réessaie.",
+    "sign_in_goals": "Connecte-toi pour enregistrer des objectifs.",
+    "calc_button": "Que puis-je obtenir pour ça ?",
+    "item_button": "Que puis-je obtenir pour cet objet ?"
   }
 }

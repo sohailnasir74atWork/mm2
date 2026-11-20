@@ -1495,7 +1495,13 @@
     "remove_selected_title": "Remove {{count}} items?",
     "remove_selected_title_one": "Remove {{count}} item?",
     "remove_selected_msg": "They'll be removed from your inventory. Your goals and trade history are not affected.",
-    "remove_selected_title_other": "Remove {{count}} items?"
+    "remove_selected_title_other": "Remove {{count}} items?",
+    "sort": "Sort",
+    "sort_value_desc": "Highest value",
+    "sort_value_asc": "Lowest value",
+    "sort_rarity": "Rarity",
+    "sort_name": "A–Z",
+    "sort_hint": "Your list is saved in this order, so traders see it too. Tap again any time to re-sort."
   },
   "feed": {
     "create_post": "Create Post",
@@ -2759,5 +2765,33 @@
     "sort_demand": "▲ Demand",
     "show_grid": "Show as grid",
     "show_list": "Show as list"
+  },
+  "advisor": {
+    "title": "What can I get?",
+    "entry_sub": "See what your items can trade for",
+    "values_from": "Values from",
+    "pick_items": "Tap the items you would trade",
+    "no_items": "Your My Stuff list is empty. Search for an item below.",
+    "search_placeholder": "Add another item, e.g. Sunset",
+    "your_offer": "Your offer",
+    "empty": "Pick at least one item to see what you can get.",
+    "swap_one": "Swap for one item",
+    "swap_two": "Or two items",
+    "none_single": "No single item is close in value.",
+    "none_combo": "No two-item swap is close in value.",
+    "note": "Based on {{source}} values. Values change, so check both sides before you trade.",
+    "demand": "Demand {{value}}/10",
+    "verdict_win": "Win",
+    "verdict_fair": "Fair",
+    "verdict_loss": "Small loss",
+    "add_goal": "Add to goals",
+    "in_goals": "In My Goals",
+    "find_players": "Find players",
+    "goal_added": "Added to My Goals",
+    "goal_added_hint": "Trade Match will look for players who have it.",
+    "goal_failed": "Could not save that goal. Try again.",
+    "sign_in_goals": "Sign in to save goals.",
+    "calc_button": "What can I get for these?",
+    "item_button": "What can I get for this?"
   }
 }

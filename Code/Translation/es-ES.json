@@ -1109,7 +1109,13 @@
     "remove_selected_title_many": "¿Quitar {{count}} objetos?",
     "remove_selected_title_other": "¿Quitar {{count}} objetos?",
     "remove_selected_msg": "Se quitarán de tu inventario. Tus objetivos y tu historial de tradeos no cambian.",
-    "title": "Mis cosas"
+    "title": "Mis cosas",
+    "sort": "Ordenar",
+    "sort_value_desc": "Mayor valor",
+    "sort_value_asc": "Menor valor",
+    "sort_rarity": "Rareza",
+    "sort_name": "A–Z",
+    "sort_hint": "Tu lista se guarda en este orden, así que los demás también la ven así. Toca de nuevo cuando quieras para reordenar."
   },
   "feed": {
     "create_post": "Crear publicación",
@@ -2425,5 +2431,33 @@
     "sort_demand": "▲ Demanda",
     "show_grid": "Ver en cuadrícula",
     "show_list": "Ver en lista"
+  },
+  "advisor": {
+    "title": "¿Qué puedo conseguir?",
+    "entry_sub": "Mira por qué puedes cambiar tus objetos",
+    "values_from": "Valores de",
+    "pick_items": "Toca los objetos que cambiarías",
+    "no_items": "Tu lista de Mis cosas está vacía. Busca un objeto abajo.",
+    "search_placeholder": "Añade otro objeto, p. ej. Sunset",
+    "your_offer": "Tu oferta",
+    "empty": "Elige al menos un objeto para ver qué puedes conseguir.",
+    "swap_one": "Cambiar por un objeto",
+    "swap_two": "O dos objetos",
+    "none_single": "Ningún objeto tiene un valor parecido.",
+    "none_combo": "Ningún par de objetos tiene un valor parecido.",
+    "note": "Según los valores de {{source}}. Los valores cambian, revisa ambos lados antes de cambiar.",
+    "demand": "Demanda {{value}}/10",
+    "verdict_win": "Ganas",
+    "verdict_fair": "Justo",
+    "verdict_loss": "Pierdes un poco",
+    "add_goal": "Añadir a metas",
+    "in_goals": "En Mis metas",
+    "find_players": "Buscar jugadores",
+    "goal_added": "Añadido a Mis metas",
+    "goal_added_hint": "Trade Match buscará jugadores que lo tengan.",
+    "goal_failed": "No se ha podido guardar la meta. Inténtalo de nuevo.",
+    "sign_in_goals": "Inicia sesión para guardar metas.",
+    "calc_button": "¿Qué puedo conseguir por estos?",
+    "item_button": "¿Qué puedo conseguir por esto?"
   }
 }

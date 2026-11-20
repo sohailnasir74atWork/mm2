@@ -24,10 +24,10 @@ import { maybeAskForReview } from '../AppHelper/reviewPrompt';
 import PetModal from '../ChatScreen/PrivateChat/PetsModel';
 import SignInDrawer from '../Firebase/SigninDrawer';
 import { useTranslation } from 'react-i18next';
-import { useFocusEffect, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useRoute, useNavigation } from '@react-navigation/native';
 import { syncValueAlertTopics } from '../Helper/valueAlerts';
 import { getJournalRevision, clearJournal, deleteJournalEntry } from '../Engagement/journalUtils';
-import { rtlX } from '../Helper/rtl';
+import { rtlX, flipInRTL } from '../Helper/rtl';
 // Same For Trade rule as the Trade Match index (missing flag = For Trade).
 import { isListed } from '../TradeMatch/matchCore';
 import ScreenBottomBanner from '../Ads/ScreenBottomBanner';
@@ -80,6 +80,36 @@ const categoryRank = (key) => {
   return i === -1 ? CATEGORY_ORDER.length : i;
 };
 const titleCase = (s) => s.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase());
+
+// My Items sort (2026-11-20: players with 80–100+ weapons were deleting and
+// re-adding everything after each trade to keep it in value order). The sort
+// reorders the SAVED list, so the calculator INVENTORY tab, the chat item
+// picker and the profile other traders open all show the same order.
+const SORT_MODES = [
+  { key: 'value_desc', labelKey: 'mystuff.sort_value_desc', fallback: 'Highest value' },
+  { key: 'value_asc', labelKey: 'mystuff.sort_value_asc', fallback: 'Lowest value' },
+  { key: 'rarity', labelKey: 'mystuff.sort_rarity', fallback: 'Rarity' },
+  { key: 'name', labelKey: 'mystuff.sort_name', fallback: 'A–Z' },
+];
+const SORT_KEYS = SORT_MODES.map(m => m.key);
+
+// Stable: equal items keep their current order. Unpriced items (value 0) go
+// last in both value orders. Rarity = game category order, highest value first
+// inside each category.
+const sortItems = (list, mode, valueOf, categoryOf) => {
+  const rows = list.map((item, i) => ({
+    item, i, v: valueOf(item) || 0, n: String(item?.name || '').toLowerCase(), c: categoryOf(item),
+  }));
+  const byName = (a, b) => a.n.localeCompare(b.n) || a.i - b.i;
+  const cmp = {
+    value_desc: (a, b) => (b.v - a.v) || byName(a, b),
+    value_asc: (a, b) => (a.v > 0 === b.v > 0 ? a.v - b.v : (a.v > 0 ? -1 : 1)) || byName(a, b),
+    rarity: (a, b) => (categoryRank(a.c) - categoryRank(b.c)) || (a.c || '').localeCompare(b.c || '')
+      || (b.v - a.v) || byName(a, b),
+    name: byName,
+  }[mode];
+  return cmp ? rows.sort(cmp).map(r => r.item) : list;
+};
 
 // One card in the Items grid. Memoised, so a select-mode tap re-renders the
 // card that was tapped, not the whole grid (same technique as Adopt Me's
@@ -176,6 +206,7 @@ const MyStuffScreen = ({ selectedTheme }) => {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const route = useRoute();
+  const navigation = useNavigation();
 
   // Trade Match links here with { initialTab: 'items' | 'goals' }.
   const [activeTab, setActiveTab] = useState(() => (route?.params?.initialTab === 'goals' ? 'goals' : 'items'));
@@ -392,18 +423,46 @@ const MyStuffScreen = ({ selectedTheme }) => {
 
   // The catalogue's category wins; the one saved with the item covers names
   // the catalogue no longer lists.
+  const categoryOf = useCallback((p) => {
+    const n = (p?.name || '').toLowerCase().trim();
+    return categoryKey(categoryByName.get(n) || p?.category || p?.type || p?.Category);
+  }, [categoryByName]);
+
   const categoryGroups = useMemo(() => {
     const byKey = new Map();
     ownedPets.forEach((p, i) => {
-      const n = (p?.name || '').toLowerCase().trim();
-      const key = categoryKey(categoryByName.get(n) || p?.category || p?.type || p?.Category);
+      const key = categoryOf(p);
       if (!byKey.has(key)) byKey.set(key, []);
       byKey.get(key).push(i);
     });
     return [...byKey.entries()]
       .map(([key, indices]) => ({ key, indices }))
       .sort((a, b) => categoryRank(a.key) - categoryRank(b.key) || a.key.localeCompare(b.key));
-  }, [ownedPets, categoryByName]);
+  }, [ownedPets, categoryOf]);
+
+  // ── Sort (Items tab) ──
+  const sortMode = SORT_KEYS.includes(localState?.myStuffSort) ? localState.myStuffSort : null;
+  const [sortOpen, setSortOpen] = useState(false);
+  // Without the catalogue every item prices at 0 and has no category, so a
+  // value or rarity sort would save a scrambled list: leave it as it is.
+  const sortOwned = useCallback(
+    (list, mode) => (mode !== 'name' && !parsedData?.length
+      ? list
+      : sortItems(list, mode, lookupVal, categoryOf)),
+    [parsedData, lookupVal, categoryOf],
+  );
+
+  // Tapping the active mode again re-sorts too (values move every day).
+  const applySort = useCallback((mode) => {
+    setSortOpen(false);
+    updateLocalState('myStuffSort', mode);
+    const sorted = sortOwned(ownedPets, mode);
+    if (sorted.every((p, i) => p === ownedPets[i])) return;
+    setOwnedPets(sorted);
+    savePetsToReviews(sorted, wishlistPets);
+  }, [ownedPets, wishlistPets, sortOwned, savePetsToReviews, updateLocalState]);
+
+  useEffect(() => { setSortOpen(false); }, [activeTab, selectMode]);
 
   const selectChips = useMemo(() => [
     { key: 'all', label: t('mystuff.select_all', { defaultValue: 'All' }), indices: ownedPets.map((_, i) => i) },
@@ -1064,6 +1123,30 @@ const MyStuffScreen = ({ selectedTheme }) => {
                       {t('mystuff.edit_items')}
                     </Text>
                   </TouchableOpacity>
+                  {!selectMode && ownedPets.length > 1 && (
+                    <TouchableOpacity
+                      style={[
+                        $.selectBtn,
+                        sortOpen
+                          ? { backgroundColor: config.colors.primary, borderColor: config.colors.primary }
+                          : { borderColor: config.colors.primary + '50' },
+                      ]}
+                      onPress={() => setSortOpen(o => !o)}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: sortOpen }}
+                    >
+                      <FontAwesome
+                        name="arrow-down-wide-short"
+                        size={12}
+                        color={sortOpen ? '#fff' : config.colors.primary}
+                        solid
+                      />
+                      <Text style={[$.addBarText, sortOpen ? $.onPrimaryText : { color: config.colors.primary }]}>
+                        {t('mystuff.sort', { defaultValue: 'Sort' })}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
                     style={[
                       $.selectBtn,
@@ -1089,6 +1172,65 @@ const MyStuffScreen = ({ selectedTheme }) => {
                 </View>
 
                 {!selectMode && (
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('TradeAdvisor')}
+                    activeOpacity={0.8}
+                    style={[$.advisorBtn, { backgroundColor: config.colors.primary + '14', borderColor: config.colors.primary + '40' }]}
+                    accessibilityRole="button"
+                  >
+                    <FontAwesome name="wand-magic-sparkles" size={13} color={config.colors.primary} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={[$.advisorTitle, { color: config.colors.primary }]}>
+                        {t('advisor.title', { defaultValue: 'What can I get?' })}
+                      </Text>
+                      <Text style={[$.advisorSub, { color: C.textSecondary }]} numberOfLines={1}>
+                        {t('advisor.entry_sub', { defaultValue: 'See what your items can trade for' })}
+                      </Text>
+                    </View>
+                    <FontAwesome name="chevron-right" size={11} color={config.colors.primary} style={flipInRTL} />
+                  </TouchableOpacity>
+                )}
+
+                {!selectMode && sortOpen && (
+                  <>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={$.chipScroll}
+                      contentContainerStyle={$.chipRow}
+                    >
+                      {SORT_MODES.map((m) => {
+                        const active = sortMode === m.key;
+                        return (
+                          <TouchableOpacity
+                            key={m.key}
+                            style={[
+                              $.chip,
+                              active
+                                ? { backgroundColor: config.colors.primary, borderColor: config.colors.primary }
+                                : { backgroundColor: C.bgAlt, borderColor: C.border },
+                            ]}
+                            onPress={() => applySort(m.key)}
+                            activeOpacity={0.7}
+                            accessibilityRole="radio"
+                            accessibilityState={{ checked: active }}
+                          >
+                            <Text style={[$.chipText, active ? $.onPrimaryText : { color: C.text }]}>
+                              {t(m.labelKey, { defaultValue: m.fallback })}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                    <Text style={[$.tradeHint, { color: C.textSecondary }]}>
+                      {t('mystuff.sort_hint', {
+                        defaultValue: 'Your list is saved in this order, so traders see it too. Tap again any time to re-sort.',
+                      })}
+                    </Text>
+                  </>
+                )}
+
+                {!selectMode && !sortOpen && (
                   <Text style={[$.tradeHint, { color: C.textSecondary }]}>
                     {t('trade_match.mystuff_hint')}
                   </Text>
@@ -1233,7 +1375,9 @@ const MyStuffScreen = ({ selectedTheme }) => {
         setWishlistPets={setWishlistPets}
         onClose={async () => {
           setPetModalVisible(false);
-          await savePetsToReviews(ownedPets, wishlistPets);
+          // Items just added go into the player's chosen order.
+          const owned = sortMode ? sortOwned(ownedPets, sortMode) : ownedPets;
+          await savePetsToReviews(owned, wishlistPets);
           if (ownedPets.length + wishlistPets.length > countAtModalOpenRef.current) {
             maybeAskForReview('collection');
           }
@@ -1407,6 +1551,9 @@ const $ = StyleSheet.create({
   tradeTagText: { fontSize: 7.5, fontWeight: '800', textAlign: 'center' },
   goalTradeTag: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
   goalTradeTagText: { fontSize: 9, fontWeight: '800' },
+  advisorBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 8 },
+  advisorTitle: { fontSize: 13, fontWeight: '800' },
+  advisorSub: { fontSize: 11, fontWeight: '500', marginTop: 1 },
   tradeHint: { fontSize: 10.5, fontWeight: '500', marginBottom: 8, lineHeight: 14 },
   selectBarRemoveText: { color: '#fff', fontSize: 13, fontWeight: '800' },
 

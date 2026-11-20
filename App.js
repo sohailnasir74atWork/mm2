@@ -221,6 +221,19 @@ function App() {
               {() => <MyStuffScreen selectedTheme={selectedTheme} />}
             </Stack.Screen>
 
+            {/* "What can I get?" trade advisor (My Stuff ▸ My Items).
+                Code/TradeAdvisor; lazily required. */}
+            <Stack.Screen
+              name="TradeAdvisor"
+              options={{
+                title: t('advisor.title', { defaultValue: 'What can I get?' }),
+                headerStyle: { backgroundColor: selectedTheme.colors.background },
+                headerTintColor: selectedTheme.colors.text,
+                headerTitleStyle: { fontFamily: 'Lato-Bold', fontSize: 20 },
+              }}
+              getComponent={() => require('./Code/TradeAdvisor/TradeAdvisorScreen').default}
+            />
+
             <Stack.Screen name="MysteryEggScreen" options={{ headerShown: false }} getComponent={() => require('./Code/Engagement/MysteryEgg').default} />
             {/* Draws its own header, so the native one stays off. */}
             <Stack.Screen name="ModsScreen" options={{ headerShown: false }} getComponent={() => require('./Code/Engagement/ModsScreen').default} />

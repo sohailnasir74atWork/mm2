@@ -1267,7 +1267,13 @@
     "remove_selected_title": "{{count}} Items entfernen?",
     "remove_selected_title_one": "{{count}} Item entfernen?",
     "remove_selected_title_other": "{{count}} Items entfernen?",
-    "remove_selected_msg": "Sie werden aus deinem Inventar entfernt. Deine Ziele und dein Trade-Verlauf bleiben erhalten."
+    "remove_selected_msg": "Sie werden aus deinem Inventar entfernt. Deine Ziele und dein Trade-Verlauf bleiben erhalten.",
+    "sort": "Sortieren",
+    "sort_value_desc": "Höchster Wert",
+    "sort_value_asc": "Niedrigster Wert",
+    "sort_rarity": "Seltenheit",
+    "sort_name": "A–Z",
+    "sort_hint": "Deine Liste wird in dieser Reihenfolge gespeichert, Händler sehen sie also genauso. Tippe jederzeit erneut, um neu zu sortieren."
   },
   "feed": {
     "create_post": "Beitrag erstellen",
@@ -2533,5 +2539,33 @@
     "sort_demand": "▲ Nachfrage",
     "show_grid": "Als Raster anzeigen",
     "show_list": "Als Liste anzeigen"
+  },
+  "advisor": {
+    "title": "Was kann ich bekommen?",
+    "entry_sub": "Sieh, wogegen du deine Items tauschen kannst",
+    "values_from": "Werte von",
+    "pick_items": "Tippe auf die Items, die du tauschen würdest",
+    "no_items": "Deine Meine-Sachen-Liste ist leer. Suche unten nach einem Item.",
+    "search_placeholder": "Weiteres Item hinzufügen, z. B. Sunset",
+    "your_offer": "Dein Angebot",
+    "empty": "Wähle mindestens ein Item, um zu sehen, was du bekommen kannst.",
+    "swap_one": "Gegen ein Item tauschen",
+    "swap_two": "Oder zwei Items",
+    "none_single": "Kein einzelnes Item hat einen ähnlichen Wert.",
+    "none_combo": "Kein Item-Paar hat einen ähnlichen Wert.",
+    "note": "Basierend auf {{source}}-Werten. Werte ändern sich, prüfe beide Seiten vor dem Tausch.",
+    "demand": "Nachfrage {{value}}/10",
+    "verdict_win": "Gewinn",
+    "verdict_fair": "Fair",
+    "verdict_loss": "Kleiner Verlust",
+    "add_goal": "Zu Zielen hinzufügen",
+    "in_goals": "In Meinen Zielen",
+    "find_players": "Spieler finden",
+    "goal_added": "Zu Meinen Zielen hinzugefügt",
+    "goal_added_hint": "Trade Match sucht Spieler, die es haben.",
+    "goal_failed": "Ziel konnte nicht gespeichert werden. Versuch es nochmal.",
+    "sign_in_goals": "Melde dich an, um Ziele zu speichern.",
+    "calc_button": "Was bekomme ich dafür?",
+    "item_button": "Was bekomme ich für dieses Item?"
   }
 }

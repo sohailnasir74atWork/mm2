@@ -60,6 +60,9 @@ const MoreHubScreen = ({ navigation, selectedTheme }) => {
   const cards = useMemo(() => {
     const list = [
       // Lights Out Manor and Fantasy League are on Home (Mini games), not here.
+      // Trade advisor (2026-11-20): also on Home, My Stuff, the calculator and
+      // an item's detail sheet.
+      { key: 'advisor', icon: 'star', accent: 'amber', title: t('advisor.title'), desc: t('advisor.entry_sub'), screen: 'TradeAdvisor' },
       { key: 'news', icon: 'news', accent: 'amber', title: t('tabs.news'), desc: t('more_hub.news_desc'), screen: 'MoreNews' },
       { key: 'reports', icon: 'report', accent: 'coral', title: t('reports.title'), desc: t('more_hub.reports_desc'), screen: 'MoreReport' },
       { key: 'birthdays', icon: 'cake', accent: 'rose', title: t('birthdays.title'), desc: t('more_hub.birthdays_desc'), screen: 'Birthdays' },

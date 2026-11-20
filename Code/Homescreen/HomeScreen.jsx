@@ -1812,6 +1812,25 @@ const HomeScreen = ({ selectedTheme, hideBanner = false }) => {
               </TouchableOpacity>
             </View>
             )}
+            {/* "What can I get for these?" — the advisor, opened with the
+                player's own side already picked (2026-11-20). */}
+            {!counter && hasItems.some(Boolean) && (
+              <TouchableOpacity
+                style={styles.advisorButton}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                onPress={() => navigation.navigate('TradeAdvisor', {
+                  items: hasItems.filter(Boolean).map((it) => ({
+                    name: it.name || it.Name, category: it.category || it.Category || it.type || it.Type,
+                  })),
+                })}
+              >
+                <Icon name="sparkles-outline" size={14} color={config.colors.primary} style={{ marginRight: 6 }} />
+                <Text style={styles.advisorButtonText} numberOfLines={1}>
+                  {t('advisor.calc_button', { defaultValue: 'What can I get for these?' })}
+                </Text>
+              </TouchableOpacity>
+            )}
             {/* Remove Ads button removed 2026-09-27 (owner): the Pro offer
                 lives in Settings, not under the calculator. */}
 
@@ -2624,6 +2643,19 @@ const getStyles = (isDarkMode, isGG) =>
       borderBottomStartRadius: 20,
       marginRight: 1
     },
+    advisorButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 8,
+      marginHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: config.colors.primary + '55',
+      backgroundColor: config.colors.primary + (isDarkMode ? '22' : '12'),
+    },
+    advisorButtonText: { color: config.colors.primary, fontSize: 13, fontWeight: '700' },
     logTradeButton: {
       backgroundColor: config.colors.primary,
       flex: 1,

@@ -1321,7 +1321,13 @@
     "remove_selected_title_few": "إزالة {{count}} عناصر؟",
     "remove_selected_title_many": "إزالة {{count}} عنصراً؟",
     "remove_selected_title_other": "إزالة {{count}} عنصر؟",
-    "remove_selected_msg": "ستُزال من مخزونك. لن تتأثر أهدافك ولا سجل صفقاتك."
+    "remove_selected_msg": "ستُزال من مخزونك. لن تتأثر أهدافك ولا سجل صفقاتك.",
+    "sort": "ترتيب",
+    "sort_value_desc": "الأعلى قيمة",
+    "sort_value_asc": "الأقل قيمة",
+    "sort_rarity": "الندرة",
+    "sort_name": "A–Z",
+    "sort_hint": "تُحفظ قائمتك بهذا الترتيب، فيراها المتداولون بنفس الشكل. اضغط مرة أخرى في أي وقت لإعادة الترتيب."
   },
   "feed": {
     "create_post": "منشور جديد",
@@ -2767,5 +2773,33 @@
     "sort_demand": "▲ الطلب",
     "show_grid": "عرض كشبكة",
     "show_list": "عرض كقائمة"
+  },
+  "advisor": {
+    "title": "ماذا يمكنني أن أحصل عليه؟",
+    "entry_sub": "اعرف ما يمكن مبادلة أغراضك به",
+    "values_from": "القيم من",
+    "pick_items": "اضغط على الأغراض التي ستبادلها",
+    "no_items": "قائمة أغراضي فارغة. ابحث عن غرض بالأسفل.",
+    "search_placeholder": "أضف غرضًا آخر، مثل Sunset",
+    "your_offer": "عرضك",
+    "empty": "اختر غرضًا واحدًا على الأقل لترى ما يمكنك الحصول عليه.",
+    "swap_one": "مبادلة بغرض واحد",
+    "swap_two": "أو غرضين",
+    "none_single": "لا يوجد غرض بقيمة قريبة.",
+    "none_combo": "لا يوجد زوج أغراض بقيمة قريبة.",
+    "note": "حسب قيم {{source}}. القيم تتغير، فتحقق من الطرفين قبل المبادلة.",
+    "demand": "الطلب {{value}}/10",
+    "verdict_win": "ربح",
+    "verdict_fair": "عادل",
+    "verdict_loss": "خسارة بسيطة",
+    "add_goal": "أضف إلى الأهداف",
+    "in_goals": "في أهدافي",
+    "find_players": "ابحث عن لاعبين",
+    "goal_added": "تمت الإضافة إلى أهدافي",
+    "goal_added_hint": "سيبحث Trade Match عن لاعبين يملكونه.",
+    "goal_failed": "تعذر حفظ الهدف. حاول مرة أخرى.",
+    "sign_in_goals": "سجّل الدخول لحفظ الأهداف.",
+    "calc_button": "ماذا أحصل مقابل هذه؟",
+    "item_button": "ماذا أحصل مقابل هذا؟"
   }
 }

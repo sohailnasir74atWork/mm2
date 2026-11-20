@@ -356,7 +356,7 @@ const MessageRow = memo(function MessageRow(props) {
       variants, so it rendered 'D' on every item and meant nothing.
       The two catalogues disagree on 70% of the items they share, so
       a reader needs to know which one these numbers came from. */}
-  <Text style={fruitStyles.sourceNote}>
+  <Text style={[fruitStyles.sourceNote, { color: fruitColors.value }]}>
     {t('chat.based_on_values', { source: sourceLabelForItems(fruits) })}
   </Text>
 </View>
@@ -939,9 +939,12 @@ const MessagesList = ({
   );
 };
 export const fruitStyles = StyleSheet.create({
+  // Colour comes from fruitColors.value at the call site: with no colour it
+  // rendered black, unreadable in dark mode (MM2 suggestion 2026-10-19).
   sourceNote: {
-    fontSize: 9,
-    opacity: 0.6,
+    fontSize: 10,
+    fontWeight: '600',
+    opacity: 0.85,
     marginTop: 4,
     alignSelf: 'flex-end',
   },

@@ -355,6 +355,26 @@ const HomeTabScreen = ({ selectedTheme }) => {
           </View>
         </TouchableOpacity>
 
+        {/* ── What can I get? ── the trade advisor (2026-11-20, owner chose a
+            Home card). No sign-in needed: search works without My Stuff. */}
+        <TouchableOpacity
+          onPress={() => nav.navigate('TradeAdvisor')}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          style={[$.myStuffCard, { backgroundColor: accentFor('amber', dark).tint, borderColor: accentFor('amber', dark).tint }]}
+        >
+          <View style={$.myStuffCardInner}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, flex: 1, minWidth: 0 }}>
+              <FontAwesome name="wand-magic-sparkles" size={18} color={accentFor('amber', dark).color} />
+              <View style={{ flexShrink: 1, minWidth: 0 }}>
+                <Text style={[$.b14, { color: C.text }]} numberOfLines={1}>{t('advisor.title')}</Text>
+                <Text style={[$.sectionMeta, { color: accentFor('amber', dark).color }]} numberOfLines={1}>{t('advisor.entry_sub')}</Text>
+              </View>
+            </View>
+            <FontAwesome name="chevron-right" size={12} color={accentFor('amber', dark).color} style={flipInRTL} />
+          </View>
+        </TouchableOpacity>
+
         {/* ── Stories ── right under the birthday card (owner, 2026-10-31), so
             the avatar row is on the first screen. Titled like every other
             section, so it reads as a feature rather than loose circles. */}

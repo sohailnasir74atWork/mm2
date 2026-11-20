@@ -10,7 +10,9 @@
 // Read-only on purpose: My Stuff is a Firestore list behind sign-in with no
 // shared add helper, and the calculator has no hand-off API, so no actions.
 import React, { useMemo } from 'react';
-import { View, Text, Modal, Pressable, Image, StyleSheet } from 'react-native';
+import { View, Text, Modal, Pressable, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import FontAwesome from 'react-native-vector-icons/FontAwesome6';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import config from '../Helper/Environment';
@@ -60,6 +62,7 @@ const ItemDetailSheet = ({ visible, item, imageUrl, isDarkMode, onClose }) => {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { localState } = useLocalState();
+  const navigation = useNavigation();
   const activeSource = localState?.valueSource || DEFAULT_VALUE_SOURCE;
   const dataMeta = localState?.dataMeta;
   const suprimeMeta = localState?.suprimeMeta;
@@ -162,6 +165,22 @@ const ItemDetailSheet = ({ visible, item, imageUrl, isDarkMode, onClose }) => {
             )}
           </View>
         )}
+
+        {/* The trade advisor, opened with this item picked (2026-11-20). */}
+        <TouchableOpacity
+          style={[styles.advisor, { borderColor: accent + '55', backgroundColor: accent + '12' }]}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          onPress={() => {
+            onClose?.();
+            navigation.navigate('TradeAdvisor', { items: [{ name: item.name, category: item.category || item.type }] });
+          }}
+        >
+          <FontAwesome name="wand-magic-sparkles" size={13} color={accent} />
+          <Text style={[styles.advisorText, { color: accent }]} numberOfLines={1}>
+            {t('advisor.item_button', { defaultValue: 'What can I get for this?' })}
+          </Text>
+        </TouchableOpacity>
       </View>
     </Modal>
   );
@@ -195,6 +214,8 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   range: { fontSize: 12 },
+  advisor: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, paddingVertical: 11, borderRadius: 12, borderWidth: 1 },
+  advisorText: { fontSize: 13, fontWeight: '700' },
 });
 
 export default ItemDetailSheet;

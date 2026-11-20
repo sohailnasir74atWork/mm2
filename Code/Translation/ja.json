@@ -1085,7 +1085,13 @@
     "remove_selected_title": "{{count}}個のアイテムを削除しますか？",
     "remove_selected_title_other": "{{count}}個のアイテムを削除しますか？",
     "remove_selected_msg": "所持アイテムから削除されます。目標とトレード履歴には影響しません。",
-    "title": "持ち物"
+    "title": "持ち物",
+    "sort": "並べ替え",
+    "sort_value_desc": "価値が高い順",
+    "sort_value_asc": "価値が低い順",
+    "sort_rarity": "レア度順",
+    "sort_name": "A–Z",
+    "sort_hint": "この順番で保存され、他のプレイヤーにも同じ順番で表示されます。いつでももう一度タップで並べ直せます。"
   },
   "feed": {
     "create_post": "投稿を作成",
@@ -2323,5 +2329,33 @@
     "sort_demand": "▲ 需要",
     "show_grid": "グリッド表示",
     "show_list": "リスト表示"
+  },
+  "advisor": {
+    "title": "何と交換できる？",
+    "entry_sub": "アイテムの交換先をチェック",
+    "values_from": "使う価値",
+    "pick_items": "交換に出すアイテムをタップ",
+    "no_items": "マイアイテムが空です。下で検索してください。",
+    "search_placeholder": "ほかのアイテムを追加（例：Sunset）",
+    "your_offer": "あなたの提示",
+    "empty": "アイテムを1つ以上選ぶと交換先が出ます。",
+    "swap_one": "1つのアイテムと交換",
+    "swap_two": "または2つのアイテム",
+    "none_single": "近い価値のアイテムはありません。",
+    "none_combo": "近い価値の2つ組はありません。",
+    "note": "{{source}}の価値に基づきます。価値は変わるので、交換前に両方を確認しよう。",
+    "demand": "需要 {{value}}/10",
+    "verdict_win": "得",
+    "verdict_fair": "公平",
+    "verdict_loss": "少し損",
+    "add_goal": "目標に追加",
+    "in_goals": "マイ目標に追加済み",
+    "find_players": "プレイヤーを探す",
+    "goal_added": "マイ目標に追加しました",
+    "goal_added_hint": "Trade Matchが持っているプレイヤーを探します。",
+    "goal_failed": "目標を保存できませんでした。もう一度お試しください。",
+    "sign_in_goals": "ログインして目標を保存しよう。",
+    "calc_button": "これで何と交換できる？",
+    "item_button": "このアイテムで何と交換できる？"
   }
 }

@@ -99,6 +99,10 @@ export const LocalStateProvider = ({ children }) => {
     // surfaces share ONE list.
     ownedPets: safeParseJSON('ownedPets', []),
     wishlistPets: safeParseJSON('wishlistPets', []),
+    // My Stuff ▸ My Items sort the player last picked ('value_desc' |
+    // 'value_asc' | 'rarity' | 'name'; 'off' = never picked). Items added
+    // through My Stuff's Edit Items are sorted in with it. Device only.
+    myStuffSort: storage.getString('myStuffSort') || 'off',
     bannedUsers: safeParseJSON('bannedUsers', []),
     // Per launch, never restored: it gates the boot splash on THIS launch's
     // login. Read back from storage it was true from the 2nd launch on, so the

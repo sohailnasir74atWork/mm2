@@ -856,7 +856,13 @@
     "delete_entry_msg": "Ela vai sair do seu histórico. Não dá para desfazer.",
     "delete_failed": "Não deu para excluir essa troca",
     "remove_selected_title_many": "Remover {{count}} itens?",
-    "remove_selected_title_other": "Remover {{count}} itens?"
+    "remove_selected_title_other": "Remover {{count}} itens?",
+    "sort": "Ordenar",
+    "sort_value_desc": "Maior valor",
+    "sort_value_asc": "Menor valor",
+    "sort_rarity": "Raridade",
+    "sort_name": "A–Z",
+    "sort_hint": "Sua lista é salva nessa ordem, então os outros jogadores também a veem assim. Toque de novo quando quiser para reordenar."
   },
   "paywall": {
     "boost_caption": "O Pro coloca suas trocas no topo do feed.",
@@ -2449,5 +2455,33 @@
     "sort_demand": "▲ Demanda",
     "show_grid": "Ver em grade",
     "show_list": "Ver em lista"
+  },
+  "advisor": {
+    "title": "O que posso conseguir?",
+    "entry_sub": "Veja pelo que seus itens podem ser trocados",
+    "values_from": "Valores de",
+    "pick_items": "Toque nos itens que você trocaria",
+    "no_items": "Sua lista Minhas coisas está vazia. Procure um item abaixo.",
+    "search_placeholder": "Adicione outro item, ex. Sunset",
+    "your_offer": "Sua oferta",
+    "empty": "Escolha pelo menos um item para ver o que pode conseguir.",
+    "swap_one": "Trocar por um item",
+    "swap_two": "Ou dois itens",
+    "none_single": "Nenhum item tem valor parecido.",
+    "none_combo": "Nenhuma dupla de itens tem valor parecido.",
+    "note": "Com base nos valores {{source}}. Os valores mudam, confira os dois lados antes de trocar.",
+    "demand": "Demanda {{value}}/10",
+    "verdict_win": "Ganha",
+    "verdict_fair": "Justo",
+    "verdict_loss": "Perde um pouco",
+    "add_goal": "Adicionar às metas",
+    "in_goals": "Nas Minhas metas",
+    "find_players": "Encontrar jogadores",
+    "goal_added": "Adicionado às Minhas metas",
+    "goal_added_hint": "O Trade Match vai procurar jogadores que têm esse item.",
+    "goal_failed": "Não foi possível salvar a meta. Tente de novo.",
+    "sign_in_goals": "Entre na conta para salvar metas.",
+    "calc_button": "O que consigo por estes?",
+    "item_button": "O que consigo por este?"
   }
 }

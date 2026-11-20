@@ -191,6 +191,15 @@ describe('buildTrade with slots and the AI model', () => {
     expect(pick.name).toBe('Hallowscythe');
   });
 
+  it('takes the Chroma twin when the bar prints a plain name the model sees as Chroma (report 0254828d)', () => {
+    const chroma = nameSlot({ text: 'Gingerblade', chroma: false, model: [cand('Chroma Gingerblade', 0.53), cand('Chroma Heat', 0.44)], catalog });
+    expect(chroma).toEqual({ name: 'Chroma Gingerblade', sure: true, alternatives: ['Chroma Heat', 'Gingerblade'] });
+    const plain = nameSlot({ text: 'Gingerblade', chroma: false, model: [cand('Gingerblade', 0.8), cand('Chroma Gingerblade', 0.5)], catalog });
+    expect(plain.name).toBe('Gingerblade');
+    const weak = nameSlot({ text: 'Gingerblade', chroma: false, model: [cand('Chroma Gingerblade', 0.3)], catalog });
+    expect(weak.name).toBe('Gingerblade');
+  });
+
   it('falls back to the text-only reading without slots', () => {
     const lines = [line('YOUR OFFER', 976, 245, 160, 30), line('THEIR OFFER', 976, 466, 160, 30), line('Tides', 1021, 429)];
     expect(buildTrade({ slots: [], lines, width: 1920, catalog }).mine.map((p) => p.name)).toEqual(['Tides']);

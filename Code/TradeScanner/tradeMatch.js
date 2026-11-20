@@ -115,6 +115,8 @@ function buildFromText({ lines, width, catalog }) {
 const inside = (l, x0, y0, x1, y1) => cx(l) >= x0 && cx(l) <= x1 && cy(l) >= y0 && cy(l) <= y1;
 // A model pick this sure is shown without a "?" (as the Blox app, 0.5).
 const SURE = 0.5;
+// A Chroma model pick lower than this never overrides a plain name read off the bar.
+const CHROMA_MIN = 0.4;
 
 /** The item name and tags the text reader saw on one slot. */
 function slotText(s, lines) {
@@ -147,6 +149,18 @@ export function nameSlot({ text, chroma, model, catalog }) {
   // The bar says exactly one catalogue name: that is the item.
   if (fromText.exact && fromText.names.length === 1) {
     const name = chromaOf(fromText.names[0]);
+    // Some trade windows print a chroma item's plain name (rainbow letters,
+    // no "Chroma" tag): report 0254828d read "Darkbringer" on a Chroma
+    // Darkbringer the model named right. The model ranking the Chroma twin
+    // above the plain name decides; unsure scores get the "?".
+    const twin = !/^chroma /i.test(name) && catalog.get(normalize(`Chroma ${name}`));
+    if (twin && model?.length) {
+      const rank = (n) => { const i = model.findIndex((c) => c.name === n); return i < 0 ? Infinity : i; };
+      const c = model.find((m) => m.name === twin);
+      if (c && c.score >= CHROMA_MIN && rank(twin) < rank(name)) {
+        return { name: twin, sure: c.score >= SURE, alternatives: alts(twin) };
+      }
+    }
     return { name, sure: true, alternatives: alts(name) };
   }
   if (model?.length) {

@@ -36,6 +36,8 @@ import { classifyTiles } from './tileModel';
 import ShareResultCard from './ShareResultCard';
 
 const SCAN_TIMEOUT_MS = 20000;
+// First wait for the scanner page; no answer by then = restart the page and try once more.
+const FIRST_TRY_MS = 12000;
 // base64: the scanner page decodes the picture in the WebView.
 const PICK_OPTIONS = { mediaType: 'photo', includeBase64: true, maxWidth: 2400, maxHeight: 2400, quality: 0.92 };
 // The app declares no CAMERA permission, so the system camera needs none.
@@ -164,13 +166,37 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
     web.current?.injectJavaScript(`window.tradeScan(${JSON.stringify(id)}, ${JSON.stringify(dataUrl)}, ${JSON.stringify(frame)}); true;`);
   }, []);
 
-  const scanPixels = useCallback((dataUrl, frame) => new Promise((resolve, reject) => {
+  // The hidden scanner page can die while the camera or the photo picker has
+  // the app in the background (Android renderer gone, iOS content process
+  // ended): nothing answers, and the scan used to end in "timeout" with
+  // nothing read (Ops/bugs/LOG.md 2026-11-15; the finder itself answers in
+  // about a second on those pictures). A dead page is mounted again, and a
+  // scan with no answer gets one more try on a fresh page.
+  const [webKey, setWebKey] = useState(0);
+  const pageRestarts = useRef(0);
+  const restartPage = useCallback(() => {
+    ready.current = false;
+    pageRestarts.current += 1;
+    setWebKey((k) => k + 1);
+  }, []);
+
+  const scanOnce = useCallback((dataUrl, frame, ms) => new Promise((resolve, reject) => {
     const id = String(Date.now());
-    const timer = setTimeout(() => { pending.current = null; reject(new Error('timeout')); }, SCAN_TIMEOUT_MS);
+    const timer = setTimeout(() => { pending.current = null; queued.current = null; reject(new Error('timeout')); }, ms);
     pending.current = { id, resolve, reject, timer };
     if (ready.current) send(id, dataUrl, frame);
     else queued.current = { id, dataUrl, frame };
   }), [send]);
+
+  const scanPixels = useCallback(async (dataUrl, frame) => {
+    try {
+      return await scanOnce(dataUrl, frame, FIRST_TRY_MS);
+    } catch (e) {
+      if (e?.message !== 'timeout') throw e;
+      restartPage();
+      return scanOnce(dataUrl, frame, SCAN_TIMEOUT_MS);
+    }
+  }, [scanOnce, restartPage]);
 
   const onMessage = useCallback((e) => {
     let msg;
@@ -261,7 +287,7 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
       setStage('review');
     } catch (err) {
       trackGrowthEvent('trade_scan', { source, window: 0, slots: -1, found: 0, unsure: 0, text_reader: 0 });
-      lastScan.current = { frame, error: String(err?.message || err).slice(0, 200) };
+      lastScan.current = { frame, error: String(err?.message || err).slice(0, 200), page: ready.current ? 1 : 0, restarts: pageRestarts.current };
       setStage('none');
     }
   }, [picked, scanPixels, catalog, maxPerSide]);
@@ -598,7 +624,10 @@ export default function TradeScannerModal({ visible, onClose, onApply, records, 
 
         {visible && !!pageHtml && (
           <WebView
+            key={webKey}
             ref={web}
+            onContentProcessDidTerminate={restartPage}
+            onRenderProcessGone={() => { restartPage(); return true; }}
             // The library wraps the WebView in a flex:1 View; hide that too or
             // it takes half the sheet.
             containerStyle={styles.hiddenWeb}

@@ -1820,6 +1820,7 @@ const HomeScreen = ({ selectedTheme, hideBanner = false }) => {
                 activeOpacity={0.8}
                 accessibilityRole="button"
                 onPress={() => navigation.navigate('TradeAdvisor', {
+                  entry: 'calculator',
                   items: hasItems.filter(Boolean).map((it) => ({
                     name: it.name || it.Name, category: it.category || it.Category || it.type || it.Type,
                   })),

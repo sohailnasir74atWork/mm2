@@ -1173,7 +1173,7 @@ const MyStuffScreen = ({ selectedTheme }) => {
 
                 {!selectMode && (
                   <TouchableOpacity
-                    onPress={() => navigation.navigate('TradeAdvisor')}
+                    onPress={() => navigation.navigate('TradeAdvisor', { entry: 'mystuff' })}
                     activeOpacity={0.8}
                     style={[$.advisorBtn, { backgroundColor: config.colors.primary + '14', borderColor: config.colors.primary + '40' }]}
                     accessibilityRole="button"

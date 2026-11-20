@@ -147,15 +147,40 @@ const TradeAdvisorScreen = () => {
 
   const result = useMemo(() => adviseTrade(offer, candidates), [offer, candidates]);
 
-  useEffect(() => { trackGrowthEvent('advisor_view', { source: valueSource }); }, [valueSource]);
+  // ── Usage events (GA4 via trackGrowthEvent). Counts and labels only, never
+  // item names. Every event carries `entry`: which button opened the screen
+  // (mystuff, home_card, more, calculator, item_sheet). Owner, 2026-11-20:
+  // track whether people use the advisor (MM2 only for now).
+  const entry = route?.params?.entry || 'unknown';
+  const track = useCallback((name, params = {}) => trackGrowthEvent(name, { entry, ...params }), [entry]);
+  const stats = useRef({ openedAt: Date.now(), results: 0, goals: 0 });
+
+  // Once per visit; switching the value list is its own event below.
+  useEffect(() => {
+    track('advisor_view', { source: valueSource });
+    const s0 = stats.current;
+    return () => track('advisor_close', {
+      seconds: Math.round((Date.now() - s0.openedAt) / 1000),
+      results: s0.results,
+      goals: s0.goals,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Once per change of the offer (not per render).
   useEffect(() => {
     if (!result.total) return;
-    trackGrowthEvent('advisor_result', {
-      offer_items: offer.length, singles: result.singles.length, combos: result.combos.length,
+    stats.current.results += 1;
+    const found = result.singles.length + result.combos.length;
+    track('advisor_result', {
+      source: valueSource,
+      offer_items: offer.length,
+      singles: result.singles.length,
+      combos: result.combos.length,
+      has_results: found > 0 ? 1 : 0,
     });
-    // Counts only, once per change of the offer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result.total]);
+  }, [result.total, valueSource]);
 
   const searchHits = useMemo(() => {
     const q = query.trim();
@@ -202,14 +227,15 @@ const TradeAdvisorScreen = () => {
         showErrorMessage(t('advisor.goal_failed', { defaultValue: 'Could not save that goal. Try again.' }), e?.message || '');
         return;
       }
-      trackGrowthEvent('advisor_goal_add', { items: fresh.length });
+      stats.current.goals += 1;
+      track('advisor_goal_add', { items: fresh.length, kind: rows.length > 1 ? 'combo' : 'single' });
     }
     setAdded((prev) => new Set([...prev, ...keys]));
     showSuccessMessage(
       t('advisor.goal_added', { defaultValue: 'Added to My Goals' }),
       t('advisor.goal_added_hint', { defaultValue: 'Trade Match will look for players who have it.' }),
     );
-  }, [user?.id, firestoreDB, localState?.wishlistPets, valueSource, updateLocalState, t]);
+  }, [user?.id, firestoreDB, localState?.wishlistPets, valueSource, updateLocalState, t, track]);
 
   const renderSuggestion = (s, idx) => {
     const v = VERDICT[s.verdict] || VERDICT.fair;
@@ -247,7 +273,14 @@ const TradeAdvisorScreen = () => {
               {inGoals ? t('advisor.in_goals', { defaultValue: 'In My Goals' }) : t('advisor.add_goal', { defaultValue: 'Add to goals' })}
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('TradeMatch')} style={[$.actBtn, { borderColor: C.border }]} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={() => {
+              track('advisor_find_players', { kind: s.items.length > 1 ? 'combo' : 'single' });
+              navigation.navigate('TradeMatch');
+            }}
+            style={[$.actBtn, { borderColor: C.border }]}
+            activeOpacity={0.7}
+          >
             <FontAwesome name="user-group" size={11} color={C.textSecondary} />
             <Text style={[$.actText, { color: C.textSecondary }]}>{t('advisor.find_players', { defaultValue: 'Find players' })}</Text>
           </TouchableOpacity>
@@ -266,7 +299,7 @@ const TradeAdvisorScreen = () => {
         {[VALUE_SOURCE.SUPREME, VALUE_SOURCE.MM2].map((src) => {
           const on = valueSource === src;
           return (
-            <TouchableOpacity key={src} onPress={() => !on && updateLocalState('valueSource', src)}
+            <TouchableOpacity key={src} onPress={() => { if (on) return; track('advisor_source_switch', { to: src }); updateLocalState('valueSource', src); }}
               style={[$.chip, on ? { backgroundColor: config.colors.primary, borderColor: config.colors.primary } : { borderColor: C.border }]}
               accessibilityRole="radio" accessibilityState={{ checked: on }}>
               <Text style={[$.chipText, { color: on ? '#fff' : C.text }]}>{src === VALUE_SOURCE.MM2 ? 'MM2' : 'Supreme'}</Text>
@@ -320,7 +353,7 @@ const TradeAdvisorScreen = () => {
         autoCorrect={false}
       />
       {searchHits.map((c) => (
-        <TouchableOpacity key={`hit-${c.key}`} onPress={() => { setExtras((prev) => [...prev, c.row]); setQuery(''); }}
+        <TouchableOpacity key={`hit-${c.key}`} onPress={() => { track('advisor_search_add'); setExtras((prev) => [...prev, c.row]); setQuery(''); }}
           style={[$.hit, { borderColor: C.border }]}>
           <Text style={[$.chipText, { color: C.text, flex: 1 }]} numberOfLines={1}>{c.name}</Text>
           <Text style={[$.chipVal, { color: C.textSecondary }]}>{fmt(c.value)}</Text>

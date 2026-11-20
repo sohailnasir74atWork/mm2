@@ -173,7 +173,7 @@ const ItemDetailSheet = ({ visible, item, imageUrl, isDarkMode, onClose }) => {
           accessibilityRole="button"
           onPress={() => {
             onClose?.();
-            navigation.navigate('TradeAdvisor', { items: [{ name: item.name, category: item.category || item.type }] });
+            navigation.navigate('TradeAdvisor', { entry: 'item_sheet', items: [{ name: item.name, category: item.category || item.type }] });
           }}
         >
           <FontAwesome name="wand-magic-sparkles" size={13} color={accent} />

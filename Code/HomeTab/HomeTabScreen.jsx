@@ -358,7 +358,7 @@ const HomeTabScreen = ({ selectedTheme }) => {
         {/* ── What can I get? ── the trade advisor (2026-11-20, owner chose a
             Home card). No sign-in needed: search works without My Stuff. */}
         <TouchableOpacity
-          onPress={() => nav.navigate('TradeAdvisor')}
+          onPress={() => nav.navigate('TradeAdvisor', { entry: 'home_card' })}
           activeOpacity={0.8}
           accessibilityRole="button"
           style={[$.myStuffCard, { backgroundColor: accentFor('amber', dark).tint, borderColor: accentFor('amber', dark).tint }]}

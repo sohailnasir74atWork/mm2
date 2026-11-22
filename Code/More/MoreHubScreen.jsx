@@ -132,8 +132,8 @@ const MoreHubScreen = ({ navigation, selectedTheme }) => {
         ))}
       </ScrollView>
 
-      {/* Plain, not collapsible: the expanding first load stays on Home. */}
-      <BannerAdComponent />
+      {/* Collapsible (owner, 2026-11-22: all banners except chat). */}
+      <BannerAdComponent collapsible />
 
       <SignInDrawer visible={signinVis} onClose={() => setSigninVis(false)} selectedTheme={selectedTheme} screen="More" message={signinMsg} />
     </View>

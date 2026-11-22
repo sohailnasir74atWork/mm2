@@ -28,7 +28,10 @@ import BannerAdComponent from './bannerAds';
 import { useLocalState } from '../LocalGlobelStats';
 
 const ScreenBottomBanner = (props) => {
-  const { background, collapsible } = props;
+  // Collapsible unless a screen passes collapsible={false} (owner, 2026-11-22:
+  // every banner collapsible except the chat screens, which stay plain).
+  const { background } = props;
+  const collapsible = props.collapsible !== false;
   const ad = props.ad !== false;
   const insets = useSafeAreaInsets();
   const { localState } = useLocalState();

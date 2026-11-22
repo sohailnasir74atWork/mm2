@@ -27,14 +27,14 @@ const Stack = createNativeStackNavigator();
 const MoreThemeContext = createContext(null);
 
 // The tool screens were built for Adopt Me's old top-tab body, which had an
-// 8 pt side margin. Plain banner, not collapsible: the expanding first load
-// stays on Home. BannerAdComponent hides itself for Pro.
+// 8 pt side margin. Collapsible banner (owner, 2026-11-22: all banners except
+// chat). BannerAdComponent hides itself for Pro.
 const Body = ({ children, ad = true }) => {
   const selectedTheme = useContext(MoreThemeContext);
   return (
     <View style={[styles.flex1, { backgroundColor: selectedTheme?.colors.background }]}>
       <View style={styles.body}>{children}</View>
-      {ad && <BannerAdComponent />}
+      {ad && <BannerAdComponent collapsible />}
     </View>
   );
 };
